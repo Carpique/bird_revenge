@@ -46,8 +46,8 @@ export const config = {
     holdMs: 1200,
     /** max hip movement (fraction of torso length) during the hold */
     maxMovement: 0.08,
-    /** require both hands above shoulders (makes sure there is headroom for flapping) */
-    requireArmsUp: true,
+    /** require both hands below the shoulders, like the outline */
+    requireArmsDown: true,
   },
 
   flap: {
@@ -71,14 +71,15 @@ export const config = {
   },
 
   squat: {
-    /** hip drop below standing height, in torso lengths, to enter a squat */
-    hipDropEnter: 0.25,
-    /** ...and to leave it */
-    hipDropExit: 0.12,
-    /** knee angle (deg, 180 = straight) below which the knee counts as bent */
-    kneeAngleEnter: 145,
-    kneeAngleExit: 160,
-    requireBentKnees: true,
+    /**
+     * how far the hips must drop to enter a squat, as a fraction of the standing hip→knee height
+     * (1 = hips level with knees; 0.3 is a light knee bend)
+     */
+    depthEnter: 0.3,
+    /** ...and back below this to leave it */
+    depthExit: 0.15,
+    /** ankle height difference (torso lengths) above which one leg counts as raised */
+    legRaiseMin: 0.15,
     cooldownMs: 700,
     /** slowly re-learn standing hip height while standing straight (handles stepping closer/further) */
     baselineAdaptRate: 0.02,
@@ -93,6 +94,8 @@ export const config = {
     /** px per physics step (60 Hz) */
     maxSpeed: 14,
     pooRadius: 9,
+    /** sideways poo speed (px per physics step) when dropped with one leg raised, towards that leg's side */
+    pooSideSpeed: 3,
   },
 
   keyboard: {

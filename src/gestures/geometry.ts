@@ -51,6 +51,24 @@ export function shoulderCenter(f: PoseFrame): Vec {
   return mid(pt(f, L.leftShoulder), pt(f, L.rightShoulder));
 }
 
+export function kneeCenter(f: PoseFrame): Vec {
+  return mid(pt(f, L.leftKnee), pt(f, L.rightKnee));
+}
+
+/** Vertical knee-centre minus hip-centre distance: shrinks to ~0 when the hips reach knee level. */
+export function thighDrop(f: PoseFrame): number {
+  return kneeCenter(f).y - hipCenter(f).y;
+}
+
+export function ankleCenter(f: PoseFrame): Vec {
+  return mid(pt(f, L.leftAnkle), pt(f, L.rightAnkle));
+}
+
+/** Vertical ankle-centre minus hip-centre distance: how high the hips are above the feet. */
+export function hipHeight(f: PoseFrame): number {
+  return ankleCenter(f).y - hipCenter(f).y;
+}
+
 /** Shoulder-centre to hip-centre distance (normalised image height units). */
 export function torsoLength(f: PoseFrame): number {
   return len(sub(hipCenter(f), shoulderCenter(f)));

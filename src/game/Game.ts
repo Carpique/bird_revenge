@@ -41,7 +41,9 @@ export class Game {
   private scoreText: Text;
   private statusText: Text;
   private pausedText: Text;
-  private pooQueued = false;
+  /** queued poo request: sideways direction (-1 left, 0 straight down, +1 right), or null */
+  private pooQueued: number | null = null;
+  private pooDir = 0;
 
   constructor(private app: Application) {
     app.renderer.background.color = scenery.skyColor;
@@ -92,9 +94,12 @@ export class Game {
     this.statusText.text = text;
   }
 
-  /** Ask the bird to squat and drop a poo (ignored while already squatting). */
-  requestPoo() {
-    if (!this.paused) this.pooQueued = true;
+  /**
+   * Ask the bird to squat and drop a poo (ignored while already squatting).
+   * `dir` gives the poo a little sideways speed on screen: -1 left, 0 straight down, +1 right.
+   */
+  requestPoo(dir = 0) {
+    if (!this.paused) this.pooQueued = dir;
   }
 
   private update(dtMs: number) {
@@ -114,9 +119,9 @@ export class Game {
 
   private step() {
     this.engine.gravity.y = config.physics.gravity;
-    if (this.pooQueued) {
-      this.pooQueued = false;
-      this.bird.squat();
+    if (this.pooQueued !== null) {
+      if (this.bird.squat()) this.pooDir = this.pooQueued;
+      this.pooQueued = null;
     }
     this.bird.step(this.controls, STEP_MS, () => this.dropPoo());
     this.villain.step(STEP_MS);
@@ -134,7 +139,7 @@ export class Game {
   private dropPoo() {
     const b = this.bird.body;
     const r = config.physics.birdRadius;
-    const poo = new Poo(b.position.x, b.position.y + r * 0.6, b.velocity.x * 0.6, Math.max(1, b.velocity.y));
+    const poo = new Poo(b.position.x, b.position.y + r * 0.6, b.velocity.x * 0.6 + this.pooDir * config.physics.pooSideSpeed, Math.max(1, b.velocity.y));
     this.poos.push(poo);
     Composite.add(this.engine.world, poo.body);
     this.fx.addChild(poo.view);

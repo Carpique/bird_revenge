@@ -21,20 +21,20 @@ export interface GuideState {
 type P = [number, number];
 interface Rect { x: number; y: number; w: number; h: number }
 
-/** The out-of-frame box covers about this fraction of the screen area, with the screen's proportions. */
-const MINI_AREA = 1 / 6;
+/** Width and height of the out-of-frame box as a fraction of the screen's (same proportions). */
+const MINI_SCALE = 1 / 6;
 const MINI_MARGIN = 16;
 
 /**
  * Ideal pose outline, in MIRRORED display coordinates of the camera image (0..1).
- * The player's left side is on the screen's left (like a mirror). Arms raised in a "Y"
- * so we know there is headroom for flapping.
+ * The player's left side is on the screen's left (like a mirror). Arms lowered, a bit away
+ * from the body.
  */
 const OUTLINE: Record<PartName, { kind: 'circle'; c: P; r: number } | { kind: 'path' | 'polygon'; pts: P[] }> = {
   head: { kind: 'circle', c: [0.5, 0.2], r: 0.055 },
   torso: { kind: 'polygon', pts: [[0.455, 0.3], [0.545, 0.3], [0.535, 0.56], [0.465, 0.56]] },
-  leftArm: { kind: 'path', pts: [[0.455, 0.3], [0.395, 0.21], [0.345, 0.11]] },
-  rightArm: { kind: 'path', pts: [[0.545, 0.3], [0.605, 0.21], [0.655, 0.11]] },
+  leftArm: { kind: 'path', pts: [[0.455, 0.3], [0.425, 0.43], [0.4, 0.55]] },
+  rightArm: { kind: 'path', pts: [[0.545, 0.3], [0.575, 0.43], [0.6, 0.55]] },
   leftLeg: { kind: 'path', pts: [[0.47, 0.56], [0.455, 0.73], [0.44, 0.9]] },
   rightLeg: { kind: 'path', pts: [[0.53, 0.56], [0.545, 0.73], [0.56, 0.9]] },
 };
@@ -143,23 +143,22 @@ export class FrameGuide {
    */
   private drawOutOfFrameBox(s: GuideState, W: number, H: number, now: number) {
     const ctx = this.ctx;
-    const k = Math.sqrt(MINI_AREA);
-    const box: Rect = { w: W * k, h: H * k, x: 0, y: 0 };
+    const box: Rect = { w: W * MINI_SCALE, h: H * MINI_SCALE, x: 0, y: 0 };
     box.x = W - box.w - MINI_MARGIN;
     box.y = H - box.h - MINI_MARGIN;
 
     ctx.fillStyle = scenery.skyColor;
     ctx.fillRect(box.x, box.y, box.w, box.h);
 
-    const textSize = Math.max(14, box.h * 0.075);
+    const textSize = Math.max(11, box.h * 0.1);
     const pad = textSize * 0.6;
     const cam = this.fitCamera({ x: box.x + pad, y: box.y + pad, w: box.w - 2 * pad, h: box.h - 2 * pad - textSize * 1.4 });
-    this.drawPose(s, cam, now, Math.max(3, box.h * 0.016), 2);
+    this.drawPose(s, cam, now, Math.max(2, box.h * 0.022), 1.5);
 
     this.text(s.message ?? 'Get back in frame!', box.x + box.w / 2, box.y + box.h - pad - textSize * 0.5, textSize, INK, box.w - 2 * pad);
 
     if (Math.floor(now / 400) % 2 === 0) {
-      this.rc.rectangle(box.x, box.y, box.w, box.h, { stroke: RED, strokeWidth: 5, roughness: 1.2, seed: 11 });
+      this.rc.rectangle(box.x, box.y, box.w, box.h, { stroke: RED, strokeWidth: 4, roughness: 1.2, seed: 11 });
     } else {
       this.rc.rectangle(box.x, box.y, box.w, box.h, { stroke: INK, strokeWidth: 2, roughness: 1.2, seed: 11 });
     }

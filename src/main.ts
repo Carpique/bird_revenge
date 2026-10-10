@@ -151,7 +151,8 @@ async function main() {
         if (f && flapOut && squatOut) {
           poseControls = { lift: flapOut.lift, steer: flapOut.steer, wingPhase: flapOut.wingPhase, flapping: false };
           lastPoseT = now;
-          if (squatOut.triggered) game.requestPoo();
+          // mirrored view: the player's left is on the screen's left, so the poo flies towards the raised leg
+          if (squatOut.triggered) game.requestPoo(squatOut.raisedLeg === 'left' ? -1 : squatOut.raisedLeg === 'right' ? 1 : 0);
         }
         break;
     }

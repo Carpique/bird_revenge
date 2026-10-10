@@ -1,7 +1,7 @@
 import { config } from '../config';
 import { L } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
-import { hipCenter, kneeAngle, torsoLength } from './geometry';
+import { hipCenter, hipHeight, kneeAngle, thighDrop, torsoLength } from './geometry';
 import type { SquatBaseline } from './SquatDetector';
 import type { VisibilityOutput } from './VisibilityMonitor';
 
@@ -14,12 +14,12 @@ export interface CalibrationStatus {
 }
 
 /**
- * Calibration: player stands in the outline, fully visible, arms raised, legs straight,
- * and holds still. We then record standing hip height and torso length.
+ * Calibration: player stands in the outline, fully visible, arms lowered, legs straight,
+ * and holds still. We then record standing torso length, hip→knee and hip→ankle height.
  */
 export class Calibration {
   private holdStart: number | null = null;
-  private samples: { hipY: number; torso: number }[] = [];
+  private samples: { hipY: number; torso: number; thigh: number; legs: number }[] = [];
 
   reset() {
     this.holdStart = null;
@@ -35,13 +35,14 @@ export class Calibration {
     if (!f || !vis.allVisible) return fail(vis.hint ?? 'Get fully into view');
 
     const lm = f.lm;
-    if (cfg.requireArmsUp) {
-      const armsUp = lm[L.leftWrist].y < lm[L.leftShoulder].y && lm[L.rightWrist].y < lm[L.rightShoulder].y;
-      if (!armsUp) return fail('Raise both arms like the outline');
+    if (cfg.requireArmsDown) {
+      const armsDown = lm[L.leftWrist].y > lm[L.leftShoulder].y && lm[L.rightWrist].y > lm[L.rightShoulder].y;
+      if (!armsDown) return fail('Lower your arms like the outline');
     }
     if (kneeAngle(f, 'left') < 160 || kneeAngle(f, 'right') < 160) return fail('Stand up straight');
 
-    const sample = { hipY: hipCenter(f).y, torso: torsoLength(f) };
+    const torso = torsoLength(f);
+    const sample = { hipY: hipCenter(f).y, torso, thigh: thighDrop(f) / torso, legs: hipHeight(f) / torso };
     if (this.samples.length) {
       const first = this.samples[0];
       if (Math.abs(sample.hipY - first.hipY) / first.torso > cfg.maxMovement) {
@@ -56,8 +57,9 @@ export class Calibration {
 
     const n = this.samples.length;
     const done = {
-      hipY: this.samples.reduce((s, x) => s + x.hipY, 0) / n,
       torso: this.samples.reduce((s, x) => s + x.torso, 0) / n,
+      thigh: this.samples.reduce((s, x) => s + x.thigh, 0) / n,
+      legs: this.samples.reduce((s, x) => s + x.legs, 0) / n,
     };
     this.reset();
     return { progress: 1, message: 'Great!', done };

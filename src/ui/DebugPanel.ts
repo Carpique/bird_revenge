@@ -117,7 +117,7 @@ export class DebugPanel {
       line((s) => s.lift, config.flap.maxLiftAccel, '#2f9e44');
       line((s) => s.depth, 1, '#845ef7');
       // squat enter threshold
-      const ty = py + ph - config.squat.hipDropEnter * ph;
+      const ty = py + ph - config.squat.depthEnter * ph;
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = '#845ef7';
       ctx.beginPath();

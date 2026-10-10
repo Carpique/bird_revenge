@@ -23,7 +23,7 @@
 | F2 | Flap detection per arm, producing both lift (up) and steering (left/right) | [DECIDED] |
 | F3 | Squat detection triggers a poo drop (discrete event) | [DECIDED] |
 | F4 | Walking pedestrians and villains with distinct scoring | [DECIDED] |
-| F5 | Short calibration step at game start: stand in the outline with arms raised, hold still ~1 s; records standing hip height and torso length | [DECIDED] (v0.1) |
+| F5 | Short calibration step at game start: stand in the outline with arms lowered, hold still ~1 s; records standing torso length, hip→knee and hip→ankle height | [DECIDED] (v0.1) |
 | F7 | Player must be **fully visible** (head to feet, arms raised included); a visibility monitor runs continuously and shows a "get back in frame" overlay when the body is not fully visible (see §4.5) | [DECIDED] |
 | F8 | The game keeps running while the out-of-frame box is shown, but pose controls are cut off (the bird drops), so the player has an incentive to get back quickly; controls return as soon as the pose is reacquired | [DECIDED] |
 | F6 | Keyboard fallback controls for development/testing (Space/↑ flap, ←/→ steer, ↓ poo; K = keyboard-only mode) | [DECIDED] (v0.1) |
@@ -78,8 +78,11 @@ webcam → MediaPipe Pose (≈30 fps) → landmark smoothing → feature extract
   - Lift = sum of both arms' impulses; steering = difference between left and right (frequency × amplitude).
   - This is cheap, low-latency (reacts mid-stroke), explainable and tunable — an ML classifier on fixed windows would add latency (must wait for the window) and is not needed for a periodic signal like this.
 - **Squat is a discrete event.** Heuristic first [DECIDED]; full-body framing means legs are always visible, so both cues are available:
-  - Hip height drops relative to the calibrated standing hip height (normalised by torso length), **and**
-  - Knee angle (hip–knee–ankle) falls below a threshold on both legs.
+  - **Depth** = how far the hips have dropped towards the ankles (feet stay put), in units of the calibrated standing hip→knee height; all vertical distances divided by torso length. 0 standing, ~1 hips level with the knees. Fires on a **light squat** (default depth 0.3), leaves below 0.15.
+  - **Raising one leg** also lifts the ankle centre and fires, which is kept on purpose [DECIDED]: if one ankle is clearly higher than the other (> `legRaiseMin` torso lengths), the detector reports which leg is raised and the poo gets a little sideways speed towards that side of the (mirrored) screen. A two-footed squat drops the poo straight down.
+  - Measured against the ankles, not the knees: the knees move towards the camera during a squat and, with the camera above knee height, appear lower, hiding part of the hip drop.
+  - Dividing by torso length makes it independent of distance from the camera (stepping closer/back doesn't fire).
+  - Knee angle is *not* used: facing the camera the knees point at the lens, so the 2D hip–knee–ankle angle barely changes until the squat is very deep (this made v0.1 demand a deep squat).
   - Fires once on entering the squat; must return to standing (hysteresis) before it can fire again.
   - Fallback: ML classifier on a sliding window of normalised landmarks, only if the heuristic gives too many false positives (e.g. leaning forward, walking towards the camera, vigorous flapping).
 - **Interference:** flapping vigorously moves the torso; squatting while flapping should probably still work. Detectors must be tested against each other's motions.
@@ -125,14 +128,14 @@ Even with heuristics we need recorded data: to tune thresholds, to test detector
 - While a part is lost, the gesture detectors ignore it (e.g. no flap signal from an arm out of frame).
 
 **"Get back in frame" box** [DECIDED]:
-- Deliberately unobtrusive: a small box in the **lower right corner** (about 1/6 of the screen area, same proportions as the screen) with a **blinking frame**, shown automatically when a part is lost and hidden as soon as the pose is reacquired.
+- Deliberately unobtrusive: a small box in the **lower right corner** (1/6 of the screen's width and height, same proportions as the screen) with a **blinking frame**, shown automatically when a part is lost and hidden as soon as the pose is reacquired.
 - No camera image: the box uses the game's sky colour as background and shows only the **target outline** and the player's live **skeleton**, plus the short text hint.
 
 **Calibration screen** [DECIDED, implemented in v0.1]:
-- Show the **mirrored camera feed** with a **target outline** of the ideal pose drawn over it. The outline has **arms raised in a "Y"** [DECIDED], so calibration also proves there is headroom above the head for flapping.
+- Show the **mirrored camera feed** with a **target outline** of the ideal pose drawn over it. The outline has **arms lowered, slightly away from the body** [DECIDED] (a natural rest pose; headroom for flapping is covered by the longer arm "lost" delay below).
 - The outline is split into the same body parts; each part is **green** when that part is visible and **blinks red** when lost. This puts the schematic feedback onto the outline itself, so one picture shows both *where to stand* and *what is missing*.
 - A short text hint from the distance/position estimate ("Step back — your feet are out of view").
-- Used at game start: the player is fully visible, raises both hands above the shoulders, keeps legs straight and holds still ~1.2 s; we record standing hip height and torso length. Calibration happens once; later out-of-frame events only need the player back in view.
+- Used at game start: the player is fully visible, keeps both hands below the shoulders, legs straight and holds still ~1.2 s; we record standing torso length, hip→knee and hip→ankle height. Calibration happens once; later out-of-frame events only need the player back in view.
 - Arms get a longer "lost" delay (800 ms) than other parts (400 ms), because hands briefly leave the frame at the top of a big flap.
 - [OPEN] Is the outline a fixed silhouette or scaled to the player after first calibration? Fixed first; scale later if needed.
 - Outline drawn with Rough.js in a sketchy style matching the placeholder art [DECIDED].
@@ -149,7 +152,7 @@ Implemented in v0.1 (all numbers live in `src/config.ts`, tunable at runtime):
 - **Flap → lift:** per arm, downstroke power = max(0, −angular velocity − 60°/s dead zone). Lift = liftGain (14) × mean of both arms' power, capped at 4000 px/s². Lift happens only while arms move down, so it reacts mid-stroke.
 - **Steering:** steerGain (6) × (left power − right power). Default: a stronger **left** arm pushes the bird **right** (like rowing); flip with `steerSign`.
 - **Wing animation follows the player:** with pose control the bird's flap frame is chosen from the average arm height, so the wings mirror the arms.
-- **Poo:** squat (or ↓) → bird squashes (×1.22 wide, ×0.72 tall, ~400 ms) and drops a poo at the deepest point; poo inherits part of the bird's velocity. Splat on the ground fades after 1.5 s.
+- **Poo:** squat (or ↓) → bird squashes (×1.22 wide, ×0.72 tall, ~400 ms) and drops a poo at the deepest point; poo inherits part of the bird's velocity, plus `pooSideSpeed` sideways when one leg was raised (towards that leg's side). Splat on the ground fades after 1.5 s.
 - **Villain:** walks back and forth on the ground (sensor body). A hit scores +1, shows the "hit" frame, he runs off and a new one enters from a random side after 1.5 s.
 - _Still to design:_ pedestrians (−1), rounds/timer, difficulty curve, game-over screen.
 
