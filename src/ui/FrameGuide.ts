@@ -26,11 +26,14 @@ export interface GuideState {
 type P = [number, number];
 interface Rect { x: number; y: number; w: number; h: number }
 
-/** Width and height of the out-of-frame box as a fraction of the screen's (same proportions). */
-const MINI_SCALE = 1 / 6;
+/** Height of the out-of-frame box as a fraction of the screen's; portrait with MINI_ASPECT (width / height). */
+const MINI_HEIGHT = 0.3;
+const MINI_ASPECT = 0.75;
 const MINI_MARGIN = 16;
-/** Calibration dialog size as a fraction of the screen's width and height. */
-const DIALOG_SCALE = 0.5;
+/** Calibration dialog height as a fraction of the screen's height... */
+const DIALOG_HEIGHT = 0.8;
+/** ...and its width / height: portrait, like the pose it shows. */
+const DIALOG_ASPECT = 0.75;
 
 /**
  * Ideal pose outline, in MIRRORED display coordinates of the camera image (0..1).
@@ -103,29 +106,33 @@ export class FrameGuide {
     }
   }
 
-  /** Rectangle with the camera image's proportions, fitted (never cropped) and centred in `r`. */
-  private fitCamera(r: Rect): Rect {
+  /**
+   * Rectangle with the camera image's proportions, centred in `r`: fitted inside it, or with `cover`
+   * filling it (overflowing on one axis; the caller clips to `r`).
+   */
+  private fitCamera(r: Rect, cover = false): Rect {
     const vw = this.video.videoWidth || 1280, vh = this.video.videoHeight || 720;
-    const scale = Math.min(r.w / vw, r.h / vh);
+    const scale = (cover ? Math.max : Math.min)(r.w / vw, r.h / vh);
     const w = vw * scale, h = vh * scale;
     return { x: r.x + (r.w - w) / 2, y: r.y + (r.h - h) / 2, w, h };
   }
 
   /**
    * "Stand in the outline" dialog, centred over the (paused) game: title, schematic, hint and the
-   * hold-still progress bar. Also shows camera/model loading and camera errors.
+   * hold-still progress bar. Also shows camera/model loading and camera errors. Portrait: the
+   * schematic shows only the middle strip of the (landscape) camera view, where the player stands.
    */
   private drawCalibrateDialog(s: GuideState, W: number, H: number, now: number) {
     const ctx = this.ctx;
     ctx.fillStyle = 'rgba(255,255,255,0.35)';
     ctx.fillRect(0, 0, W, H);
 
-    const w = Math.max(320, W * DIALOG_SCALE), h = Math.max(260, H * DIALOG_SCALE);
+    const h = Math.max(360, H * DIALOG_HEIGHT), w = Math.min(W * 0.9, h * DIALOG_ASPECT);
     const box: Rect = { x: (W - w) / 2, y: (H - h) / 2, w, h };
     this.drawPanel(box);
 
-    const titleSize = Math.max(22, h * 0.085);
-    const textSize = Math.max(15, h * 0.055);
+    const titleSize = Math.max(22, w * 0.08);
+    const textSize = Math.max(15, w * 0.05);
     const pad = textSize * 0.8;
     const barH = Math.max(8, h * 0.025);
     const cx = box.x + w / 2;
@@ -133,8 +140,14 @@ export class FrameGuide {
 
     const poseTop = box.y + pad * 1.5 + titleSize;
     const footer = textSize * 1.5 + (s.hint ? textSize * 1.3 : 0) + barH + pad * 1.5;
-    const cam = this.fitCamera({ x: box.x + pad, y: poseTop, w: w - 2 * pad, h: box.y + h - footer - poseTop });
+    const poseArea: Rect = { x: box.x + pad, y: poseTop, w: w - 2 * pad, h: box.y + h - footer - poseTop };
+    const cam = this.fitCamera(poseArea, true);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(poseArea.x, poseArea.y, poseArea.w, poseArea.h);
+    ctx.clip();
     this.drawPose(s, cam, now, h);
+    ctx.restore();
 
     let y = cam.y + cam.h + pad * 0.4 + textSize * 0.7;
     this.text(s.message ?? '', cx, y, textSize, s.error ? RED : INK, w - 2 * pad);
@@ -152,21 +165,51 @@ export class FrameGuide {
   }
 
   /**
-   * Unobtrusive "get back in frame" box in the lower right corner with a blinking frame.
+   * Unobtrusive "get back in frame" box in the lower right corner with a blinking frame. Portrait,
+   * like the calibration dialog: shows the middle strip of the camera view; the hint wraps.
    */
   private drawOutOfFrameBox(s: GuideState, W: number, H: number, now: number) {
-    const box: Rect = { w: W * MINI_SCALE, h: H * MINI_SCALE, x: 0, y: 0 };
+    const h = H * MINI_HEIGHT;
+    const box: Rect = { w: h * MINI_ASPECT, h, x: 0, y: 0 };
     box.x = W - box.w - MINI_MARGIN;
     box.y = H - box.h - MINI_MARGIN;
     const blinkOn = Math.floor(now / 400) % 2 === 0;
     this.drawPanel(box, blinkOn ? RED : INK, blinkOn ? 4 : 2);
 
-    const textSize = Math.max(11, box.h * 0.1);
+    const textSize = Math.max(11, box.w * 0.085);
     const pad = textSize * 0.6;
-    const cam = this.fitCamera({ x: box.x + pad, y: box.y + pad, w: box.w - 2 * pad, h: box.h - 2 * pad - textSize * 1.4 });
-    this.drawPose(s, cam, now, box.h);
+    const ctx = this.ctx;
+    ctx.font = `${textSize}px ${FONT}`;
+    const lines = this.wrap(s.message ?? 'Get back in frame!', box.w - 2 * pad);
+    const lineH = textSize * 1.15;
+    const textTop = box.y + box.h - pad - lines.length * lineH;
 
-    this.text(s.message ?? 'Get back in frame!', box.x + box.w / 2, box.y + box.h - pad - textSize * 0.5, textSize, INK, box.w - 2 * pad);
+    const poseArea: Rect = { x: box.x + pad, y: box.y + pad, w: box.w - 2 * pad, h: textTop - pad * 0.5 - (box.y + pad) };
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(poseArea.x, poseArea.y, poseArea.w, poseArea.h);
+    ctx.clip();
+    this.drawPose(s, this.fitCamera(poseArea, true), now, box.h);
+    ctx.restore();
+
+    lines.forEach((line, i) => this.text(line, box.x + box.w / 2, textTop + (i + 0.5) * lineH, textSize, INK, box.w - 2 * pad));
+  }
+
+  /** Greedy word wrap using the current ctx.font. */
+  private wrap(text: string, maxWidth: number): string[] {
+    const lines: string[] = [];
+    let line = '';
+    for (const word of text.split(' ')) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && this.ctx.measureText(next).width > maxWidth) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = next;
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
   }
 
   /** Box with the game's sky colour and a sketchy border. */
