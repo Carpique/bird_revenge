@@ -19,7 +19,8 @@ import { Tuning } from './ui/Tuning';
 
 /**
  * App states:
- *   loading → calibrating → countdown → playing ⇄ outOfFrame (→ countdown → playing)
+ *   loading → calibrating → countdown → playing ⇄ outOfFrame
+ *   outOfFrame keeps the game running with no pose controls, so the bird drops until the player is back
  *   error (no camera) / keyboard (K toggles; pose is ignored)
  */
 type AppState = 'loading' | 'error' | 'calibrating' | 'countdown' | 'playing' | 'outOfFrame' | 'keyboard';
@@ -140,7 +141,7 @@ async function main() {
         if (!vis.allVisible) state = 'outOfFrame';
         break;
       case 'outOfFrame':
-        if (vis.allVisible) startCountdown();
+        if (vis.allVisible) state = 'playing';
         break;
       case 'playing':
         if (!vis.allVisible) {
@@ -163,7 +164,7 @@ async function main() {
 
     const poseFresh = state === 'playing' && now - lastPoseT < 300;
     game.controls = keyboard.apply(poseFresh ? poseControls : noControls());
-    game.paused = manualPause || !(state === 'playing' || state === 'keyboard');
+    game.paused = manualPause || !(state === 'playing' || state === 'outOfFrame' || state === 'keyboard');
 
     const mode = state === 'keyboard' || state === 'error' ? 'keyboard' : 'pose';
     const rec = recorder.recording ? `  ● REC ${recorder.seconds.toFixed(0)}s` : '';

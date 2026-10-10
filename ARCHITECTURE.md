@@ -25,7 +25,7 @@
 | F4 | Walking pedestrians and villains with distinct scoring | [DECIDED] |
 | F5 | Short calibration step at game start: stand in the outline with arms raised, hold still ~1 s; records standing hip height and torso length | [DECIDED] (v0.1) |
 | F7 | Player must be **fully visible** (head to feet, arms raised included); a visibility monitor runs continuously and shows a "get back in frame" overlay when the body is not fully visible (see §4.5) | [DECIDED] |
-| F8 | The game pauses while the out-of-frame overlay is shown and resumes after a short countdown | [DECIDED] (v0.1) |
+| F8 | The game keeps running while the out-of-frame box is shown, but pose controls are cut off (the bird drops), so the player has an incentive to get back quickly; controls return as soon as the pose is reacquired | [DECIDED] |
 | F6 | Keyboard fallback controls for development/testing (Space/↑ flap, ←/→ steer, ↓ poo; K = keyboard-only mode) | [DECIDED] (v0.1) |
 | F9 | Sound | [DEFERRED] |
 
@@ -124,11 +124,15 @@ Even with heuristics we need recorded data: to tune thresholds, to test detector
 - Also estimated: **distance / position hints** from the body's bounding box (body height as a fraction of frame height, horizontal centre) → "step back", "come closer", "move left/right".
 - While a part is lost, the gesture detectors ignore it (e.g. no flap signal from an arm out of frame).
 
-**"Get back in frame" overlay** — combines both ideas [DECIDED, implemented in v0.1]:
+**"Get back in frame" box** [DECIDED]:
+- Deliberately unobtrusive: a small box in the **lower right corner** (about 1/6 of the screen area, same proportions as the screen) with a **blinking frame**, shown automatically when a part is lost and hidden as soon as the pose is reacquired.
+- No camera image: the box uses the game's sky colour as background and shows only the **target outline** and the player's live **skeleton**, plus the short text hint.
+
+**Calibration screen** [DECIDED, implemented in v0.1]:
 - Show the **mirrored camera feed** with a **target outline** of the ideal pose drawn over it. The outline has **arms raised in a "Y"** [DECIDED], so calibration also proves there is headroom above the head for flapping.
 - The outline is split into the same body parts; each part is **green** when that part is visible and **blinks red** when lost. This puts the schematic feedback onto the outline itself, so one picture shows both *where to stand* and *what is missing*.
 - A short text hint from the distance/position estimate ("Step back — your feet are out of view").
-- Same screen doubles as the **calibration screen** at game start: the player is fully visible, raises both hands above the shoulders, keeps legs straight and holds still ~1.2 s; we record standing hip height and torso length. Calibration happens once; later out-of-frame events only need the player back in view.
+- Used at game start: the player is fully visible, raises both hands above the shoulders, keeps legs straight and holds still ~1.2 s; we record standing hip height and torso length. Calibration happens once; later out-of-frame events only need the player back in view.
 - Arms get a longer "lost" delay (800 ms) than other parts (400 ms), because hands briefly leave the frame at the top of a big flap.
 - [OPEN] Is the outline a fixed silhouette or scaled to the player after first calibration? Fixed first; scale later if needed.
 - Outline drawn with Rough.js in a sketchy style matching the placeholder art [DECIDED].
@@ -175,7 +179,7 @@ Implemented in v0.1 (all numbers live in `src/config.ts`, tunable at runtime):
 ## 8. Code structure (v0.1)
 ```
 index.html, src/style.css
-src/main.ts                 app state machine: loading → calibrating → countdown → playing ⇄ outOfFrame; keyboard / error modes
+src/main.ts                 app state machine: loading → calibrating → countdown → playing ⇄ outOfFrame (game keeps running, no pose controls); keyboard / error modes
 src/config.ts               every tunable number (+ save/load to localStorage)
 src/pose/                   camera.ts, PoseTracker.ts (MediaPipe, One-Euro smoothing), landmarks.ts, types.ts
 src/gestures/               geometry.ts, FlapDetector.ts, SquatDetector.ts, VisibilityMonitor.ts, Calibration.ts  (pure TS, no DOM)
@@ -183,7 +187,7 @@ src/game/                   Game.ts (Pixi stage + Matter engine + scoring), Bird
 src/characters/, src/scenery/   art definition files (§6)
 src/render/                 assets.ts (loads everything named in the definitions), CharacterSprite.ts
 src/input/                  controls.ts (Controls interface), keyboard.ts
-src/ui/                     FrameGuide.ts (calibration / out-of-frame / countdown overlay), DebugPanel.ts (D), Tuning.ts (G), Recorder.ts (R)
+src/ui/                     FrameGuide.ts (calibration screen, out-of-frame corner box, countdown overlay), DebugPanel.ts (D), Tuning.ts (G), Recorder.ts (R)
 tests/                      synthetic.ts (synthetic pose generator), gestures.test.ts
 tools/generate-placeholder-art.mjs, scripts/copy-mediapipe-wasm.mjs
 ```

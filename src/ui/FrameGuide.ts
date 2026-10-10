@@ -2,6 +2,7 @@ import rough from 'roughjs';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { PART_NAMES, SKELETON, type PartName } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
+import { scenery } from '../scenery/scenery';
 
 export type GuideMode = 'hidden' | 'loading' | 'error' | 'calibrate' | 'outOfFrame' | 'countdown';
 
@@ -18,6 +19,11 @@ export interface GuideState {
 }
 
 type P = [number, number];
+interface Rect { x: number; y: number; w: number; h: number }
+
+/** The out-of-frame box covers about this fraction of the screen area, with the screen's proportions. */
+const MINI_AREA = 1 / 6;
+const MINI_MARGIN = 16;
 
 /**
  * Ideal pose outline, in MIRRORED display coordinates of the camera image (0..1).
@@ -41,7 +47,7 @@ const FONT = '"Patrick Hand", "Comic Sans MS", cursive';
 
 /**
  * Full-screen 2D-canvas overlay: loading/error screens, the "stand in the outline" calibration
- * screen, the "get back in frame" screen and the resume countdown.
+ * screen, the small "get back in frame" box in the lower right corner and the resume countdown.
  */
 export class FrameGuide {
   private ctx: CanvasRenderingContext2D;
@@ -84,48 +90,100 @@ export class FrameGuide {
         this.text('Get ready to flap!', W / 2, H / 2 + 120, 34, INK);
         break;
       case 'calibrate':
+        this.drawCalibrateScreen(s, W, H, now);
+        break;
       case 'outOfFrame':
-        this.drawCameraScreen(s, W, H, now);
+        this.drawOutOfFrameBox(s, W, H, now);
         break;
     }
   }
 
-  private drawCameraScreen(s: GuideState, W: number, H: number, now: number) {
+  /** Rectangle with the camera image's proportions, fitted (never cropped) and centred in `r`. */
+  private fitCamera(r: Rect): Rect {
+    const vw = this.video.videoWidth || 1280, vh = this.video.videoHeight || 720;
+    const scale = Math.min(r.w / vw, r.h / vh);
+    const w = vw * scale, h = vh * scale;
+    return { x: r.x + (r.w - w) / 2, y: r.y + (r.h - h) / 2, w, h };
+  }
+
+  private drawCalibrateScreen(s: GuideState, W: number, H: number, now: number) {
     const ctx = this.ctx;
     ctx.fillStyle = PAPER;
     ctx.fillRect(0, 0, W, H);
 
     // camera image, mirrored, fitted inside the screen (never cropped: edges matter here)
-    const vw = this.video.videoWidth || 1280, vh = this.video.videoHeight || 720;
     const top = 90, bottom = 110;
-    const scale = Math.min((W - 40) / vw, (H - top - bottom) / vh);
-    const dw = vw * scale, dh = vh * scale;
-    const ox = (W - dw) / 2, oy = top + (H - top - bottom - dh) / 2;
+    const cam = this.fitCamera({ x: 20, y: top, w: W - 40, h: H - top - bottom });
     if (this.video.readyState >= 2) {
       ctx.save();
-      ctx.translate(ox + dw, oy);
+      ctx.translate(cam.x + cam.w, cam.y);
       ctx.scale(-1, 1);
-      ctx.drawImage(this.video, 0, 0, dw, dh);
+      ctx.drawImage(this.video, 0, 0, cam.w, cam.h);
       ctx.restore();
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.fillRect(ox, oy, dw, dh);
+      ctx.fillRect(cam.x, cam.y, cam.w, cam.h);
     }
-    this.rc.rectangle(ox, oy, dw, dh, { stroke: INK, strokeWidth: 3, roughness: 1, seed: 7 });
+    this.rc.rectangle(cam.x, cam.y, cam.w, cam.h, { stroke: INK, strokeWidth: 3, roughness: 1, seed: 7 });
+    this.drawPose(s, cam, now, 7, 3);
 
+    this.text(s.title ?? 'Stand in the outline', W / 2, 48, 52, INK);
+    this.text(s.message ?? '', W / 2, H - 62, 32, INK);
+
+    if (s.progress !== undefined && s.progress > 0) {
+      const bw = Math.min(400, W * 0.6), bx = (W - bw) / 2, by = H - 34;
+      ctx.fillStyle = GREEN;
+      ctx.fillRect(bx, by, bw * s.progress, 14);
+      this.rc.rectangle(bx, by, bw, 14, { stroke: INK, strokeWidth: 2, roughness: 0.8, seed: 3 });
+    }
+  }
+
+  /**
+   * Unobtrusive "get back in frame" box in the lower right corner: game-sky background, a blinking
+   * frame, the target outline and the player's skeleton (no camera image).
+   */
+  private drawOutOfFrameBox(s: GuideState, W: number, H: number, now: number) {
+    const ctx = this.ctx;
+    const k = Math.sqrt(MINI_AREA);
+    const box: Rect = { w: W * k, h: H * k, x: 0, y: 0 };
+    box.x = W - box.w - MINI_MARGIN;
+    box.y = H - box.h - MINI_MARGIN;
+
+    ctx.fillStyle = scenery.skyColor;
+    ctx.fillRect(box.x, box.y, box.w, box.h);
+
+    const textSize = Math.max(14, box.h * 0.075);
+    const pad = textSize * 0.6;
+    const cam = this.fitCamera({ x: box.x + pad, y: box.y + pad, w: box.w - 2 * pad, h: box.h - 2 * pad - textSize * 1.4 });
+    this.drawPose(s, cam, now, Math.max(3, box.h * 0.016), 2);
+
+    this.text(s.message ?? 'Get back in frame!', box.x + box.w / 2, box.y + box.h - pad - textSize * 0.5, textSize, INK, box.w - 2 * pad);
+
+    if (Math.floor(now / 400) % 2 === 0) {
+      this.rc.rectangle(box.x, box.y, box.w, box.h, { stroke: RED, strokeWidth: 5, roughness: 1.2, seed: 11 });
+    } else {
+      this.rc.rectangle(box.x, box.y, box.w, box.h, { stroke: INK, strokeWidth: 2, roughness: 1.2, seed: 11 });
+    }
+  }
+
+  /**
+   * Target outline (each part green when visible, blinking red when lost) plus the player's live
+   * skeleton, both mapped into the camera rectangle `cam` (mirrored).
+   */
+  private drawPose(s: GuideState, cam: Rect, now: number, outlineWidth: number, skeletonWidth: number) {
+    const ctx = this.ctx;
     // display coords (already mirrored) -> screen
-    const toScreen = ([x, y]: P): P => [ox + x * dw, oy + y * dh];
+    const toScreen = ([x, y]: P): P => [cam.x + x * cam.w, cam.y + y * cam.h];
 
-    // target outline, each part green (visible) or blinking red (missing)
     const blinkOn = Math.floor(now / 350) % 2 === 0;
     PART_NAMES.forEach((name, i) => {
       const ok = s.vis?.parts[name].visible ?? false;
       const color = ok ? GREEN : RED;
       if (!ok && !blinkOn) return;
-      const o = { stroke: color, strokeWidth: 7, roughness: 1.6, bowing: 1.5, seed: 40 + i };
+      const o = { stroke: color, strokeWidth: outlineWidth, roughness: 1.6, bowing: 1.5, seed: 40 + i };
       const shape = OUTLINE[name];
       if (shape.kind === 'circle') {
         const [cx, cy] = toScreen(shape.c);
-        this.rc.circle(cx, cy, shape.r * 2 * dh, o);
+        this.rc.circle(cx, cy, shape.r * 2 * cam.h, o);
       } else if (shape.kind === 'polygon') {
         this.rc.polygon(shape.pts.map(toScreen), o);
       } else {
@@ -133,10 +191,10 @@ export class FrameGuide {
       }
     });
 
-    // the player's live skeleton (mirrored)
     if (s.frame) {
       const lm = s.frame.lm;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = skeletonWidth;
+      ctx.lineCap = 'round';
       ctx.strokeStyle = 'rgba(43,43,43,0.75)';
       ctx.beginPath();
       for (const [a, b] of SKELETON) {
@@ -147,28 +205,17 @@ export class FrameGuide {
       }
       ctx.stroke();
     }
-
-    const title = s.title ?? (s.mode === 'calibrate' ? 'Stand in the outline' : 'Get back in frame!');
-    this.text(title, W / 2, 48, 52, s.mode === 'outOfFrame' ? RED : INK);
-    this.text(s.message ?? '', W / 2, H - 62, 32, INK);
-
-    if (s.mode === 'calibrate' && s.progress !== undefined && s.progress > 0) {
-      const bw = Math.min(400, W * 0.6), bx = (W - bw) / 2, by = H - 34;
-      ctx.fillStyle = GREEN;
-      ctx.fillRect(bx, by, bw * s.progress, 14);
-      this.rc.rectangle(bx, by, bw, 14, { stroke: INK, strokeWidth: 2, roughness: 0.8, seed: 3 });
-    }
   }
 
-  private text(t: string, x: number, y: number, size: number, color: string) {
+  private text(t: string, x: number, y: number, size: number, color: string, maxWidth?: number) {
     const ctx = this.ctx;
     ctx.font = `${size}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineWidth = Math.max(3, size / 9);
     ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-    ctx.strokeText(t, x, y);
+    ctx.strokeText(t, x, y, maxWidth);
     ctx.fillStyle = color;
-    ctx.fillText(t, x, y);
+    ctx.fillText(t, x, y, maxWidth);
   }
 }
