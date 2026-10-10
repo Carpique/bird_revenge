@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Text } from 'pixi.js';
+import { Application, Container, Text } from 'pixi.js';
 import { config, WORLD } from '../config';
 import { noControls, type Controls } from '../input/controls';
 import { fitWorld } from '../render/fitWorld';
@@ -41,7 +41,6 @@ export class Game {
   private pending: (() => void)[] = [];
   private acc = 0;
   private scoreText: Text;
-  private statusText: Text;
   private pausedText: Text;
   /** queued poo request: sideways direction (-1 left, 0 straight down, +1 right), or null */
   private pooQueued: number | null = null;
@@ -75,9 +74,6 @@ export class Game {
 
     this.scoreText = new Text({ text: 'Score: 0', style: { fontFamily: FONT, fontSize: 40, fill: '#2b2b2b' } });
     this.scoreText.position.set(24, 14);
-    this.statusText = new Text({ text: '', style: { fontFamily: FONT, fontSize: 20, fill: '#555' } });
-    this.statusText.anchor.set(1, 0);
-    this.statusText.position.set(WORLD.width - 20, 18);
     this.pausedText = new Text({
       text: 'Pause',
       style: {
@@ -91,19 +87,11 @@ export class Game {
     });
     this.pausedText.anchor.set(0.5);
     this.pausedText.position.set(WORLD.width / 2, WORLD.height / 2);
-    this.hud.addChild(this.scoreText, this.statusText, this.pausedText);
-
-    // world border (visible when the window aspect differs from 16:9)
-    const frame = new Graphics().rect(0, 0, WORLD.width, WORLD.height).stroke({ width: 2, color: 0xc9d6db });
-    this.root.addChildAt(frame, 0);
+    this.hud.addChild(this.scoreText, this.pausedText);
 
     app.stage.addChild(this.root);
     app.ticker.add((ticker) => this.update(ticker.deltaMS));
     this.sync();
-  }
-
-  setStatus(text: string) {
-    this.statusText.text = text;
   }
 
   /**

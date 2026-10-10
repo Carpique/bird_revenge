@@ -15,6 +15,7 @@ import { scenery } from './scenery/scenery';
 import { DebugPanel } from './ui/DebugPanel';
 import { loadFonts } from './ui/fonts';
 import { FrameGuide, type GuideState } from './ui/FrameGuide';
+import { FullscreenButton } from './ui/FullscreenButton';
 import { Recorder } from './ui/Recorder';
 import { SplashScreen } from './ui/SplashScreen';
 import { Tuning } from './ui/Tuning';
@@ -99,9 +100,11 @@ async function main() {
   const splash = new SplashScreen(app);
   app.stage.addChild(splash);
   const help = document.getElementById('help')!;
+  const status = document.getElementById('status')!;
   const debug = new DebugPanel(video);
   const tuning = new Tuning();
   const recorder = new Recorder();
+  new FullscreenButton();
   const keyboard = new Keyboard();
   const visibility = new VisibilityMonitor();
   const flap = new FlapDetector();
@@ -267,7 +270,8 @@ async function main() {
     const mode = state === 'keyboard' || poseError ? 'keyboard' : 'pose';
     const rec = recorder.recording ? `  ● REC ${recorder.seconds.toFixed(0)}s` : '';
     const fps = tracker ? `  ${tracker.fps.toFixed(0)} fps` : '';
-    game.setStatus(`${mode}${fps}${rec}`);
+    const statusText = `${mode}${fps}${rec}`;
+    if (status.textContent !== statusText) status.textContent = statusText;
 
     debug.draw({
       state,
