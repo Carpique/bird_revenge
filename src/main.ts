@@ -7,7 +7,7 @@ import { ShootDetector, type ShootOutput } from './gestures/ShootDetector';
 import { VisibilityMonitor, type VisibilityOutput } from './gestures/VisibilityMonitor';
 import { noControls, type Controls } from './input/controls';
 import { Keyboard } from './input/keyboard';
-import { startCamera } from './pose/camera';
+import { startCamera, stopCamera } from './pose/camera';
 import { PoseTracker } from './pose/PoseTracker';
 import type { PoseFrame } from './pose/types';
 import { loadAllAssets } from './render/assets';
@@ -26,6 +26,9 @@ import { Tuning } from './ui/Tuning';
  *   calibrating shows a dialog over the paused game (also camera loading / camera errors)
  *   outOfFrame keeps the game running with no pose controls, so the bird drops until the player is back
  *   keyboard (K toggles; pose is ignored)
+ * Pausing (Space / P in game, or the window losing focus during a game) freezes the game and shows "Pause".
+ * While paused or while the window is unfocused / hidden, everything is suspended — render loop, guide
+ * overlay, pose tracker and the camera itself — so an idle game uses almost no CPU.
  */
 type AppState = 'loading' | 'menu' | 'calibrating' | 'countdown' | 'playing' | 'outOfFrame' | 'keyboard';
 
@@ -62,9 +65,19 @@ async function main() {
   let lastPoseT = 0;
   let tracker: PoseTracker | null = null;
 
-  // the guide is drawn every animation frame, also while loading
+  /** the window is unfocused / hidden, or the game is paused: nothing runs */
+  let suspended = false;
+
+  // the guide is drawn every animation frame, also while loading (not while suspended)
+  let guideRunning = true;
   const drawGuide = () => {
     const now = performance.now();
+    if (suspended) {
+      // a manual pause hides the dialogs behind the "Pause" sign; otherwise the last frame stays as is
+      if (manualPause) guide.draw({ mode: 'hidden', frame, vis }, now);
+      guideRunning = false;
+      return;
+    }
     const gs: GuideState = { mode: 'hidden', frame, vis };
     if (state === 'loading') Object.assign(gs, { mode: 'loading', message: loadingMessage });
     else if (state === 'calibrating' && poseError)
@@ -107,13 +120,89 @@ async function main() {
 
   splash.onStart = recalibrate;
 
+  /** states where the game is on screen and can be paused */
+  const inGame = () => state === 'countdown' || state === 'playing' || state === 'outOfFrame' || state === 'keyboard';
+  let focused = document.hasFocus();
+  const windowActive = () => focused && !document.hidden;
+
+  // camera + pose tracker follow `suspended`; switching is async, so changes are applied one at a time
+  let cameraOn = false;
+  let poseSync = Promise.resolve();
+  const syncPose = () => {
+    poseSync = poseSync.then(async () => {
+      if (!tracker || poseError) return;
+      const want = !suspended;
+      if (want === cameraOn) return;
+      if (want) {
+        try {
+          await startCamera(video);
+        } catch (e) {
+          console.error(e);
+          poseError = 'Could not restart the camera';
+          return;
+        }
+        cameraOn = true;
+        if (suspended) return syncPose(); // suspended again while the camera was starting
+        tracker.start();
+      } else {
+        tracker.stop();
+        stopCamera(video);
+        cameraOn = false;
+        frame = null;
+        lastPoseT = 0; // stale pose controls must not apply until a fresh frame arrives
+      }
+    });
+  };
+
+  let suspendedAt = 0;
+  const updateSuspended = () => {
+    const next = manualPause || !windowActive();
+    if (next === suspended) return;
+    suspended = next;
+    const now = performance.now();
+    if (suspended) {
+      suspendedAt = now;
+      // render one last frame (with the "Pause" sign if paused), then stop the render loop
+      game.paused = true;
+      game.showPausedText = manualPause;
+      app.ticker.update(now);
+      app.ticker.stop();
+    } else {
+      countdownEnd += now - suspendedAt;
+      app.ticker.start();
+      if (!guideRunning) {
+        guideRunning = true;
+        requestAnimationFrame(drawGuide);
+      }
+    }
+    syncPose();
+  };
+  const setPaused = (paused: boolean) => {
+    manualPause = paused;
+    updateSuspended();
+  };
+
+  // losing focus pauses a game; elsewhere (menu, calibration) it just suspends silently
+  const onWindowChange = (e: Event) => {
+    if (e.type === 'blur' || e.type === 'focus') focused = e.type === 'focus';
+    if (!windowActive() && inGame()) manualPause = true;
+    updateSuspended();
+  };
+  window.addEventListener('blur', onWindowChange);
+  window.addEventListener('focus', onWindowChange);
+  document.addEventListener('visibilitychange', onWindowChange);
+  updateSuspended(); // the page may have loaded in the background
+
   keyboard.onPoo = () => game.requestPoo();
+  keyboard.onPause = () => {
+    if (manualPause || inGame()) setPaused(!manualPause);
+  };
   keyboard.onHotkey = (k) => {
     if (k === 'd') debug.toggle();
     else if (k === 'g') tuning.toggle();
     else if (k === 'r') recorder.toggle();
     if (state === 'loading' || state === 'menu') return;
-    if (k === 'p') manualPause = !manualPause;
+    if (k === 'p') keyboard.onPause();
     else if (k === 'c' && tracker) recalibrate();
     else if (k === 'k') {
       if (state !== 'keyboard') state = 'keyboard';
@@ -197,10 +286,12 @@ async function main() {
   try {
     loadingMessage = 'Starting camera…';
     await startCamera(video);
+    cameraOn = true;
     loadingMessage = 'Loading pose model…';
     tracker = await PoseTracker.create(video);
     tracker.onFrame = onPose;
-    tracker.start();
+    if (!suspended) tracker.start();
+    syncPose(); // turns the camera off if the window was left while loading
   } catch (e) {
     console.error(e);
     const msg = e instanceof Error ? e.message : String(e);

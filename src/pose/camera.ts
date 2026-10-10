@@ -13,3 +13,10 @@ export async function startCamera(video: HTMLVideoElement): Promise<void> {
   });
   await video.play();
 }
+
+/** Stops the camera (its light goes off); `startCamera` turns it back on. */
+export function stopCamera(video: HTMLVideoElement) {
+  const stream = video.srcObject as MediaStream | null;
+  stream?.getTracks().forEach((t) => t.stop());
+  video.srcObject = null;
+}

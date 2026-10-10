@@ -23,7 +23,7 @@ const PAGE_TEXT: Record<Exclude<Page, 'main'>, string> = {
     'Hit the villain to score!',
     '',
     'Stand back so your arms and hips are in view.',
-    'Keyboard: Space / ↑ flap · ← → steer · ↓ poo',
+    'Keyboard: ↑ flap · ← → steer · ↓ poo · Space pause',
   ].join('\n'),
   scores: 'No scores yet.\nRounds and high scores are coming soon.',
 };

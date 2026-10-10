@@ -17,12 +17,12 @@ your arms (hands raised included) are visible; the legs may be cut off.
 
 | Action | Body | Keyboard |
 |---|---|---|
-| Flap / fly up | flap both arms (faster, bigger = more lift) | Space or ↑ |
+| Flap / fly up | flap both arms (faster, bigger = more lift) | ↑ |
 | Steer | flap one arm harder than the other | ← → |
 | Poo | shoot: raise a leg sideways (the poo flies towards that side) | ↓ |
 
 Hotkeys: **D** debug panel · **G** tuning panel · **K** keyboard-only mode · **C** recalibrate ·
-**P** pause · **R** start/stop recording landmarks to a JSON file.
+**Space** / **P** pause in game (also automatic when the window loses focus; camera and pose tracking are switched off while paused or unfocused) · **R** start/stop recording landmarks to a JSON file.
 
 ## Tuning
 

@@ -3,7 +3,7 @@ import { config, WORLD } from '../config';
 import { noControls, type Controls } from '../input/controls';
 import { fitWorld } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
-import { HAND_FONT as FONT } from '../ui/fonts';
+import { HAND_FONT as FONT, TITLE_FONT } from '../ui/fonts';
 import { Background } from './Background';
 import { Bird } from './Bird';
 import { Bodies, Composite, Engine, Events, STEP_MS, type MBody, type MEngine } from './physics';
@@ -78,9 +78,19 @@ export class Game {
     this.statusText = new Text({ text: '', style: { fontFamily: FONT, fontSize: 20, fill: '#555' } });
     this.statusText.anchor.set(1, 0);
     this.statusText.position.set(WORLD.width - 20, 18);
-    this.pausedText = new Text({ text: 'Paused', style: { fontFamily: FONT, fontSize: 64, fill: '#2b2b2b' } });
+    this.pausedText = new Text({
+      text: 'Pause',
+      style: {
+        fontFamily: TITLE_FONT,
+        fontSize: 180,
+        fill: '#2b2b2b',
+        stroke: { color: '#ffffff', width: 12, join: 'round' },
+        dropShadow: { color: '#c0392b', alpha: 1, angle: Math.PI / 4, distance: 9, blur: 0 },
+        padding: 20,
+      },
+    });
     this.pausedText.anchor.set(0.5);
-    this.pausedText.position.set(WORLD.width / 2, WORLD.height / 2 - 40);
+    this.pausedText.position.set(WORLD.width / 2, WORLD.height / 2);
     this.hud.addChild(this.scoreText, this.statusText, this.pausedText);
 
     // world border (visible when the window aspect differs from 16:9)

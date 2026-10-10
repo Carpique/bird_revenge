@@ -22,6 +22,8 @@ export class PoseTracker {
   private filters: OneEuroFilter[] = [];
   private lastTs = 0;
   private running = false;
+  /** bumped on every start, so a frame callback left over from before a stop/start ends its loop */
+  private generation = 0;
   private fpsCount = 0;
   private fpsT0 = performance.now();
 
@@ -53,11 +55,12 @@ export class PoseTracker {
   start() {
     if (this.running) return;
     this.running = true;
+    const gen = ++this.generation;
     const v = this.video as HTMLVideoElement & {
       requestVideoFrameCallback?: (cb: () => void) => number;
     };
     const loop = () => {
-      if (!this.running) return;
+      if (!this.running || gen !== this.generation) return;
       this.process();
       if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(loop);
       else requestAnimationFrame(loop);

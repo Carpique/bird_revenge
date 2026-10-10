@@ -26,7 +26,7 @@
 | F5 | Short calibration step at game start: stand in the outline with arms lowered, hold still ~1 s; records the standing hip angles | [DECIDED] (v0.1) |
 | F7 | Player must be **in frame**: at minimum torso (shoulders to hips) and both arms, raised included; head and legs are optional. A visibility monitor runs continuously and shows a "get back in frame" overlay when a required part is lost (see §4.5) | [DECIDED] |
 | F8 | The game keeps running while the out-of-frame box is shown, but pose controls are cut off (the bird drops), so the player has an incentive to get back quickly; controls return as soon as the pose is reacquired | [DECIDED] |
-| F6 | Keyboard fallback controls for development/testing (Space/↑ flap, ←/→ steer, ↓ poo; K = keyboard-only mode) | [DECIDED] (v0.1) |
+| F6 | Keyboard fallback controls for development/testing (↑ flap, ←/→ steer, ↓ poo; Space/P pause; K = keyboard-only mode) | [DECIDED] (v0.1) |
 | F9 | Sound | [DEFERRED] |
 
 ### 2.2 Non-functional

@@ -2,19 +2,21 @@ import { config } from '../config';
 import type { Controls } from './controls';
 
 /**
- * Keyboard fallback: Space / ↑ flap, ← → steer, ↓ poo.
+ * Keyboard fallback: ↑ flap, ← → steer, ↓ poo. Space toggles pause (`onPause`).
  * Single-letter hotkeys are dispatched to `onHotkey`.
  */
 export class Keyboard {
   private held = new Set<string>();
   onPoo: () => void = () => {};
   onHotkey: (key: string) => void = () => {};
+  onPause: () => void = () => {};
 
   constructor() {
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement) return; // typing in the tuning panel
       const k = e.key;
       if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k)) e.preventDefault();
+      if (k === ' ' && !e.repeat) this.onPause();
       if ((k === 'ArrowDown' || k === 's') && !e.repeat) this.onPoo();
       if (k.length === 1 && k !== ' ' && !e.repeat) this.onHotkey(k.toLowerCase());
       this.held.add(k);
@@ -25,7 +27,7 @@ export class Keyboard {
 
   /** Adds keyboard input on top of `base` (pose) controls. */
   apply(base: Controls): Controls {
-    const flap = this.held.has(' ') || this.held.has('ArrowUp');
+    const flap = this.held.has('ArrowUp');
     const left = this.held.has('ArrowLeft');
     const right = this.held.has('ArrowRight');
     const steer = (right ? 1 : 0) - (left ? 1 : 0);
