@@ -51,27 +51,31 @@ export function shoulderCenter(f: PoseFrame): Vec {
   return mid(pt(f, L.leftShoulder), pt(f, L.rightShoulder));
 }
 
-export function kneeCenter(f: PoseFrame): Vec {
-  return mid(pt(f, L.leftKnee), pt(f, L.rightKnee));
-}
-
-/** Vertical knee-centre minus hip-centre distance: shrinks to ~0 when the hips reach knee level. */
-export function thighDrop(f: PoseFrame): number {
-  return kneeCenter(f).y - hipCenter(f).y;
-}
-
-export function ankleCenter(f: PoseFrame): Vec {
-  return mid(pt(f, L.leftAnkle), pt(f, L.rightAnkle));
-}
-
-/** Vertical ankle-centre minus hip-centre distance: how high the hips are above the feet. */
-export function hipHeight(f: PoseFrame): number {
-  return ankleCenter(f).y - hipCenter(f).y;
-}
-
 /** Shoulder-centre to hip-centre distance (normalised image height units). */
 export function torsoLength(f: PoseFrame): number {
   return len(sub(hipCenter(f), shoulderCenter(f)));
+}
+
+/**
+ * Hip abduction: angle of the thigh (hip → knee) away from "down the torso" (shoulder centre → hip
+ * centre), signed so that positive = the leg swings out to its own side, negative = across the body.
+ * 0° = leg in line with the torso. Measured against the torso rather than the image vertical, so a
+ * tilted camera or the body swaying while flapping doesn't change it.
+ */
+export function hipAbduction(f: PoseFrame, side: Side): number {
+  const hipC = hipCenter(f);
+  const down = sub(hipC, shoulderCenter(f));
+  const hip = pt(f, side === 'left' ? L.leftHip : L.rightHip);
+  const knee = pt(f, side === 'left' ? L.leftKnee : L.rightKnee);
+  // unit vector perpendicular to the torso axis, pointing towards this hip
+  const d = len(down) || 1;
+  let out = { x: -down.y / d, y: down.x / d };
+  const toHip = sub(hip, hipC);
+  if (out.x * toHip.x + out.y * toHip.y < 0) out = { x: -out.x, y: -out.y };
+  const thigh = sub(knee, hip);
+  const along = (thigh.x * down.x + thigh.y * down.y) / d;
+  const across = thigh.x * out.x + thigh.y * out.y;
+  return (Math.atan2(across, along) * 180) / Math.PI;
 }
 
 export function isVisible(p: Landmark, minVis: number, margin: number): boolean {

@@ -1,6 +1,6 @@
 import rough from 'roughjs';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
-import { PART_NAMES, SKELETON, type PartName } from '../pose/landmarks';
+import { PART_NAMES, REQUIRED_PARTS, SKELETON, type PartName } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
 import { scenery } from '../scenery/scenery';
 import { HAND_FONT as FONT } from './fonts';
@@ -177,7 +177,8 @@ export class FrameGuide {
   }
 
   /**
-   * Target outline (each part green when visible, blinking red when lost) plus the player's live
+   * Target outline (each part green when visible; a lost required part blinks red, a lost optional
+   * part such as the legs is grey) plus the player's live
    * skeleton, both mapped into the camera rectangle `cam` (mirrored). Line widths follow `boxH`,
    * the height of the box it is drawn in. Without visibility data (still loading) the outline is grey.
    */
@@ -191,8 +192,9 @@ export class FrameGuide {
     const blinkOn = Math.floor(now / 350) % 2 === 0;
     PART_NAMES.forEach((name, i) => {
       const ok = s.vis?.parts[name].visible ?? false;
-      const color = !s.vis ? MUTED : ok ? GREEN : RED;
-      if (s.vis && !ok && !blinkOn) return;
+      const required = REQUIRED_PARTS.includes(name);
+      const color = !s.vis ? MUTED : ok ? GREEN : required ? RED : MUTED;
+      if (s.vis && !ok && required && !blinkOn) return;
       const o = { stroke: color, strokeWidth: outlineWidth, roughness: 1.6, bowing: 1.5, seed: 40 + i };
       const shape = OUTLINE[name];
       if (shape.kind === 'circle') {

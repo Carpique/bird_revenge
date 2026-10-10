@@ -1,5 +1,5 @@
 import type { FlapOutput } from '../gestures/FlapDetector';
-import type { SquatOutput } from '../gestures/SquatDetector';
+import type { ShootOutput } from '../gestures/ShootDetector';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { config } from '../config';
 import { PART_NAMES, SKELETON } from '../pose/landmarks';
@@ -10,11 +10,14 @@ interface Sample {
   aL: number;
   aR: number;
   lift: number;
-  depth: number;
-  squat: boolean;
+  /** shoot angle (larger hip angle above baseline), deg */
+  hip: number;
+  shoot: boolean;
 }
 
 const HISTORY_MS = 5000;
+/** top of the plot for the shoot hip angle, deg */
+const HIP_PLOT_MAX = 90;
 
 /** Small panel (toggle with D): camera + skeleton, live signal plot, numbers. */
 export class DebugPanel {
@@ -34,9 +37,9 @@ export class DebugPanel {
     this.root.hidden = !this.root.hidden;
   }
 
-  record(t: number, flap: FlapOutput | null, squat: SquatOutput | null) {
-    if (!flap || !squat) return;
-    this.history.push({ t, aL: flap.left.angle, aR: flap.right.angle, lift: flap.lift, depth: squat.depth, squat: squat.squatting });
+  record(t: number, flap: FlapOutput | null, shoot: ShootOutput | null) {
+    if (!flap || !shoot) return;
+    this.history.push({ t, aL: flap.left.angle, aR: flap.right.angle, lift: flap.lift, hip: shoot.angle, shoot: shoot.shooting });
     while (this.history.length && t - this.history[0].t > HISTORY_MS) this.history.shift();
   }
 
@@ -45,7 +48,7 @@ export class DebugPanel {
     frame: PoseFrame | null;
     vis: VisibilityOutput | null;
     flap: FlapOutput | null;
-    squat: SquatOutput | null;
+    shoot: ShootOutput | null;
     fps: number;
     inferenceMs: number;
     now: number;
@@ -85,7 +88,7 @@ export class DebugPanel {
       }
     }
 
-    // plot: arm angles (0..180), lift (0..max), squat depth (0..1)
+    // plot: arm angles (0..180), lift (0..max), shoot hip angle (0..90)
     const py = camH + 8, ph = this.canvas.height - py - 4;
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, py, W, ph);
@@ -96,7 +99,7 @@ export class DebugPanel {
       const t0 = info.now - HISTORY_MS;
       const X = (t: number) => ((t - t0) / HISTORY_MS) * W;
       for (const s of h) {
-        if (s.squat) {
+        if (s.shoot) {
           ctx.fillStyle = 'rgba(132, 94, 247, 0.15)';
           ctx.fillRect(X(s.t), py, 3, ph);
         }
@@ -115,9 +118,9 @@ export class DebugPanel {
       line((s) => s.aL, 180, '#1c7ed6');
       line((s) => s.aR, 180, '#f08c00');
       line((s) => s.lift, config.flap.maxLiftAccel, '#2f9e44');
-      line((s) => s.depth, 1, '#845ef7');
-      // squat enter threshold
-      const ty = py + ph - config.squat.depthEnter * ph;
+      line((s) => s.hip, HIP_PLOT_MAX, '#845ef7');
+      // shoot enter threshold
+      const ty = py + ph - (config.shoot.angleEnter / HIP_PLOT_MAX) * ph;
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = '#845ef7';
       ctx.beginPath();
@@ -127,13 +130,13 @@ export class DebugPanel {
       ctx.setLineDash([]);
     }
     ctx.font = '11px ui-monospace, monospace';
-    [['L arm', '#1c7ed6'], ['R arm', '#f08c00'], ['lift', '#2f9e44'], ['squat depth', '#845ef7']].forEach(([n, c], i) => {
+    [['L arm', '#1c7ed6'], ['R arm', '#f08c00'], ['lift', '#2f9e44'], ['shoot hip°', '#845ef7']].forEach(([n, c], i) => {
       ctx.fillStyle = c;
       ctx.fillText(n, 6 + i * 60, py + 13);
     });
 
     // numbers
-    const fl = info.flap, sq = info.squat, vis = info.vis;
+    const fl = info.flap, sh = info.shoot, vis = info.vis;
     const n = (x: number, d = 0) => x.toFixed(d).padStart(5);
     const lines = [
       `state     ${info.state}`,
@@ -144,8 +147,8 @@ export class DebugPanel {
       fl ? `R   ${n(fl.right.angle)} ${n(fl.right.velocity)} ${n(fl.right.power)} ${String(fl.right.strokes).padStart(4)} ${fl.right.frequency.toFixed(1).padStart(4)}` : '',
       fl ? `lift ${n(fl.lift)} px/s²  steer ${n(fl.steer)}` : '',
       '',
-      sq ? `squat depth ${sq.depth.toFixed(2)}  knees ${n(sq.kneeLeft)} ${n(sq.kneeRight)}` : '',
-      sq ? `squatting ${sq.squatting ? 'YES' : 'no'}` : '',
+      sh ? `shoot hips L ${n(sh.left)}  R ${n(sh.right)}  raised ${sh.raisedLeg ?? '-'}` : '',
+      sh ? `shooting ${sh.shooting ? 'YES' : 'no'}` : '',
       '',
       vis ? 'parts ' + PART_NAMES.map((p) => `${p}:${vis.parts[p].visible ? '✓' : '✗'}`).join(' ') : '',
       vis?.hint ? `hint  ${vis.hint}` : '',

@@ -1,5 +1,5 @@
 import { config } from '../config';
-import { PART_LANDMARKS, PART_NAMES, type PartName } from '../pose/landmarks';
+import { L, PART_LANDMARKS, PART_NAMES, REQUIRED_PARTS, type PartName } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
 import { isVisible } from './geometry';
 
@@ -15,8 +15,9 @@ export interface PartStatus {
 export interface VisibilityOutput {
   personDetected: boolean;
   parts: Record<PartName, PartStatus>;
-  allVisible: boolean;
-  /** body bounding box in normalised image coords (not mirrored), if a person is detected */
+  /** all REQUIRED_PARTS visible: enough of the player in view to play */
+  inFrame: boolean;
+  /** upper-body bounding box in normalised image coords (not mirrored), if a person is detected */
   box: { minX: number; maxX: number; minY: number; maxY: number } | null;
   /** what to tell the player, or null when all good */
   hint: string | null;
@@ -29,7 +30,7 @@ interface PartTimer {
 }
 
 /**
- * Decides whether the player is fully in frame, with smoothing + hysteresis so the
+ * Decides whether enough of the player is in frame (REQUIRED_PARTS), with smoothing + hysteresis so the
  * "get back in frame" overlay doesn't flicker on single bad frames.
  */
 export class VisibilityMonitor {
@@ -79,15 +80,15 @@ export class VisibilityMonitor {
     }
 
     const parts = Object.fromEntries(PART_NAMES.map((n) => [n, { ...this.parts[n].status }])) as Record<PartName, PartStatus>;
-    const allVisible = this.personDetected && PART_NAMES.every((n) => parts[n].visible);
-    const box = f ? bodyBox(f) : null;
-    return { personDetected: this.personDetected, parts, allVisible, box, hint: makeHint(this.personDetected, parts, box) };
+    const inFrame = this.personDetected && REQUIRED_PARTS.every((n) => parts[n].visible);
+    const box = f ? upperBodyBox(f) : null;
+    return { personDetected: this.personDetected, parts, inFrame, box, hint: makeHint(this.personDetected, parts, box, f) };
   }
 }
 
-function bodyBox(f: PoseFrame) {
-  // nose, shoulders, elbows, wrists, hips, knees, ankles — MediaPipe estimates these even off-frame
-  const idx = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+function upperBodyBox(f: PoseFrame) {
+  // nose, shoulders, elbows, wrists, hips — MediaPipe estimates these even off-frame
+  const idx = [0, 11, 12, 13, 14, 15, 16, 23, 24];
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const i of idx) {
     const p = f.lm[i];
@@ -105,16 +106,15 @@ function makeHint(
   person: boolean,
   parts: Record<PartName, PartStatus>,
   box: VisibilityOutput['box'],
+  f: PoseFrame | null,
 ): string | null {
   if (!person) return 'Step in front of the camera';
   const cfg = config.visibility;
-  const legsLost = !parts.leftLeg.visible || !parts.rightLeg.visible;
-  const headLost = !parts.head.visible;
   const armsLost = !parts.leftArm.visible || !parts.rightArm.visible;
   const h = box ? box.maxY - box.minY : 0;
-  if (legsLost && headLost) return 'Step back — you are too close';
-  if (legsLost) return 'Step back — your feet are out of view';
-  if (headLost) return 'Step back — your head is out of view';
+  // hips below the frame edge: too close (or camera too high)
+  const hipsBelow = !!f && Math.max(f.lm[L.leftHip].y, f.lm[L.rightHip].y) > 1 - cfg.frameMargin;
+  if (!parts.torso.visible && hipsBelow) return 'Step back — your hips are out of view';
   if (box && armsLost) {
     // box is in camera coords; on the mirrored screen left/right swap
     const centre = 1 - (box.minX + box.maxX) / 2;
@@ -123,7 +123,6 @@ function makeHint(
     return 'Step back — your arms are out of view';
   }
   if (!parts.torso.visible) return 'Face the camera';
-  if (box && h > cfg.maxBodyHeight) return 'Step back a little';
-  if (box && h < cfg.minBodyHeight) return 'Come a bit closer';
+  if (box && h < cfg.minUpperBodyHeight) return 'Come a bit closer';
   return null;
 }

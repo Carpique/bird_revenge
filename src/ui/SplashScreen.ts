@@ -19,10 +19,10 @@ interface MenuItem {
 const PAGE_TEXT: Record<Exclude<Page, 'main'>, string> = {
   instructions: [
     'Flap your arms to fly. Flap one arm harder to steer.',
-    'Squat to drop a poo; lift one leg to throw it sideways.',
+    'Shoot: raise a leg sideways to drop a poo — it flies that way.',
     'Hit the villain to score!',
     '',
-    'Stand 2–3 m from the camera, whole body in view.',
+    'Stand back so your arms and hips are in view.',
     'Keyboard: Space / ↑ flap · ← → steer · ↓ poo',
   ].join('\n'),
   scores: 'No scores yet.\nRounds and high scores are coming soon.',
@@ -64,7 +64,7 @@ export class SplashScreen extends Container {
     title.anchor.set(0.5);
     title.position.set(WORLD.width / 2, 170);
 
-    const tagline = new Text({ text: 'flap · squat · splat', style: { fontFamily: HAND_FONT, fontSize: 34, fill: '#555' } });
+    const tagline = new Text({ text: 'flap · shoot · splat', style: { fontFamily: HAND_FONT, fontSize: 34, fill: '#555' } });
     tagline.anchor.set(0.5);
     tagline.position.set(WORLD.width / 2, 275);
 

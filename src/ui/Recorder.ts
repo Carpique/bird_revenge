@@ -3,7 +3,7 @@ import type { PoseFrame } from '../pose/types';
 
 /**
  * Records raw landmark streams to a JSON download (press R to start/stop).
- * Cheap insurance: if the squat heuristic needs ML later, we already have data.
+ * Cheap insurance: if the shoot heuristic needs ML later, we already have data.
  */
 export class Recorder {
   recording = false;

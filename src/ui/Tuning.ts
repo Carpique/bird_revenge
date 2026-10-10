@@ -10,11 +10,11 @@ const RANGES: Record<string, [number, number, number]> = {
   'flap.maxLiftAccel': [500, 8000, 100],
   'flap.maxSteerAccel': [0, 6000, 100],
   'flap.strokeMinAmplitude': [5, 90, 1],
-  'squat.depthEnter': [0.1, 1.2, 0.01],
-  'squat.depthExit': [0, 1, 0.01],
-  'squat.legRaiseMin': [0, 1, 0.01],
-  'squat.cooldownMs': [0, 3000, 50],
-  'squat.baselineAdaptRate': [0, 0.2, 0.005],
+  'shoot.angleEnter': [5, 80, 1],
+  'shoot.angleExit': [0, 60, 1],
+  'shoot.legRaiseMin': [0, 60, 1],
+  'shoot.cooldownMs': [0, 3000, 50],
+  'shoot.baselineAdaptRate': [0, 0.2, 0.005],
   'visibility.minLandmarkVisibility': [0, 1, 0.05],
   'visibility.frameMargin': [0, 0.1, 0.005],
   'visibility.emaAlpha': [0.05, 1, 0.05],
@@ -32,7 +32,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'smoothing.beta': [0, 3, 0.01],
 };
 
-const SECTIONS = ['flap', 'squat', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain'] as const;
+const SECTIONS = ['flap', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {
@@ -53,7 +53,7 @@ export class Tuning {
           folder.add(obj, key);
         }
       }
-      if (section !== 'flap' && section !== 'squat') folder.close();
+      if (section !== 'flap' && section !== 'shoot') folder.close();
     }
     this.gui.add({ save: () => saveConfig() }, 'save').name('💾 save to this browser');
     this.gui.add({ copy: () => navigator.clipboard?.writeText(JSON.stringify(config, null, 2)) }, 'copy').name('📋 copy as JSON');

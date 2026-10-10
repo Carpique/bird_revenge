@@ -19,6 +19,11 @@ export const L = {
 
 export type PartName = 'head' | 'torso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
 export const PART_NAMES: PartName[] = ['head', 'torso', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
+/**
+ * Parts that must be in frame to play. Legs are optional: MediaPipe still estimates them (straight)
+ * when they are off-frame, and the hip angles that the shoot detector uses only need the hips.
+ */
+export const REQUIRED_PARTS: PartName[] = ['torso', 'leftArm', 'rightArm'];
 
 /** Landmarks that must all be visible for a body part to count as visible. */
 export const PART_LANDMARKS: Record<PartName, number[]> = {

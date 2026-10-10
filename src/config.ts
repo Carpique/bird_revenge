@@ -36,9 +36,8 @@ export const config = {
     armLostAfterMs: 800,
     recoverAfterMs: 300,
     noPersonAfterMs: 500,
-    /** body height as fraction of frame height, used for "come closer / step back" hints */
-    minBodyHeight: 0.45,
-    maxBodyHeight: 0.97,
+    /** nose→hips height as fraction of frame height, below which we hint "come closer" */
+    minUpperBodyHeight: 0.22,
   },
 
   calibration: {
@@ -70,18 +69,16 @@ export const config = {
     strokeMinAmplitude: 25,
   },
 
-  squat: {
-    /**
-     * how far the hips must drop to enter a squat, as a fraction of the standing hip→knee height
-     * (1 = hips level with knees; 0.3 is a light knee bend)
-     */
-    depthEnter: 0.3,
-    /** ...and back below this to leave it */
-    depthExit: 0.15,
-    /** ankle height difference (torso lengths) above which one leg counts as raised */
-    legRaiseMin: 0.15,
+  /** "shoot": a leg raised sideways, read from the hip angles */
+  shoot: {
+    /** hip abduction (deg above the standing baseline) of either leg that enters a shoot */
+    angleEnter: 25,
+    /** ...and both legs back below this to leave it */
+    angleExit: 12,
+    /** left-right hip angle difference (deg) above which one leg counts as the raised one */
+    legRaiseMin: 15,
     cooldownMs: 700,
-    /** slowly re-learn standing hip height while standing straight (handles stepping closer/further) */
+    /** slowly re-learn the standing hip angles while standing (stance drifts a little) */
     baselineAdaptRate: 0.02,
   },
 

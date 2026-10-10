@@ -3,7 +3,7 @@ import { config, loadSavedConfig } from './config';
 import { Game } from './game/Game';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
 import { FlapDetector, type FlapOutput } from './gestures/FlapDetector';
-import { SquatDetector, type SquatOutput } from './gestures/SquatDetector';
+import { ShootDetector, type ShootOutput } from './gestures/ShootDetector';
 import { VisibilityMonitor, type VisibilityOutput } from './gestures/VisibilityMonitor';
 import { noControls, type Controls } from './input/controls';
 import { Keyboard } from './input/keyboard';
@@ -56,7 +56,7 @@ async function main() {
   let frame: PoseFrame | null = null;
   let vis: VisibilityOutput | null = null;
   let flapOut: FlapOutput | null = null;
-  let squatOut: SquatOutput | null = null;
+  let shootOut: ShootOutput | null = null;
   let calibStatus: CalibrationStatus | null = null;
   let poseControls: Controls = noControls();
   let lastPoseT = 0;
@@ -71,8 +71,8 @@ async function main() {
       Object.assign(gs, { mode: 'calibrate', title: 'No camera', message: poseError, error: true, hint: 'Press K to play with the keyboard' });
     else if (state === 'calibrating' && !tracker) Object.assign(gs, { mode: 'calibrate', title: 'Getting ready', message: loadingMessage });
     else if (state === 'calibrating')
-      Object.assign(gs, { mode: 'calibrate', message: calibStatus?.message ?? 'Get fully into view', progress: calibStatus?.progress });
-    else if (state === 'outOfFrame') Object.assign(gs, { mode: 'outOfFrame', message: vis?.hint ?? 'Get fully into view' });
+      Object.assign(gs, { mode: 'calibrate', message: calibStatus?.message ?? 'Get into view', progress: calibStatus?.progress });
+    else if (state === 'outOfFrame') Object.assign(gs, { mode: 'outOfFrame', message: vis?.hint ?? 'Get into view' });
     else if (state === 'countdown') Object.assign(gs, { mode: 'countdown', countdown: (countdownEnd - now) / 1000 });
     guide.draw(gs, now);
     requestAnimationFrame(drawGuide);
@@ -92,7 +92,7 @@ async function main() {
   const keyboard = new Keyboard();
   const visibility = new VisibilityMonitor();
   const flap = new FlapDetector();
-  const squat = new SquatDetector();
+  const shoot = new ShootDetector();
   const calibration = new Calibration();
 
   const startCountdown = () => {
@@ -117,7 +117,7 @@ async function main() {
     else if (k === 'c' && tracker) recalibrate();
     else if (k === 'k') {
       if (state !== 'keyboard') state = 'keyboard';
-      else state = squat.baseline && !poseError ? 'outOfFrame' : 'calibrating';
+      else state = shoot.baseline && !poseError ? 'outOfFrame' : 'calibrating';
     }
   };
 
@@ -129,34 +129,34 @@ async function main() {
     // always run the detectors so their state stays continuous; only *apply* them while playing
     if (f) {
       flapOut = flap.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible);
-      squatOut = squat.update(f, vis.parts.leftLeg.visible && vis.parts.rightLeg.visible);
-      debug.record(now, flapOut, squatOut);
+      shootOut = shoot.update(f, vis.parts.torso.visible);
+      debug.record(now, flapOut, shootOut);
     }
 
     switch (state) {
       case 'calibrating':
         calibStatus = calibration.update(f, vis);
         if (calibStatus.done) {
-          squat.calibrate(calibStatus.done);
+          shoot.calibrate(calibStatus.done);
           startCountdown();
         }
         break;
       case 'countdown':
-        if (!vis.allVisible) state = 'outOfFrame';
+        if (!vis.inFrame) state = 'outOfFrame';
         break;
       case 'outOfFrame':
-        if (vis.allVisible) state = 'playing';
+        if (vis.inFrame) state = 'playing';
         break;
       case 'playing':
-        if (!vis.allVisible) {
+        if (!vis.inFrame) {
           state = 'outOfFrame';
           break;
         }
-        if (f && flapOut && squatOut) {
+        if (f && flapOut && shootOut) {
           poseControls = { lift: flapOut.lift, steer: flapOut.steer, wingPhase: flapOut.wingPhase, flapping: false };
           lastPoseT = now;
           // mirrored view: the player's left is on the screen's left, so the poo flies towards the raised leg
-          if (squatOut.triggered) game.requestPoo(squatOut.raisedLeg === 'left' ? -1 : squatOut.raisedLeg === 'right' ? 1 : 0);
+          if (shootOut.triggered) game.requestPoo(shootOut.raisedLeg === 'left' ? -1 : shootOut.raisedLeg === 'right' ? 1 : 0);
         }
         break;
     }
@@ -185,7 +185,7 @@ async function main() {
       frame,
       vis,
       flap: flapOut,
-      squat: squatOut,
+      shoot: shootOut,
       fps: tracker?.fps ?? 0,
       inferenceMs: tracker?.inferenceMs ?? 0,
       now,

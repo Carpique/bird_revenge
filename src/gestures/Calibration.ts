@@ -1,8 +1,8 @@
 import { config } from '../config';
 import { L } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
-import { hipCenter, hipHeight, kneeAngle, thighDrop, torsoLength } from './geometry';
-import type { SquatBaseline } from './SquatDetector';
+import { hipAbduction, hipCenter, kneeAngle, torsoLength } from './geometry';
+import type { ShootBaseline } from './ShootDetector';
 import type { VisibilityOutput } from './VisibilityMonitor';
 
 export interface CalibrationStatus {
@@ -10,16 +10,16 @@ export interface CalibrationStatus {
   progress: number;
   /** what the player should do now */
   message: string;
-  done: SquatBaseline | null;
+  done: ShootBaseline | null;
 }
 
 /**
- * Calibration: player stands in the outline, fully visible, arms lowered, legs straight,
- * and holds still. We then record standing torso length, hip→knee and hip→ankle height.
+ * Calibration: player stands in the outline (at least torso and arms in view), arms lowered, legs
+ * straight, and holds still. We then record the standing hip angles.
  */
 export class Calibration {
   private holdStart: number | null = null;
-  private samples: { hipY: number; torso: number; thigh: number; legs: number }[] = [];
+  private samples: { hipY: number; torso: number; left: number; right: number }[] = [];
 
   reset() {
     this.holdStart = null;
@@ -32,17 +32,18 @@ export class Calibration {
       this.reset();
       return { progress: 0, message, done: null };
     };
-    if (!f || !vis.allVisible) return fail(vis.hint ?? 'Get fully into view');
+    if (!f || !vis.inFrame) return fail(vis.hint ?? 'Get into view');
 
     const lm = f.lm;
     if (cfg.requireArmsDown) {
       const armsDown = lm[L.leftWrist].y > lm[L.leftShoulder].y && lm[L.rightWrist].y > lm[L.rightShoulder].y;
       if (!armsDown) return fail('Lower your arms like the outline');
     }
+    // off-frame legs are estimated straight, so this only bites when the knees are in view
     if (kneeAngle(f, 'left') < 160 || kneeAngle(f, 'right') < 160) return fail('Stand up straight');
 
-    const torso = torsoLength(f);
-    const sample = { hipY: hipCenter(f).y, torso, thigh: thighDrop(f) / torso, legs: hipHeight(f) / torso };
+    const sample = { hipY: hipCenter(f).y, torso: torsoLength(f), left: hipAbduction(f, 'left'), right: hipAbduction(f, 'right') };
+    if (Math.max(sample.left, sample.right) > config.shoot.angleEnter) return fail('Put your legs down');
     if (this.samples.length) {
       const first = this.samples[0];
       if (Math.abs(sample.hipY - first.hipY) / first.torso > cfg.maxMovement) {
@@ -57,9 +58,8 @@ export class Calibration {
 
     const n = this.samples.length;
     const done = {
-      torso: this.samples.reduce((s, x) => s + x.torso, 0) / n,
-      thigh: this.samples.reduce((s, x) => s + x.thigh, 0) / n,
-      legs: this.samples.reduce((s, x) => s + x.legs, 0) / n,
+      left: this.samples.reduce((s, x) => s + x.left, 0) / n,
+      right: this.samples.reduce((s, x) => s + x.right, 0) / n,
     };
     this.reset();
     return { progress: 1, message: 'Great!', done };

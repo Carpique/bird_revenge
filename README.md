@@ -1,6 +1,6 @@
 # Bird Revenge
 
-A browser game controlled by your body: flap your arms to fly, squat to drop a poo on the villain.
+A browser game controlled by your body: flap your arms to fly, raise a leg sideways (the "shoot" pose) to drop a poo on the villain.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design.
 
 ## Run
@@ -10,8 +10,8 @@ npm install      # also copies MediaPipe's WASM runtime into public/mediapipe/
 npm run dev      # opens http://localhost:5173
 ```
 
-The camera needs `localhost` or `https`. Stand back so your whole body (hands raised included)
-is visible, about 2–3 m from the camera.
+The camera needs `localhost` or `https`. Stand back so at least your torso down to the hips and
+your arms (hands raised included) are visible; the legs may be cut off.
 
 ## Controls
 
@@ -19,18 +19,18 @@ is visible, about 2–3 m from the camera.
 |---|---|---|
 | Flap / fly up | flap both arms (faster, bigger = more lift) | Space or ↑ |
 | Steer | flap one arm harder than the other | ← → |
-| Poo | squat | ↓ |
+| Poo | shoot: raise a leg sideways (the poo flies towards that side) | ↓ |
 
 Hotkeys: **D** debug panel · **G** tuning panel · **K** keyboard-only mode · **C** recalibrate ·
 **P** pause · **R** start/stop recording landmarks to a JSON file.
 
 ## Tuning
 
-Press **G** for live sliders over everything in `src/config.ts` (flap gains, squat thresholds,
+Press **G** for live sliders over everything in `src/config.ts` (flap gains, shoot thresholds,
 visibility timing, physics). "save" stores your values in this browser; "copy as JSON" lets you
 paste them into `src/config.ts` to make them the defaults.
 
-Press **D** to see the camera skeleton, a 5-second plot of arm angles / lift / squat depth, and
+Press **D** to see the camera skeleton, a 5-second plot of arm angles / lift / shoot hip angle, and
 the raw numbers the detectors use.
 
 ## Art

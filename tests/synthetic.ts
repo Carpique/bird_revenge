@@ -6,15 +6,15 @@ export interface SynthPose {
   /** arm elevation, deg (0 down .. 180 up) */
   armLeft?: number;
   armRight?: number;
-  /** squat depth: 0 standing, 1 hips level with knees (feet stay put) */
-  squat?: number;
-  /** lift this leg's foot (the person's own side) by `raiseBy` image heights */
-  raiseLeg?: 'left' | 'right';
-  raiseBy?: number;
+  /** leg swung out sideways, deg from straight down (the person's own side) */
+  legLeft?: number;
+  legRight?: number;
   /** body size relative to the default, scaled about the feet (< 1 = stepped back) */
   scale?: number;
-  /** override landmarks to be out of frame */
+  /** legs out of frame (low visibility, positions still estimated) */
   hideLegs?: boolean;
+  /** hips (and legs) below the frame */
+  hideHips?: boolean;
 }
 
 const ASPECT = 16 / 9;
@@ -24,9 +24,7 @@ export function synthPose(p: SynthPose): PoseFrame {
   const lm: Landmark[] = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, v: 0.99 }));
   const torso = 0.27;
   const thigh = 0.2;
-  const sq = p.squat ?? 0;
-  const drop = sq * thigh;
-  const shY = 0.3 + drop;
+  const shY = 0.3;
   const hipY = shY + torso;
   // person's left appears on image right (x larger) for an unmirrored camera
   const S = p.scale ?? 1;
@@ -51,20 +49,22 @@ export function synthPose(p: SynthPose): PoseFrame {
   };
   arm(1, p.armLeft ?? 10, L.leftElbow, L.leftWrist);
   arm(-1, p.armRight ?? 10, L.rightElbow, L.rightWrist);
-  // legs: feet fixed on the floor, knees stay at the same height (they move towards the camera)
-  // and spread out a little, hips come down towards knee level
-  const leg = (side: 1 | -1, hipI: number, kneeI: number, ankI: number) => {
+  // legs: straight, rotated outward about the hip by `legLeft` / `legRight`
+  const leg = (side: 1 | -1, deg: number, hipI: number, kneeI: number, ankI: number) => {
     const hx = 0.05 * side;
-    const lift = p.raiseLeg === (side === 1 ? 'left' : 'right') ? (p.raiseBy ?? 0.12) : 0;
+    const a = (deg * Math.PI) / 180;
+    const dx = Math.sin(a) * side;
+    const dy = Math.cos(a);
+    const shin = FEET_Y - hipY - thigh;
     set(hipI, X(hx), hipY);
-    set(kneeI, X(hx + 0.05 * sq * side), 0.57 + thigh - lift / 2);
-    set(ankI, X(hx), FEET_Y - lift);
+    set(kneeI, X(hx + dx * thigh), hipY + dy * thigh);
+    set(ankI, X(hx + dx * (thigh + shin)), hipY + dy * (thigh + shin));
   };
-  leg(1, L.leftHip, L.leftKnee, L.leftAnkle);
-  leg(-1, L.rightHip, L.rightKnee, L.rightAnkle);
-  if (p.hideLegs) {
-    for (const i of [L.leftKnee, L.leftAnkle, L.rightKnee, L.rightAnkle]) lm[i] = { ...lm[i], y: 1.05, v: 0.3 };
-  }
+  leg(1, p.legLeft ?? 0, L.leftHip, L.leftKnee, L.leftAnkle);
+  leg(-1, p.legRight ?? 0, L.rightHip, L.rightKnee, L.rightAnkle);
+  // legs out of frame: MediaPipe still estimates them, just with low visibility
+  if (p.hideLegs) for (const i of [L.leftKnee, L.leftAnkle, L.rightKnee, L.rightAnkle]) lm[i] = { ...lm[i], v: 0.3 };
+  if (p.hideHips) for (const i of [L.leftHip, L.rightHip, L.leftKnee, L.leftAnkle, L.rightKnee, L.rightAnkle]) lm[i] = { ...lm[i], y: 1.05, v: 0.3 };
   return { t: p.t, lm, aspect: ASPECT };
 }
 

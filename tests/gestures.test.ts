@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../src/config';
 import { FlapDetector } from '../src/gestures/FlapDetector';
-import { armElevation, hipHeight, kneeAngle, thighDrop, torsoLength } from '../src/gestures/geometry';
-import { SquatDetector } from '../src/gestures/SquatDetector';
+import { armElevation, hipAbduction, kneeAngle } from '../src/gestures/geometry';
+import { ShootDetector } from '../src/gestures/ShootDetector';
 import { VisibilityMonitor } from '../src/gestures/VisibilityMonitor';
 import { frames, synthPose } from './synthetic';
 
@@ -15,6 +15,12 @@ describe('geometry', () => {
     expect(Math.abs(armElevation(f, 'left') - 90)).toBeLessThan(6); // torso axis leans ~4° (hips narrower than shoulders)
     expect(Math.abs(armElevation(f, 'right') - 30)).toBeLessThan(6);
     expect(kneeAngle(f, 'left')).toBeGreaterThan(175);
+  });
+
+  it('measures hip abduction, positive outward on both sides', () => {
+    const f = synthPose({ t: 0, legLeft: 30, legRight: -10 });
+    expect(Math.abs(hipAbduction(f, 'left') - 30)).toBeLessThan(6);
+    expect(Math.abs(hipAbduction(f, 'right') + 10)).toBeLessThan(6);
   });
 });
 
@@ -73,21 +79,24 @@ describe('FlapDetector', () => {
   });
 });
 
-describe('SquatDetector', () => {
+describe('ShootDetector', () => {
   const baseline = () => {
     const f = synthPose({ t: 0 });
-    const torso = torsoLength(f);
-    return { torso, thigh: thighDrop(f) / torso, legs: hipHeight(f) / torso };
+    return { left: hipAbduction(f, 'left'), right: hipAbduction(f, 'right') };
+  };
+  const detector = () => {
+    const d = new ShootDetector();
+    d.calibrate(baseline());
+    return d;
   };
 
-  it('fires once per squat, re-arms after standing up', () => {
-    const d = new SquatDetector();
-    d.calibrate(baseline());
+  it('fires once per shoot, re-arms after putting the leg down', () => {
+    const d = detector();
     const seq = [
       ...frames(500, () => ({})),
-      ...frames(600, () => ({ squat: 0.8 }), 500),
+      ...frames(600, () => ({ legLeft: 40 }), 500),
       ...frames(600, () => ({}), 1100),
-      ...frames(600, () => ({ squat: 0.8 }), 1700),
+      ...frames(600, () => ({ legLeft: 40 }), 1700),
       ...frames(400, () => ({}), 2300),
     ];
     let triggers = 0;
@@ -96,54 +105,60 @@ describe('SquatDetector', () => {
   });
 
   it('does not fire on flapping while standing', () => {
-    const d = new SquatDetector();
-    d.calibrate(baseline());
+    const d = detector();
     let triggers = 0;
     for (const f of frames(3000, (t) => ({ armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) }))) if (d.update(f, true).triggered) triggers++;
     expect(triggers).toBe(0);
   });
 
-  it('fires on a half squat but not on a slight knee bend', () => {
-    const fires = (squat: number) => {
-      const d = new SquatDetector();
-      d.calibrate(baseline());
-      return frames(1000, () => ({ squat })).some((f) => d.update(f, true).triggered);
+  it('fires on a clear sideways raise but not on a slight one', () => {
+    const fires = (deg: number) => {
+      const d = detector();
+      return frames(1000, () => ({ legRight: deg })).some((f) => d.update(f, true).triggered);
     };
-    expect(fires(0.4)).toBe(true);
-    expect(fires(0.15)).toBe(false);
+    expect(fires(35)).toBe(true);
+    expect(fires(10)).toBe(false);
   });
 
-  it('fires on raising one leg and reports which one', () => {
+  it('reports which leg is raised', () => {
     for (const side of ['left', 'right'] as const) {
-      const d = new SquatDetector();
-      d.calibrate(baseline());
-      const hits = frames(1000, () => ({ raiseLeg: side })).map((f) => d.update(f, true)).filter((o) => o.triggered);
+      const d = detector();
+      const pose = side === 'left' ? { legLeft: 40 } : { legRight: 40 };
+      const hits = frames(1000, () => pose).map((f) => d.update(f, true)).filter((o) => o.triggered);
       expect(hits.length).toBe(1);
       expect(hits[0].raisedLeg).toBe(side);
     }
   });
 
-  it('reports no raised leg for a two-footed squat', () => {
-    const d = new SquatDetector();
-    d.calibrate(baseline());
-    const hits = frames(1000, () => ({ squat: 0.8 })).map((f) => d.update(f, true)).filter((o) => o.triggered);
+  it('reports no raised leg when both legs go out', () => {
+    const d = detector();
+    const hits = frames(1000, () => ({ legLeft: 35, legRight: 35 })).map((f) => d.update(f, true)).filter((o) => o.triggered);
     expect(hits.length).toBe(1);
     expect(hits[0].raisedLeg).toBe(null);
   });
 
   it('does not fire when stepping closer or further away', () => {
-    const d = new SquatDetector();
-    d.calibrate(baseline());
+    const d = detector();
     let triggers = 0;
     for (const f of [...frames(1000, () => ({ scale: 0.65 })), ...frames(1000, () => ({ scale: 1.3 }), 1000)]) if (d.update(f, true).triggered) triggers++;
     expect(triggers).toBe(0);
   });
 
+  it('still works with the legs out of frame (estimated legs)', () => {
+    const d = detector();
+    const hits = frames(1000, (t) => ({ legLeft: t > 300 ? 40 : 0, hideLegs: true })).map((f) => d.update(f, true)).filter((o) => o.triggered);
+    expect(hits.length).toBe(1);
+  });
+
+  it('does nothing while the hips are not visible', () => {
+    const d = detector();
+    expect(frames(1000, () => ({ legLeft: 40 })).some((f) => d.update(f, false).triggered)).toBe(false);
+  });
+
   it('works while flapping', () => {
-    const d = new SquatDetector();
-    d.calibrate(baseline());
+    const d = detector();
     let triggers = 0;
-    for (const f of frames(800, (t) => ({ squat: t > 300 ? 0.8 : 0, armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) })))
+    for (const f of frames(800, (t) => ({ legLeft: t > 300 ? 40 : 0, armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) })))
       if (d.update(f, true).triggered) triggers++;
     expect(triggers).toBe(1);
   });
@@ -152,28 +167,36 @@ describe('SquatDetector', () => {
 describe('VisibilityMonitor', () => {
   const run = (m: VisibilityMonitor, seq: ReturnType<typeof frames>) => seq.map((f) => m.update(f, f.t));
 
-  it('becomes fully visible shortly after the person appears', () => {
+  it('becomes in frame shortly after the person appears', () => {
     const m = new VisibilityMonitor();
     const out = run(m, frames(1000, () => ({})));
-    expect(out[0].allVisible).toBe(false);
-    expect(out[out.length - 1].allVisible).toBe(true);
+    expect(out[0].inFrame).toBe(false);
+    expect(out[out.length - 1].inFrame).toBe(true);
+  });
+
+  it('does not need the legs', () => {
+    const m = new VisibilityMonitor();
+    const out = run(m, frames(1500, () => ({ hideLegs: true })));
+    const last = out[out.length - 1];
+    expect(last.parts.leftLeg.visible).toBe(false);
+    expect(last.inFrame).toBe(true);
   });
 
   it('ignores brief dropouts but reports a sustained one, with a hint', () => {
     const m = new VisibilityMonitor();
     run(m, frames(1000, () => ({})));
-    const brief = run(m, frames(200, () => ({ hideLegs: true }), 1000));
-    expect(brief.every((o) => o.allVisible)).toBe(true);
+    const brief = run(m, frames(200, () => ({ hideHips: true }), 1000));
+    expect(brief.every((o) => o.inFrame)).toBe(true);
     run(m, frames(500, () => ({}), 1200));
-    const long = run(m, frames(1200, () => ({ hideLegs: true }), 1700));
+    const long = run(m, frames(1200, () => ({ hideHips: true }), 1700));
     const last = long[long.length - 1];
-    expect(last.allVisible).toBe(false);
-    expect(last.parts.leftLeg.visible).toBe(false);
-    expect(last.parts.torso.visible).toBe(true);
-    expect(last.hint).toMatch(/feet/);
+    expect(last.inFrame).toBe(false);
+    expect(last.parts.torso.visible).toBe(false);
+    expect(last.parts.leftArm.visible).toBe(true);
+    expect(last.hint).toMatch(/hips/);
     // recovers
     const back = run(m, frames(1000, () => ({}), 2900));
-    expect(back[back.length - 1].allVisible).toBe(true);
+    expect(back[back.length - 1].inFrame).toBe(true);
   });
 
   it('reports no person after frames stop', () => {
