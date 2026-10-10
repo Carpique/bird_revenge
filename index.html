@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pooping Birds</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="game"></div>
+    <canvas id="guide"></canvas>
+    <div id="debug" hidden>
+      <canvas id="debug-canvas" width="320" height="330"></canvas>
+      <pre id="debug-text"></pre>
+    </div>
+    <div id="help">Flap your arms to fly · squat to poo · keyboard: Space/↑ flap, ←/→ steer, ↓ poo · D debug · G tuning · K keyboard mode · C recalibrate · P pause · R record</div>
+    <video id="camera" playsinline muted></video>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
