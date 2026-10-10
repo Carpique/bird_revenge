@@ -131,8 +131,10 @@ Even with heuristics we need recorded data: to tune thresholds, to test detector
 - Deliberately unobtrusive: a small box in the **lower right corner** (1/6 of the screen's width and height, same proportions as the screen) with a **blinking frame**, shown automatically when a part is lost and hidden as soon as the pose is reacquired.
 - No camera image: the box uses the game's sky colour as background and shows only the **target outline** and the player's live **skeleton**, plus the short text hint.
 
-**Calibration screen** [DECIDED, implemented in v0.1]:
-- Show the **mirrored camera feed** with a **target outline** of the ideal pose drawn over it. The outline has **arms lowered, slightly away from the body** [DECIDED] (a natural rest pose; headroom for flapping is covered by the longer arm "lost" delay below).
+**Splash screen** [DECIDED]: title "Bird Revenge" (Abril Fatface, a Didone "fat face" in the style of 19th-century French posters), menu **Start / Instructions / Scores** (arrow keys + Enter, Esc back, or mouse), the game's sky colour and the same `Ground` as the game. Camera and pose model load in the background while it is shown. Scores is a placeholder until rounds exist.
+
+**Calibration dialog** [DECIDED, replaces the v0.1 full-screen camera view]:
+- After **Start**, a dialog (half the screen's width and height, centred) over the paused game shows the same schematic as the out-of-frame box: game-sky background, **target outline** and the player's live skeleton, no camera image. It also shows camera/model loading and camera errors ("Press K to play with the keyboard"). When calibration succeeds it closes, the countdown runs and the game starts. The outline has **arms lowered, slightly away from the body** [DECIDED] (a natural rest pose; headroom for flapping is covered by the longer arm "lost" delay below).
 - The outline is split into the same body parts; each part is **green** when that part is visible and **blinks red** when lost. This puts the schematic feedback onto the outline itself, so one picture shows both *where to stand* and *what is missing*.
 - A short text hint from the distance/position estimate ("Step back — your feet are out of view").
 - Used at game start: the player is fully visible, keeps both hands below the shoulders, legs straight and holds still ~1.2 s; we record standing torso length, hip→knee and hip→ankle height. Calibration happens once; later out-of-frame events only need the player back in view.
@@ -182,15 +184,15 @@ Implemented in v0.1 (all numbers live in `src/config.ts`, tunable at runtime):
 ## 8. Code structure (v0.1)
 ```
 index.html, src/style.css
-src/main.ts                 app state machine: loading → calibrating → countdown → playing ⇄ outOfFrame (game keeps running, no pose controls); keyboard / error modes
+src/main.ts                 app state machine: loading → menu → calibrating → countdown → playing ⇄ outOfFrame (game keeps running, no pose controls); keyboard mode
 src/config.ts               every tunable number (+ save/load to localStorage)
 src/pose/                   camera.ts, PoseTracker.ts (MediaPipe, One-Euro smoothing), landmarks.ts, types.ts
 src/gestures/               geometry.ts, FlapDetector.ts, SquatDetector.ts, VisibilityMonitor.ts, Calibration.ts  (pure TS, no DOM)
-src/game/                   Game.ts (Pixi stage + Matter engine + scoring), Bird.ts, Villain.ts, Poo.ts, Background.ts, physics.ts
+src/game/                   Game.ts (Pixi stage + Matter engine + scoring), Bird.ts, Villain.ts, Poo.ts, Background.ts (sun, clouds + Ground), Ground.ts (shared with the splash), physics.ts
 src/characters/, src/scenery/   art definition files (§6)
-src/render/                 assets.ts (loads everything named in the definitions), CharacterSprite.ts
+src/render/                 assets.ts (loads everything named in the definitions), CharacterSprite.ts, fitWorld.ts (scales the 1280x720 world into the window)
 src/input/                  controls.ts (Controls interface), keyboard.ts
-src/ui/                     FrameGuide.ts (calibration screen, out-of-frame corner box, countdown overlay), DebugPanel.ts (D), Tuning.ts (G), Recorder.ts (R)
+src/ui/                     SplashScreen.ts (title + menu), FrameGuide.ts (calibration dialog, out-of-frame corner box, countdown overlay), fonts.ts, DebugPanel.ts (D), Tuning.ts (G), Recorder.ts (R)
 tests/                      synthetic.ts (synthetic pose generator), gestures.test.ts
 tools/generate-placeholder-art.mjs, scripts/copy-mediapipe-wasm.mjs
 ```

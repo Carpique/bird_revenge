@@ -2,6 +2,7 @@ import { Container, Sprite } from 'pixi.js';
 import { WORLD } from '../config';
 import { tex } from '../render/assets';
 import { scenery } from '../scenery/scenery';
+import { Ground } from './Ground';
 
 const spriteAt = (image: string, x: number, y: number, height: number) => {
   const s = new Sprite(tex(image));
@@ -16,18 +17,14 @@ export class Background extends Container {
 
   constructor() {
     super();
-    const { sun, clouds, ground } = scenery;
+    const { sun, clouds } = scenery;
     this.addChild(spriteAt(sun.image, sun.x, sun.y, sun.height));
     for (const c of clouds) {
       const sprite = spriteAt(c.image, c.x, c.y, c.height);
       this.clouds.push({ sprite, speed: c.driftSpeed });
       this.addChild(sprite);
     }
-    const g = new Sprite(tex(ground.image));
-    g.width = WORLD.width;
-    g.scale.y = g.scale.x;
-    g.position.set(0, WORLD.groundY - ground.surfaceOffset * g.scale.y);
-    this.addChild(g);
+    this.addChild(new Ground());
   }
 
   update(dtMs: number) {

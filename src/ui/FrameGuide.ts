@@ -3,13 +3,18 @@ import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { PART_NAMES, SKELETON, type PartName } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
 import { scenery } from '../scenery/scenery';
+import { HAND_FONT as FONT } from './fonts';
 
-export type GuideMode = 'hidden' | 'loading' | 'error' | 'calibrate' | 'outOfFrame' | 'countdown';
+export type GuideMode = 'hidden' | 'loading' | 'calibrate' | 'outOfFrame' | 'countdown';
 
 export interface GuideState {
   mode: GuideMode;
   title?: string;
   message?: string;
+  /** smaller second line (e.g. "Press K to play with the keyboard") */
+  hint?: string;
+  /** show `message` as an error (red) */
+  error?: boolean;
   /** 0..1 calibration hold progress */
   progress?: number;
   /** seconds left in countdown */
@@ -24,6 +29,8 @@ interface Rect { x: number; y: number; w: number; h: number }
 /** Width and height of the out-of-frame box as a fraction of the screen's (same proportions). */
 const MINI_SCALE = 1 / 6;
 const MINI_MARGIN = 16;
+/** Calibration dialog size as a fraction of the screen's width and height. */
+const DIALOG_SCALE = 0.5;
 
 /**
  * Ideal pose outline, in MIRRORED display coordinates of the camera image (0..1).
@@ -42,12 +49,13 @@ const OUTLINE: Record<PartName, { kind: 'circle'; c: P; r: number } | { kind: 'p
 const GREEN = '#2f9e44';
 const RED = '#e03131';
 const INK = '#2b2b2b';
-const PAPER = '#f4f1e8';
-const FONT = '"Patrick Hand", "Comic Sans MS", cursive';
+const MUTED = '#9aa5a8';
 
 /**
- * Full-screen 2D-canvas overlay: loading/error screens, the "stand in the outline" calibration
- * screen, the small "get back in frame" box in the lower right corner and the resume countdown.
+ * Full-screen 2D-canvas overlay: loading screen, the "stand in the outline" calibration dialog,
+ * the small "get back in frame" box in the lower right corner and the resume countdown.
+ * The dialog and the corner box share the same schematic: game-sky background, target outline and
+ * the player's live skeleton (no camera image).
  */
 export class FrameGuide {
   private ctx: CanvasRenderingContext2D;
@@ -76,12 +84,9 @@ export class FrameGuide {
 
     switch (s.mode) {
       case 'loading':
-      case 'error':
-        ctx.fillStyle = PAPER;
+        ctx.fillStyle = scenery.skyColor;
         ctx.fillRect(0, 0, W, H);
-        this.text('Pooping Birds', W / 2, H * 0.38, 72, INK);
-        this.text(s.message ?? '', W / 2, H * 0.52, 30, s.mode === 'error' ? RED : INK);
-        if (s.mode === 'error') this.text('Press K to play with the keyboard', W / 2, H * 0.6, 26, '#555');
+        this.text(s.message ?? 'Loading…', W / 2, H / 2, 34, INK);
         break;
       case 'countdown':
         ctx.fillStyle = 'rgba(255,255,255,0.45)';
@@ -90,7 +95,7 @@ export class FrameGuide {
         this.text('Get ready to flap!', W / 2, H / 2 + 120, 34, INK);
         break;
       case 'calibrate':
-        this.drawCalibrateScreen(s, W, H, now);
+        this.drawCalibrateDialog(s, W, H, now);
         break;
       case 'outOfFrame':
         this.drawOutOfFrameBox(s, W, H, now);
@@ -106,78 +111,88 @@ export class FrameGuide {
     return { x: r.x + (r.w - w) / 2, y: r.y + (r.h - h) / 2, w, h };
   }
 
-  private drawCalibrateScreen(s: GuideState, W: number, H: number, now: number) {
+  /**
+   * "Stand in the outline" dialog, centred over the (paused) game: title, schematic, hint and the
+   * hold-still progress bar. Also shows camera/model loading and camera errors.
+   */
+  private drawCalibrateDialog(s: GuideState, W: number, H: number, now: number) {
     const ctx = this.ctx;
-    ctx.fillStyle = PAPER;
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
     ctx.fillRect(0, 0, W, H);
 
-    // camera image, mirrored, fitted inside the screen (never cropped: edges matter here)
-    const top = 90, bottom = 110;
-    const cam = this.fitCamera({ x: 20, y: top, w: W - 40, h: H - top - bottom });
-    if (this.video.readyState >= 2) {
-      ctx.save();
-      ctx.translate(cam.x + cam.w, cam.y);
-      ctx.scale(-1, 1);
-      ctx.drawImage(this.video, 0, 0, cam.w, cam.h);
-      ctx.restore();
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.fillRect(cam.x, cam.y, cam.w, cam.h);
+    const w = Math.max(320, W * DIALOG_SCALE), h = Math.max(260, H * DIALOG_SCALE);
+    const box: Rect = { x: (W - w) / 2, y: (H - h) / 2, w, h };
+    this.drawPanel(box);
+
+    const titleSize = Math.max(22, h * 0.085);
+    const textSize = Math.max(15, h * 0.055);
+    const pad = textSize * 0.8;
+    const barH = Math.max(8, h * 0.025);
+    const cx = box.x + w / 2;
+    this.text(s.title ?? 'Stand in the outline', cx, box.y + pad + titleSize / 2, titleSize, INK, w - 2 * pad);
+
+    const poseTop = box.y + pad * 1.5 + titleSize;
+    const footer = textSize * 1.5 + (s.hint ? textSize * 1.3 : 0) + barH + pad * 1.5;
+    const cam = this.fitCamera({ x: box.x + pad, y: poseTop, w: w - 2 * pad, h: box.y + h - footer - poseTop });
+    this.drawPose(s, cam, now, h);
+
+    let y = cam.y + cam.h + pad * 0.4 + textSize * 0.7;
+    this.text(s.message ?? '', cx, y, textSize, s.error ? RED : INK, w - 2 * pad);
+    if (s.hint) {
+      y += textSize * 1.3;
+      this.text(s.hint, cx, y, textSize * 0.85, '#555', w - 2 * pad);
     }
-    this.rc.rectangle(cam.x, cam.y, cam.w, cam.h, { stroke: INK, strokeWidth: 3, roughness: 1, seed: 7 });
-    this.drawPose(s, cam, now, 7, 3);
 
-    this.text(s.title ?? 'Stand in the outline', W / 2, 48, 52, INK);
-    this.text(s.message ?? '', W / 2, H - 62, 32, INK);
-
-    if (s.progress !== undefined && s.progress > 0) {
-      const bw = Math.min(400, W * 0.6), bx = (W - bw) / 2, by = H - 34;
+    const bw = w * 0.6, bx = cx - bw / 2, by = box.y + h - pad - barH;
+    if (s.progress) {
       ctx.fillStyle = GREEN;
-      ctx.fillRect(bx, by, bw * s.progress, 14);
-      this.rc.rectangle(bx, by, bw, 14, { stroke: INK, strokeWidth: 2, roughness: 0.8, seed: 3 });
+      ctx.fillRect(bx, by, bw * s.progress, barH);
     }
+    this.rc.rectangle(bx, by, bw, barH, { stroke: s.progress ? INK : MUTED, strokeWidth: 2, roughness: 0.8, seed: 3 });
   }
 
   /**
-   * Unobtrusive "get back in frame" box in the lower right corner: game-sky background, a blinking
-   * frame, the target outline and the player's skeleton (no camera image).
+   * Unobtrusive "get back in frame" box in the lower right corner with a blinking frame.
    */
   private drawOutOfFrameBox(s: GuideState, W: number, H: number, now: number) {
-    const ctx = this.ctx;
     const box: Rect = { w: W * MINI_SCALE, h: H * MINI_SCALE, x: 0, y: 0 };
     box.x = W - box.w - MINI_MARGIN;
     box.y = H - box.h - MINI_MARGIN;
-
-    ctx.fillStyle = scenery.skyColor;
-    ctx.fillRect(box.x, box.y, box.w, box.h);
+    const blinkOn = Math.floor(now / 400) % 2 === 0;
+    this.drawPanel(box, blinkOn ? RED : INK, blinkOn ? 4 : 2);
 
     const textSize = Math.max(11, box.h * 0.1);
     const pad = textSize * 0.6;
     const cam = this.fitCamera({ x: box.x + pad, y: box.y + pad, w: box.w - 2 * pad, h: box.h - 2 * pad - textSize * 1.4 });
-    this.drawPose(s, cam, now, Math.max(2, box.h * 0.022), 1.5);
+    this.drawPose(s, cam, now, box.h);
 
     this.text(s.message ?? 'Get back in frame!', box.x + box.w / 2, box.y + box.h - pad - textSize * 0.5, textSize, INK, box.w - 2 * pad);
+  }
 
-    if (Math.floor(now / 400) % 2 === 0) {
-      this.rc.rectangle(box.x, box.y, box.w, box.h, { stroke: RED, strokeWidth: 4, roughness: 1.2, seed: 11 });
-    } else {
-      this.rc.rectangle(box.x, box.y, box.w, box.h, { stroke: INK, strokeWidth: 2, roughness: 1.2, seed: 11 });
-    }
+  /** Box with the game's sky colour and a sketchy border. */
+  private drawPanel(box: Rect, border = INK, borderWidth = 3) {
+    this.ctx.fillStyle = scenery.skyColor;
+    this.ctx.fillRect(box.x, box.y, box.w, box.h);
+    this.rc.rectangle(box.x, box.y, box.w, box.h, { stroke: border, strokeWidth: borderWidth, roughness: 1.2, seed: 11 });
   }
 
   /**
    * Target outline (each part green when visible, blinking red when lost) plus the player's live
-   * skeleton, both mapped into the camera rectangle `cam` (mirrored).
+   * skeleton, both mapped into the camera rectangle `cam` (mirrored). Line widths follow `boxH`,
+   * the height of the box it is drawn in. Without visibility data (still loading) the outline is grey.
    */
-  private drawPose(s: GuideState, cam: Rect, now: number, outlineWidth: number, skeletonWidth: number) {
+  private drawPose(s: GuideState, cam: Rect, now: number, boxH: number) {
     const ctx = this.ctx;
+    const outlineWidth = Math.min(7, Math.max(2, boxH * 0.022));
+    const skeletonWidth = Math.min(3, Math.max(1.5, boxH * 0.006));
     // display coords (already mirrored) -> screen
     const toScreen = ([x, y]: P): P => [cam.x + x * cam.w, cam.y + y * cam.h];
 
     const blinkOn = Math.floor(now / 350) % 2 === 0;
     PART_NAMES.forEach((name, i) => {
       const ok = s.vis?.parts[name].visible ?? false;
-      const color = ok ? GREEN : RED;
-      if (!ok && !blinkOn) return;
+      const color = !s.vis ? MUTED : ok ? GREEN : RED;
+      if (s.vis && !ok && !blinkOn) return;
       const o = { stroke: color, strokeWidth: outlineWidth, roughness: 1.6, bowing: 1.5, seed: 40 + i };
       const shape = OUTLINE[name];
       if (shape.kind === 'circle') {

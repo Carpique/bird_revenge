@@ -1,14 +1,14 @@
 import { Application, Container, Graphics, Text } from 'pixi.js';
 import { config, WORLD } from '../config';
 import { noControls, type Controls } from '../input/controls';
+import { fitWorld } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
+import { HAND_FONT as FONT } from '../ui/fonts';
 import { Background } from './Background';
 import { Bird } from './Bird';
 import { Bodies, Composite, Engine, Events, STEP_MS, type MBody, type MEngine } from './physics';
 import { Poo } from './Poo';
 import { Villain } from './Villain';
-
-const FONT = '"Patrick Hand", "Comic Sans MS", cursive';
 
 interface Popup {
   text: Text;
@@ -22,6 +22,8 @@ interface Popup {
 export class Game {
   readonly root = new Container();
   paused = true;
+  /** show the big "Paused" label while paused (only for a manual pause, not behind dialogs) */
+  showPausedText = false;
   score = 0;
   /** latest controls; set by main from pose + keyboard */
   controls: Controls = noControls();
@@ -103,8 +105,8 @@ export class Game {
   }
 
   private update(dtMs: number) {
-    this.layout();
-    this.pausedText.visible = this.paused;
+    fitWorld(this.app, this.root);
+    this.pausedText.visible = this.paused && this.showPausedText;
     if (!this.paused) {
       this.acc += Math.min(dtMs, 100);
       while (this.acc >= STEP_MS) {
@@ -197,13 +199,5 @@ export class Game {
     this.bird.sync(this.controls);
     this.villain.sync();
     for (const p of this.poos) p.sync();
-  }
-
-  /** Fit the 1280x720 world into the window, centred. */
-  private layout() {
-    const { width, height } = this.app.screen;
-    const s = Math.min(width / WORLD.width, height / WORLD.height);
-    this.root.scale.set(s);
-    this.root.position.set((width - WORLD.width * s) / 2, (height - WORLD.height * s) / 2);
   }
 }

@@ -13,17 +13,21 @@ import type { PoseFrame } from './pose/types';
 import { loadAllAssets } from './render/assets';
 import { scenery } from './scenery/scenery';
 import { DebugPanel } from './ui/DebugPanel';
+import { loadFonts } from './ui/fonts';
 import { FrameGuide, type GuideState } from './ui/FrameGuide';
 import { Recorder } from './ui/Recorder';
+import { SplashScreen } from './ui/SplashScreen';
 import { Tuning } from './ui/Tuning';
 
 /**
  * App states:
- *   loading → calibrating → countdown → playing ⇄ outOfFrame
+ *   loading → menu → calibrating → countdown → playing ⇄ outOfFrame
+ *   menu is the splash screen; camera and pose model load in the background meanwhile
+ *   calibrating shows a dialog over the paused game (also camera loading / camera errors)
  *   outOfFrame keeps the game running with no pose controls, so the bird drops until the player is back
- *   error (no camera) / keyboard (K toggles; pose is ignored)
+ *   keyboard (K toggles; pose is ignored)
  */
-type AppState = 'loading' | 'error' | 'calibrating' | 'countdown' | 'playing' | 'outOfFrame' | 'keyboard';
+type AppState = 'loading' | 'menu' | 'calibrating' | 'countdown' | 'playing' | 'outOfFrame' | 'keyboard';
 
 async function main() {
   loadSavedConfig();
@@ -42,11 +46,11 @@ async function main() {
   const guide = new FrameGuide(document.getElementById('guide') as HTMLCanvasElement, video);
 
   let state: AppState = 'loading';
-  let errorMessage = '';
+  /** camera / pose model status, shown in the calibration dialog */
+  let poseError: string | null = null;
   let loadingMessage = 'Loading…';
   let manualPause = false;
   let countdownEnd = 0;
-  let resumeState: AppState = 'calibrating';
 
   // latest pose results
   let frame: PoseFrame | null = null;
@@ -63,7 +67,9 @@ async function main() {
     const now = performance.now();
     const gs: GuideState = { mode: 'hidden', frame, vis };
     if (state === 'loading') Object.assign(gs, { mode: 'loading', message: loadingMessage });
-    else if (state === 'error') Object.assign(gs, { mode: 'error', message: errorMessage });
+    else if (state === 'calibrating' && poseError)
+      Object.assign(gs, { mode: 'calibrate', title: 'No camera', message: poseError, error: true, hint: 'Press K to play with the keyboard' });
+    else if (state === 'calibrating' && !tracker) Object.assign(gs, { mode: 'calibrate', title: 'Getting ready', message: loadingMessage });
     else if (state === 'calibrating')
       Object.assign(gs, { mode: 'calibrate', message: calibStatus?.message ?? 'Get fully into view', progress: calibStatus?.progress });
     else if (state === 'outOfFrame') Object.assign(gs, { mode: 'outOfFrame', message: vis?.hint ?? 'Get fully into view' });
@@ -73,14 +79,13 @@ async function main() {
   };
   requestAnimationFrame(drawGuide);
 
-  try {
-    await document.fonts.load('40px "Patrick Hand"');
-  } catch {
-    /* fallback font */
-  }
+  await loadFonts();
   await loadAllAssets();
 
   const game = new Game(app);
+  const splash = new SplashScreen(app);
+  app.stage.addChild(splash);
+  const help = document.getElementById('help')!;
   const debug = new DebugPanel(video);
   const tuning = new Tuning();
   const recorder = new Recorder();
@@ -100,20 +105,19 @@ async function main() {
     state = 'calibrating';
   };
 
+  splash.onStart = recalibrate;
+
   keyboard.onPoo = () => game.requestPoo();
   keyboard.onHotkey = (k) => {
     if (k === 'd') debug.toggle();
     else if (k === 'g') tuning.toggle();
     else if (k === 'r') recorder.toggle();
-    else if (k === 'p') manualPause = !manualPause;
+    if (state === 'loading' || state === 'menu') return;
+    if (k === 'p') manualPause = !manualPause;
     else if (k === 'c' && tracker) recalibrate();
     else if (k === 'k') {
-      if (state === 'keyboard') {
-        state = resumeState === 'error' ? 'error' : squat.baseline ? 'outOfFrame' : 'calibrating';
-      } else if (state !== 'loading') {
-        resumeState = state;
-        state = 'keyboard';
-      }
+      if (state !== 'keyboard') state = 'keyboard';
+      else state = squat.baseline && !poseError ? 'outOfFrame' : 'calibrating';
     }
   };
 
@@ -166,8 +170,12 @@ async function main() {
     const poseFresh = state === 'playing' && now - lastPoseT < 300;
     game.controls = keyboard.apply(poseFresh ? poseControls : noControls());
     game.paused = manualPause || !(state === 'playing' || state === 'outOfFrame' || state === 'keyboard');
+    game.showPausedText = manualPause;
+    splash.visible = state === 'menu';
+    game.root.visible = !splash.visible;
+    help.hidden = state === 'menu' || state === 'loading';
 
-    const mode = state === 'keyboard' || state === 'error' ? 'keyboard' : 'pose';
+    const mode = state === 'keyboard' || poseError ? 'keyboard' : 'pose';
     const rec = recorder.recording ? `  ● REC ${recorder.seconds.toFixed(0)}s` : '';
     const fps = tracker ? `  ${tracker.fps.toFixed(0)} fps` : '';
     game.setStatus(`${mode}${fps}${rec}`);
@@ -184,7 +192,8 @@ async function main() {
     });
   });
 
-  // camera + pose model
+  // splash screen first; camera + pose model load in the background
+  state = 'menu';
   try {
     loadingMessage = 'Starting camera…';
     await startCamera(video);
@@ -192,13 +201,10 @@ async function main() {
     tracker = await PoseTracker.create(video);
     tracker.onFrame = onPose;
     tracker.start();
-    recalibrate();
   } catch (e) {
     console.error(e);
     const msg = e instanceof Error ? e.message : String(e);
-    errorMessage = /Permission|NotAllowed/i.test(msg) ? 'Camera access was blocked' : `Could not start pose tracking: ${msg}`;
-    state = 'error';
-    game.paused = true;
+    poseError = /Permission|NotAllowed/i.test(msg) ? 'Camera access was blocked' : `Could not start pose tracking: ${msg}`;
   }
 }
 

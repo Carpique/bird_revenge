@@ -1,4 +1,4 @@
-# Pooping Birds
+# Bird Revenge
 
 A browser game controlled by your body: flap your arms to fly, squat to drop a poo on the villain.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design.
