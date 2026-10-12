@@ -8,6 +8,10 @@ export interface Controls {
   wingPhase: number | null;
   /** keyboard flap held (bird plays the flap loop) */
   flapping: boolean;
+  /** arms spread out (or Shift held): fall slowly */
+  gliding: boolean;
+  /** while gliding: sideways speed to slide at (px per physics step, + = right), or null to keep the momentum */
+  glideSlide: number | null;
 }
 
-export const noControls = (): Controls => ({ lift: 0, steer: 0, wingPhase: null, flapping: false });
+export const noControls = (): Controls => ({ lift: 0, steer: 0, wingPhase: null, flapping: false, gliding: false, glideSlide: null });

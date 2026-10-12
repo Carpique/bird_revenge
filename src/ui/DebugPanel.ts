@@ -1,4 +1,5 @@
 import type { FlapOutput } from '../gestures/FlapDetector';
+import type { GlideOutput } from '../gestures/GlideDetector';
 import type { ShootOutput } from '../gestures/ShootDetector';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { config } from '../config';
@@ -49,6 +50,7 @@ export class DebugPanel {
     vis: VisibilityOutput | null;
     flap: FlapOutput | null;
     shoot: ShootOutput | null;
+    glide: GlideOutput | null;
     fps: number;
     inferenceMs: number;
     now: number;
@@ -149,6 +151,10 @@ export class DebugPanel {
       '',
       sh ? `shoot hips L ${n(sh.left)}  R ${n(sh.right)}  raised ${sh.raisedLeg ?? '-'}` : '',
       sh ? `shooting ${sh.shooting ? 'YES' : 'no'}` : '',
+      info.glide
+        ? `glide line tilt ${info.glide.line ? n(info.glide.line.tilt) : '    -'}° bend ${info.glide.line ? info.glide.line.bend.toFixed(2) : '-'}` +
+          `  ${info.glide.gliding ? `GLIDING slide ${info.glide.slide === null ? 'none' : info.glide.slide.toFixed(1)}` : info.glide.pose ? 'pose' : 'no'}`
+        : '',
       '',
       vis ? 'parts ' + PART_NAMES.map((p) => `${p}:${vis.parts[p].visible ? '✓' : '✗'}`).join(' ') : '',
       vis?.hint ? `hint  ${vis.hint}` : '',

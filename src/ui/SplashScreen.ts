@@ -16,12 +16,13 @@ interface MenuItem {
 const PAGE_TEXT: Record<Exclude<Page, 'main'>, string> = {
   instructions: [
     'Flap your arms to fly. Flap one arm harder to steer.',
+    'Glide: spread your arms out to fall slowly — tilt them to slide.',
     'Shoot: raise a leg sideways to drop a poo — it flies that way.',
     'Hit the villain to score!',
     "Don't touch him — it costs you one of your 3 lives.",
     '',
     'Stand back so your arms and hips are in view.',
-    'Keyboard: ↑ flap · ← → steer · ↓ poo · Space pause',
+    'Keyboard: ↑ flap · ← → steer · Shift glide · ↓ poo · Space pause',
   ].join('\n'),
   scores: 'No scores yet.\nRounds and high scores are coming soon.',
 };

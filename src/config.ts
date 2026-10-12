@@ -82,6 +82,43 @@ export const config = {
     baselineAdaptRate: 0.02,
   },
 
+  /**
+   * "glide": both arms spread out in a roughly straight line → the bird falls slowly. Tilting the line
+   * slides it sideways; about horizontal it keeps its momentum.
+   */
+  glide: {
+    /** how far the arm points may stray from a straight line: perpendicular RMS / along-line RMS */
+    maxBend: 0.12,
+    /** arm lines steeper than this (deg) aren't a glide */
+    maxTilt: 50,
+    /** arms moving faster than this (deg/s) are flapping, not gliding */
+    maxArmSpeed: 120,
+    /** the pose must hold this long to start gliding... */
+    enterMs: 150,
+    /** ...and be gone this long to stop */
+    exitMs: 150,
+    /** tilts within ±this (deg) count as horizontal: no sideways slide, the bird keeps its momentum */
+    deadZone: 10,
+    /** ...and once sliding, the tilt must drop this much further below the dead zone to stop */
+    deadZoneHysteresis: 4,
+    /** tilt (deg) at which the slide reaches full `slideSpeed` */
+    fullTilt: 35,
+    /** EMA factor for the tilt per pose frame (lower = steadier, laggier) */
+    tiltSmoothing: 0.3,
+    /** -1: arm line rising to the right (as seen on screen) slides left, like a ball rolling downhill. +1: slides right */
+    tiltSign: -1,
+    /** fraction of gravity still acting while gliding and falling */
+    gravityScale: 0.25,
+    /** max fall speed while gliding (px per physics step) */
+    maxFallSpeed: 2.5,
+    /** Matter.js frictionAir while gliding: lower keeps the sideways speed longer */
+    airFriction: 0.01,
+    /** sideways speed (px per physics step) at full tilt */
+    slideSpeed: 4,
+    /** how quickly the bird reaches the slide speed: sideways acceleration, px/s² */
+    sideAccel: 900,
+  },
+
   physics: {
     /** 1.0 = 1000 px/s² */
     gravity: 0.8,

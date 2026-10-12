@@ -114,9 +114,24 @@ export class Bird {
     }
     const b = this.body;
     this.invulnT = Math.max(0, this.invulnT - stepMs);
-    b.frictionAir = config.physics.birdAirFriction;
-    Body.applyForce(b, b.position, { x: forceFor(b, c.steer), y: -forceFor(b, c.lift) });
-    const v = b.velocity;
+    // gliding only while falling: it slows the fall but never lifts
+    const glide = c.gliding && b.velocity.y > 0;
+    b.frictionAir = glide ? config.glide.airFriction : config.physics.birdAirFriction;
+    // gliding cancels part of gravity (Matter applies the full gravity itself)
+    const antiGravity = glide ? (1 - config.glide.gravityScale) * config.physics.gravity * 1000 : 0;
+    Body.applyForce(b, b.position, { x: forceFor(b, c.steer), y: -forceFor(b, c.lift + antiGravity) });
+    let v = b.velocity;
+    if (glide && c.glideSlide !== null) {
+      // arms tilted: ease towards the slide speed (speeding up or slowing down to it)
+      const maxDv = config.glide.sideAccel * (stepMs / 1000) ** 2;
+      const dv = c.glideSlide - v.x;
+      Body.setVelocity(b, { x: v.x + Math.max(-maxDv, Math.min(maxDv, dv)), y: v.y });
+      v = b.velocity;
+    }
+    if (glide && v.y > config.glide.maxFallSpeed) {
+      Body.setVelocity(b, { x: v.x, y: config.glide.maxFallSpeed });
+      v = b.velocity;
+    }
     const speed = Math.hypot(v.x, v.y);
     const max = config.physics.maxSpeed;
     if (speed > max) Body.setVelocity(b, { x: (v.x / speed) * max, y: (v.y / speed) * max });
@@ -151,6 +166,7 @@ export class Bird {
 
     if (this.onGround && c.lift < 50 && !c.flapping) this.sprite.play('idle');
     else if (c.wingPhase !== null) this.sprite.showPhase('flap', c.wingPhase);
+    else if (c.gliding) this.sprite.showPhase('flap', 0.5);
     else if (c.flapping) this.sprite.play('flap');
     else this.sprite.showPhase('flap', 0.5); // gliding
 

@@ -15,6 +15,20 @@ const RANGES: Record<string, [number, number, number]> = {
   'shoot.legRaiseMin': [0, 60, 1],
   'shoot.cooldownMs': [0, 3000, 50],
   'shoot.baselineAdaptRate': [0, 0.2, 0.005],
+  'glide.maxBend': [0, 0.5, 0.01],
+  'glide.maxTilt': [10, 90, 1],
+  'glide.maxArmSpeed': [0, 600, 10],
+  'glide.enterMs': [0, 1000, 10],
+  'glide.exitMs': [0, 1000, 10],
+  'glide.deadZone': [0, 30, 1],
+  'glide.deadZoneHysteresis': [0, 15, 1],
+  'glide.fullTilt': [5, 90, 1],
+  'glide.tiltSmoothing': [0.05, 1, 0.05],
+  'glide.gravityScale': [0, 1, 0.05],
+  'glide.maxFallSpeed': [0, 14, 0.5],
+  'glide.airFriction': [0, 0.2, 0.005],
+  'glide.slideSpeed': [0, 14, 0.5],
+  'glide.sideAccel': [0, 4000, 50],
   'visibility.minLandmarkVisibility': [0, 1, 0.05],
   'visibility.frameMargin': [0, 0.1, 0.005],
   'visibility.emaAlpha': [0.05, 1, 0.05],
@@ -42,7 +56,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'smoothing.beta': [0, 3, 0.01],
 };
 
-const SECTIONS = ['flap', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'player'] as const;
+const SECTIONS = ['flap', 'shoot', 'glide', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'player'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {
@@ -57,13 +71,15 @@ export class Tuning {
         const r = RANGES[`${section}.${key}`];
         if (section === 'flap' && key === 'steerSign') {
           folder.add(obj, key, { 'left arm → right': 1, 'left arm → left': -1 }).name('steering');
+        } else if (section === 'glide' && key === 'tiltSign') {
+          folder.add(obj, key, { 'rising right → right': 1, 'rising right → left': -1 }).name('tilt direction');
         } else if (r) {
           folder.add(obj, key, r[0], r[1], r[2]);
         } else {
           folder.add(obj, key);
         }
       }
-      if (section !== 'flap' && section !== 'shoot') folder.close();
+      if (section !== 'flap' && section !== 'shoot' && section !== 'glide') folder.close();
     }
     this.gui.add({ save: () => saveConfig() }, 'save').name('💾 save to this browser');
     this.gui.add({ copy: () => navigator.clipboard?.writeText(JSON.stringify(config, null, 2)) }, 'copy').name('📋 copy as JSON');

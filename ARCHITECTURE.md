@@ -27,6 +27,7 @@
 | F7 | Player must be **in frame**: at minimum torso (shoulders to hips) and both arms, raised included; head and legs are optional. A visibility monitor runs continuously and shows a "get back in frame" overlay when a required part is lost (see §4.5) | [DECIDED] |
 | F8 | The game keeps running while the out-of-frame box is shown, but pose controls are cut off (the bird drops), so the player has an incentive to get back quickly; controls return as soon as the pose is reacquired | [DECIDED] |
 | F6 | Keyboard fallback controls for development/testing (↑ flap, ←/→ steer, ↓ poo; Space/P pause; K = keyboard-only mode) | [DECIDED] (v0.1) |
+| F12 | **Glide**: both arms spread out in a roughly straight line → the bird falls slowly. **Tilting** the arm line slides it sideways (the bird slides towards the lower hand, as seen on screen), faster the more it's tilted; about horizontal it keeps its momentum. Lowering the arms brings normal falling back. Binary on/off with some leeway (see §5) | [DECIDED] |
 | F9 | Sound | [DEFERRED] |
 | F10 | The player has 3 lives; touching a walking villain costs one: the bird hops and falls off the screen turned on its side (the lost heart blinks meanwhile), then a new bird drops in from the top, blinking and unhurtable for ~2 s. After the last life the "Game Over" sign drops from the top, then a new game starts (countdown, or straight away in keyboard mode) | [DECIDED] |
 | F11 | A villain hit by a poo is knocked off the screen arcade style: a short hop, then a parabolic fall past the bottom edge, growing a little as if flying towards the camera | [DECIDED] |
@@ -155,6 +156,7 @@ Implemented in v0.1 (all numbers live in `src/config.ts`, tunable at runtime):
 - **Bird:** Matter.js circle (r = 34), no rotation, no bounce, air friction 0.03, max speed clamp. Gravity 800 px/s².
 - **Flap → lift:** per arm, downstroke power = max(0, −angular velocity − 60°/s dead zone). Lift = liftGain (14) × mean of both arms' power, capped at 4000 px/s². Lift happens only while arms move down, so it reacts mid-stroke.
 - **Steering:** steerGain (6) × (left power − right power). Default: a stronger **left** arm pushes the bird **right** (like rowing); flip with `steerSign`.
+- **Glide:** `GlideDetector` fits a total-least-squares line through both wrists, elbows and shoulders (mirrored screen coords, y up). It's a glide when the points stray little from the line (`maxBend` 0.12 = perpendicular RMS / along-line RMS; a V, arms down, or one arm 30° off the other fail), the line is within ±50° and the arms move ≤ 120°/s; on after holding 150 ms, off after it's gone 150 ms (so a flap sweeping through horizontal doesn't trigger it). While gliding and falling, only 25% of gravity acts, fall speed is capped at 2.5 px/step and air friction drops to 0.01. The smoothed tilt sets the slide: within the ±10° dead zone (4° hysteresis) the bird keeps its momentum; beyond it, it eases (≤ 900 px/s²) to a sideways speed ramping from 0 at 10° up to 4 px/step at 35°, towards where the line falls, i.e. the lower hand (`tiltSign` flips it). It never lifts. Keyboard: Shift (keeps momentum; arrows steer).
 - **Wing animation follows the player:** with pose control the bird's flap frame is chosen from the average arm height, so the wings mirror the arms.
 - **Poo:** shoot (or ↓) → bird squashes (×1.22 wide, ×0.72 tall, ~400 ms) and drops a poo at the deepest point; poo inherits part of the bird's velocity, plus `pooSideSpeed` sideways when one leg was raised (towards that leg's side). Splat on the ground fades after 1.5 s.
 - **Villain:** walks back and forth on the ground (sensor body). A hit scores +1, shows the "hit" frame, he runs off and a new one enters from a random side after 1.5 s.
@@ -189,7 +191,7 @@ index.html, src/style.css
 src/main.ts                 app state machine: loading → menu → calibrating → countdown → playing ⇄ outOfFrame (game keeps running, no pose controls); keyboard mode
 src/config.ts               every tunable number (+ save/load to localStorage)
 src/pose/                   camera.ts, PoseTracker.ts (MediaPipe, One-Euro smoothing), landmarks.ts, types.ts
-src/gestures/               geometry.ts, FlapDetector.ts, ShootDetector.ts, VisibilityMonitor.ts, Calibration.ts  (pure TS, no DOM)
+src/gestures/               geometry.ts, FlapDetector.ts, ShootDetector.ts, GlideDetector.ts, VisibilityMonitor.ts, Calibration.ts  (pure TS, no DOM)
 src/game/                   Game.ts (Pixi stage + Matter engine + scoring), Bird.ts, Villain.ts, Poo.ts, Background.ts (sun, clouds + Ground), Ground.ts (shared with the splash), physics.ts
 src/characters/, src/scenery/   art definition files (§6)
 src/render/                 assets.ts (loads everything named in the definitions), CharacterSprite.ts, fitWorld.ts (scales the 1280x720 world into the window)
@@ -198,5 +200,5 @@ src/ui/                     SplashScreen.ts (title + menu), FrameGuide.ts (calib
 tests/                      synthetic.ts (synthetic pose generator), gestures.test.ts
 tools/generate-placeholder-art.mjs, scripts/copy-mediapipe-wasm.mjs
 ```
-- The game knows nothing about poses: it reads a `Controls` object (`lift`, `steer`, `wingPhase`, `flapping`) and `requestPoo()`. Pose and keyboard both produce `Controls`.
+- The game knows nothing about poses: it reads a `Controls` object (`lift`, `steer`, `wingPhase`, `flapping`, `gliding`) and `requestPoo()`. Pose and keyboard both produce `Controls`.
 - MediaPipe's WASM is copied from `node_modules` into `public/mediapipe/` on `npm install`, so JS and WASM versions always match. The model file (`pose_landmarker_lite.task`) is downloaded from Google's model storage at startup.
