@@ -28,11 +28,21 @@ const RANGES: Record<string, [number, number, number]> = {
   'keyboard.lift': [0, 5000, 50],
   'keyboard.steer': [0, 5000, 50],
   'villain.speed': [0, 8, 0.1],
+  'villain.fallJumpSpeed': [0, 30, 0.5],
+  'villain.fallGravity': [0.05, 2, 0.05],
+  'villain.fallSideSpeed': [0, 10, 0.5],
+  'villain.fallGrowth': [0, 5, 0.1],
+  'player.lives': [1, 9, 1],
+  'player.invulnerableMs': [0, 5000, 100],
+  'player.dieJumpSpeed': [0, 30, 0.5],
+  'player.dieGravity': [0.05, 2, 0.05],
+  'player.dieSideSpeed': [0, 10, 0.5],
+  'player.dieTurnMs': [0, 2000, 50],
   'smoothing.minCutoff': [0.1, 10, 0.1],
   'smoothing.beta': [0, 3, 0.01],
 };
 
-const SECTIONS = ['flap', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain'] as const;
+const SECTIONS = ['flap', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'player'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {

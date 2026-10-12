@@ -3,7 +3,7 @@ import { config, WORLD } from '../config';
 import { noControls, type Controls } from '../input/controls';
 import { fitWorld } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
-import { HAND_FONT as FONT, TITLE_FONT } from '../ui/fonts';
+import { HAND_FONT as FONT, titleStyle } from '../ui/fonts';
 import { Background } from './Background';
 import { Bird } from './Bird';
 import { Bodies, Composite, Engine, Events, STEP_MS, type MBody, type MEngine } from './physics';
@@ -25,6 +25,11 @@ export class Game {
   /** show the big "Paused" label while paused (only for a manual pause, not behind dialogs) */
   showPausedText = false;
   score = 0;
+  lives = config.player.lives;
+  /** lost the last life; frozen behind "Game Over" until `reset()` */
+  over = false;
+  /** called once when the bird has fallen off the screen for the last time */
+  onGameOver: (() => void) | null = null;
   /** latest controls; set by main from pose + keyboard */
   controls: Controls = noControls();
 
@@ -32,6 +37,8 @@ export class Game {
   private world = new Container();
   private actors = new Container();
   private fx = new Container();
+  /** in front of everything: the knocked-off villain flying towards the camera */
+  private front = new Container();
   private hud = new Container();
   private background = new Background();
   private bird: Bird;
@@ -42,6 +49,10 @@ export class Game {
   private acc = 0;
   private scoreText: Text;
   private pausedText: Text;
+  private hearts = new Container();
+  private gameOverText: Text;
+  /** ms since game over (drives the falling sign) */
+  private overT = 0;
   /** queued poo request: sideways direction (-1 left, 0 straight down, +1 right), or null */
   private pooQueued: number | null = null;
   private pooDir = 0;
@@ -69,25 +80,17 @@ export class Game {
 
     // layers
     this.actors.addChild(this.villain.view, this.bird.view);
-    this.world.addChild(this.background, this.actors, this.fx);
+    this.world.addChild(this.background, this.actors, this.fx, this.front);
     this.root.addChild(this.world, this.hud);
 
     this.scoreText = new Text({ text: 'Score: 0', style: { fontFamily: FONT, fontSize: 40, fill: '#2b2b2b' } });
     this.scoreText.position.set(24, 14);
-    this.pausedText = new Text({
-      text: 'Pause',
-      style: {
-        fontFamily: TITLE_FONT,
-        fontSize: 180,
-        fill: '#2b2b2b',
-        stroke: { color: '#ffffff', width: 12, join: 'round' },
-        dropShadow: { color: '#c0392b', alpha: 1, angle: Math.PI / 4, distance: 9, blur: 0 },
-        padding: 20,
-      },
-    });
-    this.pausedText.anchor.set(0.5);
-    this.pausedText.position.set(WORLD.width / 2, WORLD.height / 2);
-    this.hud.addChild(this.scoreText, this.pausedText);
+    this.hearts.position.set(WORLD.width - 24, 14);
+    this.buildHearts();
+    this.pausedText = bigText('Pause');
+    this.gameOverText = bigText('Game Over');
+    this.gameOverText.visible = false;
+    this.hud.addChild(this.scoreText, this.hearts, this.pausedText, this.gameOverText);
 
     app.stage.addChild(this.root);
     app.ticker.add((ticker) => this.update(ticker.deltaMS));
@@ -99,15 +102,44 @@ export class Game {
    * `dir` gives the poo a little sideways speed on screen: -1 left, 0 straight down, +1 right.
    */
   requestPoo(dir = 0) {
-    if (!this.paused) this.pooQueued = dir;
+    if (!this.paused && !this.over) this.pooQueued = dir;
+  }
+
+  /** Start a new game: score, lives, bird, villain and poos back to the start. */
+  reset() {
+    this.score = 0;
+    this.scoreText.text = 'Score: 0';
+    this.lives = config.player.lives;
+    this.buildHearts();
+    this.over = false;
+    this.overT = 0;
+    this.pooQueued = null;
+    this.bird.respawn(WORLD.width / 2, WORLD.groundY - config.physics.birdRadius, false);
+    Composite.remove(this.engine.world, this.bird.body); // no-op unless it was left in
+    Composite.add(this.engine.world, this.bird.body);
+    this.villain.reset(200);
+    for (const p of this.poos) {
+      Composite.remove(this.engine.world, p.body);
+      p.view.destroy();
+    }
+    this.poos = [];
+    for (const p of this.popups) p.text.destroy();
+    this.popups = [];
+    this.pending = [];
+    this.acc = 0;
+    this.sync();
   }
 
   private update(dtMs: number) {
     fitWorld(this.app, this.root);
-    this.pausedText.visible = this.paused && this.showPausedText;
-    if (!this.paused) {
+    this.pausedText.visible = this.paused && this.showPausedText && !this.over;
+    this.gameOverText.visible = this.over;
+    if (!this.paused && this.over) {
+      this.overT += dtMs;
+      this.background.update(dtMs);
+    } else if (!this.paused) {
       this.acc += Math.min(dtMs, 100);
-      while (this.acc >= STEP_MS) {
+      while (this.acc >= STEP_MS && !this.over) {
         this.step();
         this.acc -= STEP_MS;
       }
@@ -119,7 +151,7 @@ export class Game {
 
   private step() {
     this.engine.gravity.y = config.physics.gravity;
-    if (this.pooQueued !== null) {
+    if (this.pooQueued !== null && !this.bird.dying) {
       if (this.bird.squat()) this.pooDir = this.pooQueued;
       this.pooQueued = null;
     }
@@ -128,6 +160,12 @@ export class Game {
     for (const p of this.poos) p.step(STEP_MS);
     Engine.update(this.engine, STEP_MS);
     for (const fn of this.pending.splice(0)) fn();
+    // bird touching a walking villain costs a life
+    const b = this.bird.body;
+    if (!this.bird.dying && !this.bird.invulnerable && this.villain.touches(b.position.x, b.position.y, config.physics.birdRadius)) {
+      this.loseLife();
+    }
+    if (this.bird.fallen) this.afterDeath();
     // remove finished poos
     this.poos = this.poos.filter((p) => {
       if (p.state !== 'done') return true;
@@ -169,6 +207,37 @@ export class Game {
     }
   }
 
+  /** The bird dies and falls off the screen; the lost heart blinks meanwhile. */
+  private loseLife() {
+    this.lives = Math.max(0, this.lives - 1);
+    this.bird.die();
+    Composite.remove(this.engine.world, this.bird.body);
+  }
+
+  /** The dead bird has left the screen: drop in a new one from the top, or it's game over. */
+  private afterDeath() {
+    if (this.lives > 0) {
+      this.bird.respawn(WORLD.width / 2, 120, true);
+      Composite.add(this.engine.world, this.bird.body);
+      return;
+    }
+    this.over = true;
+    this.overT = 0;
+    this.onGameOver?.();
+  }
+
+  /** One heart per life, right-aligned in the corner. */
+  private buildHearts() {
+    for (const c of this.hearts.removeChildren()) c.destroy();
+    const n = config.player.lives;
+    for (let i = 0; i < n; i++) {
+      const heart = new Text({ text: '♥', style: { fontFamily: FONT, fontSize: 40, fill: '#c0392b', stroke: { color: '#fff', width: 5 } } });
+      heart.anchor.set(1, 0);
+      heart.x = -(n - 1 - i) * 40;
+      this.hearts.addChild(heart);
+    }
+  }
+
   private addScore(points: number, x: number, y: number) {
     this.score += points;
     this.scoreText.text = `Score: ${this.score}`;
@@ -194,8 +263,37 @@ export class Game {
   }
 
   private sync() {
+    // hearts: the one being lost blinks while the bird falls
+    const deathMs = this.bird.deathMs;
+    this.hearts.children.forEach((h, i) => {
+      h.visible = i < this.lives || (i === this.lives && deathMs !== null && Math.floor(deathMs / 120) % 2 === 0);
+    });
+    // "Game Over" drops in from the top and bounces to a stop in the middle
+    const k = Math.min(1, this.overT / Math.max(1, config.gameOver.dropMs));
+    const top = -this.gameOverText.height / 2;
+    this.gameOverText.y = top + (WORLD.height / 2 - top) * easeOutBounce(k);
     this.bird.sync(this.controls);
     this.villain.sync();
+    // the knocked-off villain flies towards the camera, in front of everything; walking, he's behind the bird
+    const v = this.villain.view;
+    if (this.villain.falling && v.parent !== this.front) this.front.addChild(v);
+    else if (!this.villain.falling && v.parent !== this.actors) this.actors.addChildAt(v, 0);
     for (const p of this.poos) p.sync();
   }
 }
+
+/** Big sign in the middle of the screen ("Pause", "Game Over"), styled like the title. */
+function bigText(text: string) {
+  const t = new Text({ text, style: titleStyle(180) });
+  t.anchor.set(0.5);
+  t.position.set(WORLD.width / 2, WORLD.height / 2);
+  return t;
+}
+
+const easeOutBounce = (x: number) => {
+  const n1 = 7.5625, d1 = 2.75;
+  if (x < 1 / d1) return n1 * x * x;
+  if (x < 2 / d1) return n1 * (x -= 1.5 / d1) * x + 0.75;
+  if (x < 2.5 / d1) return n1 * (x -= 2.25 / d1) * x + 0.9375;
+  return n1 * (x -= 2.625 / d1) * x + 0.984375;
+};

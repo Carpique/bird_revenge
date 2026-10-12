@@ -7,6 +7,18 @@ import { BIRD_GROUP, Bodies, Body, forceFor, type MBody } from './physics';
 
 type BirdAnim = keyof typeof birdDef.animations;
 
+/** Knocked off by the villain: falls off the screen on its side (animated by hand, outside the physics world). */
+interface Death {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  /** ms since dying */
+  t: number;
+  /** +1 turns clockwise, -1 anticlockwise */
+  turn: 1 | -1;
+}
+
 export class Bird {
   readonly body: MBody;
   readonly view = new Container();
@@ -15,6 +27,9 @@ export class Bird {
   private squashT: number | null = null;
   private pooDropped = false;
   private facing: 'left' | 'right' = 'right';
+  /** ms of invulnerability left after coming back from losing a life */
+  private invulnT = 0;
+  private death: Death | null = null;
 
   constructor(x: number) {
     const r = config.physics.birdRadius;
@@ -34,6 +49,51 @@ export class Bird {
     return this.body.position.y >= WORLD.groundY - r - 1.5 && Math.abs(this.body.velocity.y) < 0.6;
   }
 
+  get invulnerable(): boolean {
+    return this.invulnT > 0;
+  }
+
+  get dying(): boolean {
+    return this.death !== null;
+  }
+
+  /** ms since dying, or null when alive */
+  get deathMs(): number | null {
+    return this.death?.t ?? null;
+  }
+
+  /** the death fall has left the bottom of the screen */
+  get fallen(): boolean {
+    return this.death !== null && this.death.y - birdDef.displayHeight > WORLD.height;
+  }
+
+  /**
+   * Touched the villain: a little hop, then a parabolic fall off the screen, turned on its side.
+   * The caller takes the body out of the physics world until `respawn()`.
+   */
+  die() {
+    const p = this.body.position;
+    const back = this.facing === 'right' ? -1 : 1;
+    this.death = {
+      x: p.x,
+      y: p.y,
+      vx: back * config.player.dieSideSpeed,
+      vy: -config.player.dieJumpSpeed,
+      t: 0,
+      turn: back === -1 ? -1 : 1,
+    };
+    this.squashT = null;
+  }
+
+  /** Back in play at (x, y), at rest; `invulnerable` makes it blink and unhurtable for a while. */
+  respawn(x: number, y: number, invulnerable: boolean) {
+    Body.setPosition(this.body, { x, y });
+    Body.setVelocity(this.body, { x: 0, y: 0 });
+    this.squashT = null;
+    this.death = null;
+    this.invulnT = invulnerable ? config.player.invulnerableMs : 0;
+  }
+
   /** Start the squat-then-poo animation; `drop` is called at the deepest point. */
   squat(): boolean {
     if (this.squashT !== null) return false;
@@ -44,7 +104,16 @@ export class Bird {
 
   /** Physics step: apply flap forces, clamp speed, advance squash. */
   step(c: Controls, stepMs: number, drop: () => void) {
+    const d = this.death;
+    if (d) {
+      d.t += stepMs;
+      d.vy += config.player.dieGravity;
+      d.x += d.vx;
+      d.y += d.vy;
+      return;
+    }
     const b = this.body;
+    this.invulnT = Math.max(0, this.invulnT - stepMs);
     b.frictionAir = config.physics.birdAirFriction;
     Body.applyForce(b, b.position, { x: forceFor(b, c.steer), y: -forceFor(b, c.lift) });
     const v = b.velocity;
@@ -65,6 +134,16 @@ export class Bird {
 
   /** Render sync: position, animation frame, facing, squash. */
   sync(c: Controls) {
+    const d = this.death;
+    if (d) {
+      this.sprite.showPhase('flap', 0.5);
+      this.view.scale.set(1);
+      this.view.alpha = 1;
+      this.view.position.set(d.x, d.y);
+      this.view.rotation = d.turn * (Math.PI / 2) * Math.min(1, d.t / Math.max(1, config.player.dieTurnMs));
+      return;
+    }
+    this.view.rotation = 0;
     const b = this.body;
     const r = config.physics.birdRadius;
     if (Math.abs(b.velocity.x) > 0.4) this.facing = b.velocity.x > 0 ? 'right' : 'left';
@@ -77,6 +156,8 @@ export class Bird {
 
     const [sx, sy] = this.squashScale();
     this.view.scale.set(sx, sy);
+    // blink while invulnerable
+    this.view.alpha = this.invulnT > 0 && Math.floor(this.invulnT / 100) % 2 === 0 ? 0.25 : 1;
     // squash around the feet, not the centre
     this.view.position.set(b.position.x, b.position.y + r * (1 - sy));
   }

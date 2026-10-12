@@ -28,6 +28,8 @@
 | F8 | The game keeps running while the out-of-frame box is shown, but pose controls are cut off (the bird drops), so the player has an incentive to get back quickly; controls return as soon as the pose is reacquired | [DECIDED] |
 | F6 | Keyboard fallback controls for development/testing (↑ flap, ←/→ steer, ↓ poo; Space/P pause; K = keyboard-only mode) | [DECIDED] (v0.1) |
 | F9 | Sound | [DEFERRED] |
+| F10 | The player has 3 lives; touching a walking villain costs one: the bird hops and falls off the screen turned on its side (the lost heart blinks meanwhile), then a new bird drops in from the top, blinking and unhurtable for ~2 s. After the last life the "Game Over" sign drops from the top, then a new game starts (countdown, or straight away in keyboard mode) | [DECIDED] |
+| F11 | A villain hit by a poo is knocked off the screen arcade style: a short hop, then a parabolic fall past the bottom edge, growing a little as if flying towards the camera | [DECIDED] |
 
 ### 2.2 Non-functional
 | ID | Requirement | Status |

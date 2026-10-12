@@ -105,13 +105,42 @@ export const config = {
   villain: {
     /** px per physics step */
     speed: 1.6,
-    hitShowMs: 900,
+    /** how long the "hit" pose is held before he's knocked off the screen */
+    hitShowMs: 300,
+    /** knock-off: upward speed of the little hop (px per physics step) */
+    fallJumpSpeed: 9,
+    /** knock-off: gravity of the fall (px per physics step²) */
+    fallGravity: 0.45,
+    /** knock-off: sideways drift (px per physics step), away from where he was walking */
+    fallSideSpeed: 1.5,
+    /** knock-off: scale gained per second, as if flying towards the camera */
+    fallGrowth: 0.6,
     respawnDelayMs: 1500,
+  },
+
+  player: {
+    lives: 3,
+    /** after coming back from losing a life the bird blinks and can't be hurt for this long */
+    invulnerableMs: 2000,
+    /** death fall: upward speed of the little hop (px per physics step) */
+    dieJumpSpeed: 8,
+    /** death fall: gravity (px per physics step²) */
+    dieGravity: 0.45,
+    /** death fall: sideways drift (px per physics step), backwards */
+    dieSideSpeed: 1.5,
+    /** death fall: how long the bird takes to turn on its side */
+    dieTurnMs: 250,
   },
 
   score: { villain: 1, pedestrian: -1 },
 
   countdownMs: 2000,
+  gameOver: {
+    /** the "Game Over" sign drops from the top to the middle in this long */
+    dropMs: 1000,
+    /** ...and the screen is shown this long (from the start of the drop) before a new game starts */
+    showMs: 4000,
+  },
 };
 
 export type Config = typeof config;

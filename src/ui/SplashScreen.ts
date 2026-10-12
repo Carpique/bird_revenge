@@ -4,10 +4,7 @@ import { WORLD } from '../config';
 import { Ground } from '../game/Ground';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { fitWorld } from '../render/fitWorld';
-import { HAND_FONT, TITLE_FONT } from './fonts';
-
-const INK = '#2b2b2b';
-const ACCENT = '#c0392b';
+import { ACCENT, HAND_FONT, INK, TITLE_FONT, titleStyle } from './fonts';
 
 type Page = 'main' | 'instructions' | 'scores';
 
@@ -21,6 +18,7 @@ const PAGE_TEXT: Record<Exclude<Page, 'main'>, string> = {
     'Flap your arms to fly. Flap one arm harder to steer.',
     'Shoot: raise a leg sideways to drop a poo — it flies that way.',
     'Hit the villain to score!',
+    "Don't touch him — it costs you one of your 3 lives.",
     '',
     'Stand back so your arms and hips are in view.',
     'Keyboard: ↑ flap · ← → steer · ↓ poo · Space pause',
@@ -50,17 +48,7 @@ export class SplashScreen extends Container {
 
     root.addChild(new Ground());
 
-    const title = new Text({
-      text: 'Bird Revenge',
-      style: {
-        fontFamily: TITLE_FONT,
-        fontSize: 150,
-        fill: INK,
-        stroke: { color: '#ffffff', width: 10, join: 'round' },
-        dropShadow: { color: ACCENT, alpha: 1, angle: Math.PI / 4, distance: 8, blur: 0 },
-        padding: 16,
-      },
-    });
+    const title = new Text({ text: 'Bird Revenge', style: titleStyle(150) });
     title.anchor.set(0.5);
     title.position.set(WORLD.width / 2, 170);
 

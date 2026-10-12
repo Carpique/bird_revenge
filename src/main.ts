@@ -27,11 +27,12 @@ import { Tuning } from './ui/Tuning';
  *   calibrating shows a dialog over the paused game (also camera loading / camera errors)
  *   outOfFrame keeps the game running with no pose controls, so the bird drops until the player is back
  *   keyboard (K toggles; pose is ignored)
+ *   playing / outOfFrame / keyboard → gameOver (last life lost) → new game: countdown, or keyboard again
  * Pausing (Space / P in game, or the window losing focus during a game) freezes the game and shows "Pause".
  * While paused or while the window is unfocused / hidden, everything is suspended — render loop, guide
  * overlay, pose tracker and the camera itself — so an idle game uses almost no CPU.
  */
-type AppState = 'loading' | 'menu' | 'calibrating' | 'countdown' | 'playing' | 'outOfFrame' | 'keyboard';
+type AppState = 'loading' | 'menu' | 'calibrating' | 'countdown' | 'playing' | 'outOfFrame' | 'keyboard' | 'gameOver';
 
 async function main() {
   loadSavedConfig();
@@ -56,6 +57,9 @@ async function main() {
   let cameraError: string | null = null;
   let manualPause = false;
   let countdownEnd = 0;
+  let gameOverEnd = 0;
+  /** whether the game after "Game Over" is played with the keyboard */
+  let keyboardAfterGameOver = false;
 
   // latest pose results
   let frame: PoseFrame | null = null;
@@ -121,15 +125,21 @@ async function main() {
     countdownEnd = performance.now() + config.countdownMs;
   };
   const recalibrate = () => {
+    if (game.over) game.reset();
     calibration.reset();
     calibStatus = null;
     state = 'calibrating';
   };
 
   splash.onStart = recalibrate;
+  game.onGameOver = () => {
+    keyboardAfterGameOver = state === 'keyboard';
+    state = 'gameOver';
+    gameOverEnd = performance.now() + config.gameOver.showMs;
+  };
 
   /** states where the game is on screen and can be paused */
-  const inGame = () => state === 'countdown' || state === 'playing' || state === 'outOfFrame' || state === 'keyboard';
+  const inGame = () => state === 'countdown' || state === 'playing' || state === 'outOfFrame' || state === 'keyboard' || state === 'gameOver';
   let focused = document.hasFocus();
   const windowActive = () => focused && !document.hidden;
 
@@ -204,6 +214,7 @@ async function main() {
       app.ticker.stop();
     } else {
       countdownEnd += now - suspendedAt;
+      gameOverEnd += now - suspendedAt;
       app.ticker.start();
       if (!guideRunning) {
         guideRunning = true;
@@ -238,6 +249,7 @@ async function main() {
     else if (k === 'r') recorder.toggle();
     if (state === 'loading' || state === 'menu') return;
     if (k === 'p') keyboard.onPause();
+    else if (state === 'gameOver') return;
     else if (k === 'c' && tracker) recalibrate();
     else if (k === 'k') {
       if (state !== 'keyboard') state = 'keyboard';
@@ -290,10 +302,16 @@ async function main() {
   app.ticker.add(() => {
     const now = performance.now();
     if (state === 'countdown' && now >= countdownEnd) state = 'playing';
+    if (state === 'gameOver' && now >= gameOverEnd) {
+      game.reset();
+      if (keyboardAfterGameOver) state = 'keyboard';
+      else startCountdown();
+    }
 
     const poseFresh = state === 'playing' && now - lastPoseT < 300;
     game.controls = keyboard.apply(poseFresh ? poseControls : noControls());
-    game.paused = manualPause || !(state === 'playing' || state === 'outOfFrame' || state === 'keyboard');
+    // during gameOver the game runs only to drop the "Game Over" sign in
+    game.paused = manualPause || !(state === 'playing' || state === 'outOfFrame' || state === 'keyboard' || state === 'gameOver');
     game.showPausedText = manualPause;
     splash.visible = state === 'menu';
     game.root.visible = !splash.visible;
