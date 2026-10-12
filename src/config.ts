@@ -54,17 +54,9 @@ export const config = {
     velocityDeadzone: 60,
     /** EMA factor for angular velocity per pose frame (higher = more responsive, noisier) */
     velocitySmoothing: 0.5,
-    /** upward acceleration (px/s²) per deg/s of downstroke speed, averaged over both arms */
-    liftGain: 14,
-    /** sideways acceleration (px/s²) per deg/s of left-right downstroke difference */
-    steerGain: 6,
-    /**
-     * +1: stronger LEFT arm pushes the bird RIGHT (like rowing / a real bird turning).
-     * -1: stronger left arm moves the bird left.
-     */
-    steerSign: 1,
-    maxLiftAccel: 4000,
-    maxSteerAccel: 2500,
+    /** upward acceleration (px/s²) per deg/s of downstroke speed, averaged over both arms (only while both move down) */
+    liftGain: 16.8,
+    maxLiftAccel: 4800,
     /** minimum peak-to-trough arm swing (deg) to count as a stroke (stats only) */
     strokeMinAmplitude: 25,
   },

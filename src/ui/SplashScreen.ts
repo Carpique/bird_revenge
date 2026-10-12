@@ -15,7 +15,7 @@ interface MenuItem {
 
 const PAGE_TEXT: Record<Exclude<Page, 'main'>, string> = {
   instructions: [
-    'Flap your arms to fly. Flap one arm harder to steer.',
+    'Flap both arms to fly.',
     'Glide: spread your arms out to fall slowly — tilt them to slide.',
     'Shoot: raise a leg sideways to drop a poo — it flies that way.',
     'Hit the villain to score!',

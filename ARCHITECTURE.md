@@ -8,7 +8,7 @@
 - The player controls a **bird** with their body, tracked by the webcam.
 - **Default state:** the bird rests on the ground.
 - **Flapping arms** → the bird flaps its wings and rises a bit. **Continuous flapping** keeps pushing it upward; stopping lets it fall (gravity).
-- **Left/right asymmetry** in flapping (frequency and/or strength per arm) → **sideways movement**.
+- **Sideways movement** comes from gliding with the arms spread out and tilted (left/right flapping asymmetry was tried first and removed).
 - **"Shoot" gesture** (a leg raised sideways) → the bird **drops a poo**.
 - **Targets** walk along the bottom of the screen:
   - **Pedestrians** — hitting one scores **negative** points.
@@ -20,7 +20,7 @@
 | ID | Requirement | Status |
 |----|-------------|--------|
 | F1 | Webcam-based pose tracking controls the bird; no keyboard/mouse needed during play | [DECIDED] |
-| F2 | Flap detection per arm, producing both lift (up) and steering (left/right) | [DECIDED] |
+| F2 | Flap detection per arm; lift (up) only when both arms flap down together. Steering by left/right asymmetry was removed (single-arm flapping does nothing); sideways movement comes from gliding (F12) | [DECIDED] |
 | F3 | Shoot detection (leg raised sideways, read from the hip angles) triggers a poo drop (discrete event) | [DECIDED] |
 | F4 | Walking pedestrians and villains with distinct scoring | [DECIDED] |
 | F5 | Short calibration step at game start: stand in the outline with arms lowered, hold still ~1 s; records the standing hip angles | [DECIDED] (v0.1) |
@@ -78,7 +78,7 @@ webcam → MediaPipe Pose (≈30 fps) → landmark smoothing → feature extract
 ### 4.2 The two gestures are different kinds of problems
 - **Flapping is continuous control, not classification.** The game needs a per-arm signal every frame (how hard / how fast is each arm flapping right now), not a label after the fact.
   - Proposed approach: per arm, compute the **arm elevation angle** (shoulder→wrist vector relative to the torso axis). Track it as a time series; detect **downstrokes** (peak → trough with amplitude above a threshold). Each downstroke delivers an impulse of lift proportional to its amplitude/speed.
-  - Lift = sum of both arms' impulses; steering = difference between left and right (frequency × amplitude).
+  - Lift = sum of both arms' impulses, only while both arms move down (steering by left/right difference was removed).
   - This is cheap, low-latency (reacts mid-stroke), explainable and tunable — an ML classifier on fixed windows would add latency (must wait for the window) and is not needed for a periodic signal like this.
 - **Shoot is a discrete event** (renamed from "squat" [DECIDED]: the gesture is now a leg raised sideways). Heuristic first [DECIDED]. Since the legs no longer have to be in frame (§4.5), it relies on the **hip angles** only:
   - **Hip abduction** per leg = angle of the thigh (hip → knee) away from the torso axis (shoulder centre → hip centre), signed so a leg swung out to its own side is positive. Measured against the torso, not the image vertical, so camera tilt and body sway during flapping cancel out.
@@ -154,8 +154,8 @@ Even with heuristics we need recorded data: to tune thresholds, to test detector
 Implemented in v0.1 (all numbers live in `src/config.ts`, tunable at runtime):
 - **World:** fixed 1280×720 logical world scaled to fit the window; ground at y = 640; invisible walls and ceiling keep the bird on screen.
 - **Bird:** Matter.js circle (r = 34), no rotation, no bounce, air friction 0.03, max speed clamp. Gravity 800 px/s².
-- **Flap → lift:** per arm, downstroke power = max(0, −angular velocity − 60°/s dead zone). Lift = liftGain (14) × mean of both arms' power, capped at 4000 px/s². Lift happens only while arms move down, so it reacts mid-stroke.
-- **Steering:** steerGain (6) × (left power − right power). Default: a stronger **left** arm pushes the bird **right** (like rowing); flip with `steerSign`.
+- **Flap → lift:** per arm, downstroke power = max(0, −angular velocity − 60°/s dead zone). Lift = liftGain (16.8) × mean of both arms' power, only while **both** have power, capped at 4800 px/s². Lift happens only while arms move down, so it reacts mid-stroke.
+- **No flap steering:** lift needs both arms on a downstroke at once (one arm alone gives nothing). Asymmetric-flap steering (`steerGain` × (left − right power)) was removed to see if it improves control; sideways movement comes from gliding.
 - **Glide:** `GlideDetector` fits a total-least-squares line through both wrists, elbows and shoulders (mirrored screen coords, y up). It's a glide when the points stray little from the line (`maxBend` 0.12 = perpendicular RMS / along-line RMS; a V, arms down, or one arm 30° off the other fail), the line is within ±50° and the arms move ≤ 120°/s; on after holding 150 ms, off after it's gone 150 ms (so a flap sweeping through horizontal doesn't trigger it). While gliding and falling, only 25% of gravity acts, fall speed is capped at 2.5 px/step and air friction drops to 0.01. The smoothed tilt sets the slide: within the ±10° dead zone (4° hysteresis) the bird keeps its momentum; beyond it, it eases (≤ 900 px/s²) to a sideways speed ramping from 0 at 10° up to 4 px/step at 35°, towards where the line falls, i.e. the lower hand (`tiltSign` flips it). It never lifts. Keyboard: Shift (keeps momentum; arrows steer).
 - **Wing animation follows the player:** with pose control the bird's flap frame is chosen from the average arm height, so the wings mirror the arms.
 - **Poo:** shoot (or ↓) → bird squashes (×1.22 wide, ×0.72 tall, ~400 ms) and drops a poo at the deepest point; poo inherits part of the bird's velocity, plus `pooSideSpeed` sideways when one leg was raised (towards that leg's side). Splat on the ground fades after 1.5 s.

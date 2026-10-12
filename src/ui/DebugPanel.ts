@@ -147,7 +147,7 @@ export class DebugPanel {
       fl ? `arm  angle   vel  power strk  Hz` : '',
       fl ? `L   ${n(fl.left.angle)} ${n(fl.left.velocity)} ${n(fl.left.power)} ${String(fl.left.strokes).padStart(4)} ${fl.left.frequency.toFixed(1).padStart(4)}` : '',
       fl ? `R   ${n(fl.right.angle)} ${n(fl.right.velocity)} ${n(fl.right.power)} ${String(fl.right.strokes).padStart(4)} ${fl.right.frequency.toFixed(1).padStart(4)}` : '',
-      fl ? `lift ${n(fl.lift)} px/s²  steer ${n(fl.steer)}` : '',
+      fl ? `lift ${n(fl.lift)} px/s²` : '',
       '',
       sh ? `shoot hips L ${n(sh.left)}  R ${n(sh.right)}  raised ${sh.raisedLeg ?? '-'}` : '',
       sh ? `shooting ${sh.shooting ? 'YES' : 'no'}` : '',

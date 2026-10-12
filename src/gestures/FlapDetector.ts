@@ -23,8 +23,6 @@ export interface FlapOutput {
   right: ArmState;
   /** upward acceleration, px/s² */
   lift: number;
-  /** sideways acceleration, px/s² (+ = right on screen) */
-  steer: number;
   /** 0 = arms down … 1 = arms up, for picking the bird's wing frame */
   wingPhase: number;
 }
@@ -95,7 +93,8 @@ class ArmTracker {
 
 /**
  * Heuristic flap detector: lift comes from the *speed of downstrokes*, so it reacts mid-stroke
- * (no waiting for a full gesture). Faster / bigger flaps → more lift. Left/right imbalance → steering.
+ * (no waiting for a full gesture). Faster / bigger flaps → more lift. Both arms must be on a downstroke
+ * together: flapping one arm alone does nothing (no lift, no steering).
  */
 export class FlapDetector {
   private left = new ArmTracker('left');
@@ -107,12 +106,11 @@ export class FlapDetector {
     const l = this.left.state;
     const r = this.right.state;
     const cfg = config.flap;
-    const lift = Math.min(cfg.maxLiftAccel, (cfg.liftGain * (l.power + r.power)) / 2);
-    const steerRaw = cfg.steerSign * cfg.steerGain * (l.power - r.power);
-    const steer = Math.max(-cfg.maxSteerAccel, Math.min(cfg.maxSteerAccel, steerRaw));
+    const bothDown = l.power > 0 && r.power > 0;
+    const lift = bothDown ? Math.min(cfg.maxLiftAccel, (cfg.liftGain * (l.power + r.power)) / 2) : 0;
     const visAngles = [l, r].filter((a) => a.visible).map((a) => a.angle);
     const avg = visAngles.length ? visAngles.reduce((x, y) => x + y, 0) / visAngles.length : 60;
     const wingPhase = Math.max(0, Math.min(1, (avg - 20) / 140));
-    return { left: { ...l }, right: { ...r }, lift, steer, wingPhase };
+    return { left: { ...l }, right: { ...r }, lift, wingPhase };
   }
 }

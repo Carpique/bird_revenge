@@ -6,9 +6,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'flap.velocityDeadzone': [0, 300, 5],
   'flap.velocitySmoothing': [0.05, 1, 0.05],
   'flap.liftGain': [0, 40, 0.5],
-  'flap.steerGain': [0, 30, 0.5],
   'flap.maxLiftAccel': [500, 8000, 100],
-  'flap.maxSteerAccel': [0, 6000, 100],
   'flap.strokeMinAmplitude': [5, 90, 1],
   'shoot.angleEnter': [5, 80, 1],
   'shoot.angleExit': [0, 60, 1],
@@ -69,9 +67,7 @@ export class Tuning {
       const folder = this.gui.addFolder(section);
       for (const key of Object.keys(obj)) {
         const r = RANGES[`${section}.${key}`];
-        if (section === 'flap' && key === 'steerSign') {
-          folder.add(obj, key, { 'left arm → right': 1, 'left arm → left': -1 }).name('steering');
-        } else if (section === 'glide' && key === 'tiltSign') {
+        if (section === 'glide' && key === 'tiltSign') {
           folder.add(obj, key, { 'rising right → right': 1, 'rising right → left': -1 }).name('tilt direction');
         } else if (r) {
           folder.add(obj, key, r[0], r[1], r[2]);

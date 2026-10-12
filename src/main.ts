@@ -295,7 +295,7 @@ async function main() {
         if (f && flapOut && shootOut && glideOut) {
           poseControls = {
             lift: flapOut.lift,
-            steer: flapOut.steer,
+            steer: 0,
             wingPhase: flapOut.wingPhase,
             flapping: false,
             gliding: glideOut.gliding,

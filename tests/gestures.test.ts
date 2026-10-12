@@ -33,29 +33,27 @@ describe('FlapDetector', () => {
     expect(maxLift).toBe(0);
   });
 
-  it('vigorous symmetric flapping gives average lift above gravity and no net steering', () => {
+  it('vigorous symmetric flapping gives average lift above gravity', () => {
     const d = new FlapDetector();
-    let liftSum = 0, steerSum = 0, n = 0;
+    let liftSum = 0, n = 0;
     let out;
     for (const f of frames(4000, (t) => ({ armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) }))) {
       out = d.update(f, true, true);
       liftSum += out.lift;
-      steerSum += out.steer;
       n++;
     }
     const gravity = config.physics.gravity * 1000;
     expect(liftSum / n).toBeGreaterThan(gravity);
-    expect(Math.abs(steerSum / n)).toBeLessThan(1);
     expect(out!.left.strokes).toBeGreaterThanOrEqual(5);
     expect(out!.left.frequency).toBeGreaterThan(1.2);
     expect(out!.left.frequency).toBeLessThan(1.8);
   });
 
-  it('flapping only the left arm steers right (steerSign = +1)', () => {
+  it('flapping only one arm gives no lift', () => {
     const d = new FlapDetector();
-    let steerSum = 0;
-    for (const f of frames(3000, (t) => ({ armLeft: flapAngle(t, 1.5), armRight: 15 }))) steerSum += d.update(f, true, true).steer;
-    expect(steerSum).toBeGreaterThan(0);
+    let maxLift = 0;
+    for (const f of frames(3000, (t) => ({ armLeft: flapAngle(t, 1.5), armRight: 15 }))) maxLift = Math.max(maxLift, d.update(f, true, true).lift);
+    expect(maxLift).toBe(0);
   });
 
   it('lift is produced only during downstrokes', () => {
