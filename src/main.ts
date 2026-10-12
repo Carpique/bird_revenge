@@ -52,7 +52,8 @@ async function main() {
   let state: AppState = 'loading';
   /** camera / pose model status, shown in the calibration dialog */
   let poseError: string | null = null;
-  let loadingMessage = 'Loading…';
+  /** the camera stopped working after it had started; it's being retried */
+  let cameraError: string | null = null;
   let manualPause = false;
   let countdownEnd = 0;
 
@@ -80,13 +81,17 @@ async function main() {
       return;
     }
     const gs: GuideState = { mode: 'hidden', frame, vis };
-    if (state === 'loading') Object.assign(gs, { mode: 'loading', message: loadingMessage });
+    if (state === 'loading') Object.assign(gs, { mode: 'loading', message: 'Loading…' });
     else if (state === 'calibrating' && poseError)
       Object.assign(gs, { mode: 'calibrate', title: 'No camera', message: poseError, error: true, hint: 'Press K to play with the keyboard' });
-    else if (state === 'calibrating' && !tracker) Object.assign(gs, { mode: 'calibrate', title: 'Getting ready', message: loadingMessage });
+    else if (state === 'calibrating' && cameraError)
+      Object.assign(gs, { mode: 'calibrate', title: cameraError, message: 'Reconnecting…', hint: 'Press K to play with the keyboard' });
+    else if (state === 'calibrating' && (!cameraOn || !tracker))
+      Object.assign(gs, { mode: 'calibrate', title: 'Getting ready', message: cameraOn ? 'Loading pose model…' : 'Starting camera…' });
     else if (state === 'calibrating')
       Object.assign(gs, { mode: 'calibrate', message: calibStatus?.message ?? 'Get into view', progress: calibStatus?.progress });
-    else if (state === 'outOfFrame') Object.assign(gs, { mode: 'outOfFrame', message: vis?.hint ?? 'Get into view' });
+    else if (state === 'outOfFrame')
+      Object.assign(gs, { mode: 'outOfFrame', message: cameraError ? `${cameraError} – reconnecting…` : (vis?.hint ?? 'Get into view') });
     else if (state === 'countdown') Object.assign(gs, { mode: 'countdown', countdown: (countdownEnd - now) / 1000 });
     guide.draw(gs, now);
     requestAnimationFrame(drawGuide);
@@ -128,31 +133,58 @@ async function main() {
   let focused = document.hasFocus();
   const windowActive = () => focused && !document.hidden;
 
-  // camera + pose tracker follow `suspended`; switching is async, so changes are applied one at a time
+  // camera + pose tracker follow `suspended`; switching is async, so changes are applied one at a time.
+  // A camera that fails to start (e.g. not ready yet after the laptop wakes — the Vite dev server also
+  // reloads the page then) or dies while running is retried with backoff; meanwhile the dialogs say
+  // it's reconnecting. Only a blocked permission or a missing camera API is final.
   let cameraOn = false;
   let poseSync = Promise.resolve();
+  let retryTimer = 0;
+  let retryDelay = 500;
+  const scheduleRetry = () => {
+    clearTimeout(retryTimer);
+    retryTimer = window.setTimeout(syncPose, retryDelay);
+    retryDelay = Math.min(retryDelay * 2, 5000);
+  };
+  const cameraOff = () => {
+    tracker?.stop();
+    stopCamera(video);
+    cameraOn = false;
+    frame = null;
+    lastPoseT = 0; // stale pose controls must not apply until a fresh frame arrives
+  };
+  const onCameraLost = () => {
+    console.warn('camera stream ended');
+    cameraOff();
+    cameraError = 'Camera disconnected';
+    if (state === 'countdown' || state === 'playing') state = 'outOfFrame';
+    syncPose();
+  };
   const syncPose = () => {
     poseSync = poseSync.then(async () => {
-      if (!tracker || poseError) return;
+      if (poseError) return;
       const want = !suspended;
       if (want === cameraOn) return;
       if (want) {
         try {
-          await startCamera(video);
+          await startCamera(video, onCameraLost);
         } catch (e) {
           console.error(e);
-          poseError = 'Could not restart the camera';
+          if (isPermissionError(e)) poseError = 'Camera access was blocked';
+          else if (!navigator.mediaDevices?.getUserMedia) poseError = e instanceof Error ? e.message : String(e);
+          else {
+            cameraError ??= 'Camera unavailable';
+            scheduleRetry();
+          }
           return;
         }
         cameraOn = true;
+        cameraError = null;
+        retryDelay = 500;
         if (suspended) return syncPose(); // suspended again while the camera was starting
-        tracker.start();
+        tracker?.start(); // if the model is still loading, it starts the tracker once it's ready
       } else {
-        tracker.stop();
-        stopCamera(video);
-        cameraOn = false;
-        frame = null;
-        lastPoseT = 0; // stale pose controls must not apply until a fresh frame arrives
+        cameraOff();
       }
     });
   };
@@ -287,20 +319,24 @@ async function main() {
 
   // splash screen first; camera + pose model load in the background
   state = 'menu';
+  syncPose(); // starts the camera (retrying if it isn't available yet)
   try {
-    loadingMessage = 'Starting camera…';
-    await startCamera(video);
-    cameraOn = true;
-    loadingMessage = 'Loading pose model…';
-    tracker = await PoseTracker.create(video);
-    tracker.onFrame = onPose;
-    if (!suspended) tracker.start();
-    syncPose(); // turns the camera off if the window was left while loading
+    const t = await PoseTracker.create(video);
+    t.onFrame = onPose;
+    tracker = t;
+    if (cameraOn && !suspended) t.start();
   } catch (e) {
     console.error(e);
     const msg = e instanceof Error ? e.message : String(e);
-    poseError = /Permission|NotAllowed/i.test(msg) ? 'Camera access was blocked' : `Could not start pose tracking: ${msg}`;
+    poseError = `Could not start pose tracking: ${msg}`;
+    clearTimeout(retryTimer);
+    cameraOff();
   }
+}
+
+function isPermissionError(e: unknown) {
+  const s = e instanceof Error ? `${e.name} ${e.message}` : String(e);
+  return /Permission|NotAllowed/i.test(s);
 }
 
 main();
