@@ -4,6 +4,7 @@ import { noControls, type Controls } from '../input/controls';
 import { fitWorld } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
 import { HAND_FONT as FONT, titleStyle } from '../ui/fonts';
+import { Apple } from './Apple';
 import { Background } from './Background';
 import { Bird } from './Bird';
 import { Bodies, Composite, Engine, Events, STEP_MS, type MBody, type MEngine } from './physics';
@@ -44,6 +45,7 @@ export class Game {
   private bird: Bird;
   private villain: Villain;
   private poos: Poo[] = [];
+  private apples: Apple[] = [];
   private popups: Popup[] = [];
   private pending: (() => void)[] = [];
   private acc = 0;
@@ -72,6 +74,7 @@ export class Game {
 
     this.bird = new Bird(WORLD.width / 2);
     this.villain = new Villain(200);
+    this.villain.onThrow = (x, y) => this.throwApple(x, y);
     Composite.add(this.engine.world, [this.bird.body, this.villain.body]);
 
     Events.on(this.engine, 'collisionStart', (e) => {
@@ -123,6 +126,8 @@ export class Game {
       p.view.destroy();
     }
     this.poos = [];
+    for (const a of this.apples) a.view.destroy();
+    this.apples = [];
     for (const p of this.popups) p.text.destroy();
     this.popups = [];
     this.pending = [];
@@ -156,14 +161,24 @@ export class Game {
       this.pooQueued = null;
     }
     this.bird.step(this.controls, STEP_MS, () => this.dropPoo());
-    this.villain.step(STEP_MS);
+    this.villain.step(STEP_MS, this.bird.dying ? null : this.bird.body.position.x);
     for (const p of this.poos) p.step(STEP_MS);
+    for (const a of this.apples) a.step(STEP_MS);
     Engine.update(this.engine, STEP_MS);
     for (const fn of this.pending.splice(0)) fn();
     // bird touching a walking villain costs a life
     const b = this.bird.body;
     if (!this.bird.dying && !this.bird.invulnerable && this.villain.touches(b.position.x, b.position.y, config.physics.birdRadius)) {
       this.loseLife();
+    }
+    // ...and so does an apple
+    for (const a of this.apples) {
+      if (a.state !== 'flying' || this.bird.dying || this.bird.invulnerable) continue;
+      const hitR = config.physics.birdRadius + config.apple.radius;
+      if ((a.x - b.position.x) ** 2 + (a.y - b.position.y) ** 2 < hitR * hitR) {
+        a.state = 'done';
+        this.loseLife();
+      }
     }
     if (this.bird.fallen) this.afterDeath();
     // remove finished poos
@@ -172,6 +187,36 @@ export class Game {
       p.view.destroy();
       return false;
     });
+    this.apples = this.apples.filter((a) => {
+      if (a.state !== 'done') return true;
+      a.view.destroy();
+      return false;
+    });
+  }
+
+  /** How hard the villain throws (launch speed, px per physics step). Constant for now; could grow as the game goes on. */
+  private appleStrength(): number {
+    return config.apple.strength;
+  }
+
+  /**
+   * Throw an apple from (x, y) at where the bird is now (no leading, so moving dodges it), on the flatter
+   * of the two arcs that reach it. A bird out of reach gets a lob that falls short.
+   */
+  private throwApple(x: number, y: number) {
+    const target = this.bird.body.position;
+    const v = this.appleStrength();
+    const g = config.apple.gravity;
+    const dx = target.x - x;
+    const adx = Math.max(1, Math.abs(dx));
+    const up = y - target.y;
+    const d = v ** 4 - g * (g * adx * adx + 2 * up * v * v);
+    let angle = d >= 0 ? Math.atan((v * v - Math.sqrt(d)) / (g * adx)) : (config.apple.outOfReachAngle * Math.PI) / 180;
+    angle += ((Math.random() * 2 - 1) * config.apple.aimSpread * Math.PI) / 180;
+    const side = dx < 0 ? -1 : 1;
+    const apple = new Apple(x, y, side * v * Math.cos(angle), -v * Math.sin(angle));
+    this.apples.push(apple);
+    this.fx.addChild(apple.view);
   }
 
   private dropPoo() {
@@ -279,6 +324,7 @@ export class Game {
     if (this.villain.falling && v.parent !== this.front) this.front.addChild(v);
     else if (!this.villain.falling && v.parent !== this.actors) this.actors.addChildAt(v, 0);
     for (const p of this.poos) p.sync();
+    for (const a of this.apples) a.sync();
   }
 }
 

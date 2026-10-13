@@ -44,6 +44,14 @@ const RANGES: Record<string, [number, number, number]> = {
   'villain.fallGravity': [0.05, 2, 0.05],
   'villain.fallSideSpeed': [0, 10, 0.5],
   'villain.fallGrowth': [0, 5, 0.1],
+  'apple.strength': [0, 30, 0.5],
+  'apple.gravity': [0.01, 1, 0.002],
+  'apple.minIntervalMs': [0, 15000, 100],
+  'apple.maxIntervalMs': [0, 15000, 100],
+  'apple.windupMs': [0, 2000, 50],
+  'apple.aimSpread': [0, 45, 1],
+  'apple.outOfReachAngle': [0, 90, 1],
+  'apple.radius': [2, 40, 1],
   'player.lives': [1, 9, 1],
   'player.invulnerableMs': [0, 5000, 100],
   'player.dieJumpSpeed': [0, 30, 0.5],
@@ -54,7 +62,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'smoothing.beta': [0, 3, 0.01],
 };
 
-const SECTIONS = ['flap', 'shoot', 'glide', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'player'] as const;
+const SECTIONS = ['flap', 'shoot', 'glide', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'player'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {

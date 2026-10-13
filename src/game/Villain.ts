@@ -10,11 +10,19 @@ const MIN_X = 60, MAX_X = WORLD.width - 60;
 const HEIGHT = villainDef.displayHeight;
 /** body centre when standing on the ground */
 const STAND_Y = WORLD.groundY - HEIGHT / 2;
+/** where the apple leaves his hand: in front of him (along his facing), above the feet */
+const HAND_DX = 22, HAND_Y = WORLD.groundY - 95;
+
+const nextThrowDelay = () => {
+  const { minIntervalMs: lo, maxIntervalMs: hi } = config.apple;
+  return lo + Math.random() * Math.max(0, hi - lo);
+};
 
 /**
  * Walks back and forth on the ground. When hit, he is knocked off the screen arcade style:
  * a little hop, then a parabolic fall past the bottom edge, growing as if flying towards the camera.
  * Then a new one comes in.
+ * Every now and then, while walking on screen, he stops, turns to the bird and throws an apple at it.
  */
 export class Villain {
   readonly body: MBody;
@@ -28,6 +36,12 @@ export class Villain {
   private scale = 1;
   private dir: 1 | -1 = 1;
   private timer = 0;
+  /** ms until he starts the next throw */
+  private throwIn = nextThrowDelay();
+  /** ms into the windup of a throw (standing still, facing the bird), or null when not throwing */
+  private aimT: number | null = null;
+  /** called when an apple leaves his hand, with the hand position */
+  onThrow: ((x: number, y: number) => void) | null = null;
 
   constructor(x: number) {
     this.x = x;
@@ -59,8 +73,7 @@ export class Villain {
   /** Returns true if this hit counts. */
   hit(): boolean {
     if (!this.hittable) return false;
-    this.state = 'hit';
-    this.timer = 0;
+    this.enter('hit');
     return true;
   }
 
@@ -71,11 +84,35 @@ export class Villain {
     this.enter('walking');
   }
 
-  step(stepMs: number) {
+  /** `targetX`: where the bird is, or null when there's nothing to throw at (bird dying) */
+  step(stepMs: number, targetX: number | null) {
     const speed = config.villain.speed;
     this.timer += stepMs;
     switch (this.state) {
       case 'walking':
+        if (this.aimT !== null) {
+          if (targetX === null) {
+            this.aimT = null;
+            this.throwIn = nextThrowDelay();
+            break;
+          }
+          this.dir = targetX < this.x ? -1 : 1;
+          this.aimT += stepMs;
+          if (this.aimT >= config.apple.windupMs) {
+            this.aimT = null;
+            this.throwIn = nextThrowDelay();
+            this.onThrow?.(this.x + this.dir * HAND_DX, HAND_Y);
+          }
+          break;
+        }
+        // only throws while fully on screen
+        if (targetX !== null && this.x >= MIN_X && this.x <= MAX_X) {
+          this.throwIn -= stepMs;
+          if (this.throwIn <= 0) {
+            this.aimT = 0;
+            break;
+          }
+        }
         this.x += this.dir * speed;
         if (this.x > MAX_X) this.dir = -1;
         if (this.x < MIN_X) this.dir = 1;
@@ -114,13 +151,17 @@ export class Villain {
     this.view.scale.set(this.scale);
     this.view.position.set(this.x, this.y + (HEIGHT * this.scale) / 2);
     this.view.setFacing(this.dir > 0 ? 'right' : 'left');
-    this.view.play(this.state === 'walking' ? 'walk' : 'hit');
+    // standing still in the windup of a throw
+    if (this.aimT !== null) this.view.showPhase('walk', 0);
+    else this.view.play(this.state === 'walking' ? 'walk' : 'hit');
   }
 
   private enter(state: State) {
     this.state = state;
     this.timer = 0;
+    this.aimT = null;
     if (state === 'walking') {
+      this.throwIn = nextThrowDelay();
       this.y = STAND_Y;
       this.scale = 1;
     }
