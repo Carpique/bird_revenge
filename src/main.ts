@@ -3,7 +3,6 @@ import { config, loadSavedConfig } from './config';
 import { Game } from './game/Game';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
 import { FlapDetector, type FlapOutput } from './gestures/FlapDetector';
-import { GlideDetector, type GlideOutput } from './gestures/GlideDetector';
 import { ShootDetector, type ShootOutput } from './gestures/ShootDetector';
 import { VisibilityMonitor, type VisibilityOutput } from './gestures/VisibilityMonitor';
 import { noControls, type Controls } from './input/controls';
@@ -67,7 +66,6 @@ async function main() {
   let vis: VisibilityOutput | null = null;
   let flapOut: FlapOutput | null = null;
   let shootOut: ShootOutput | null = null;
-  let glideOut: GlideOutput | null = null;
   let calibStatus: CalibrationStatus | null = null;
   let poseControls: Controls = noControls();
   let lastPoseT = 0;
@@ -120,7 +118,6 @@ async function main() {
   const visibility = new VisibilityMonitor();
   const flap = new FlapDetector();
   const shoot = new ShootDetector();
-  const glide = new GlideDetector();
   const calibration = new Calibration();
 
   const startCountdown = () => {
@@ -269,7 +266,6 @@ async function main() {
     if (f) {
       flapOut = flap.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible);
       shootOut = shoot.update(f, vis.parts.torso.visible);
-      glideOut = glide.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible, flapOut);
       debug.record(now, flapOut, shootOut);
     }
 
@@ -292,14 +288,12 @@ async function main() {
           state = 'outOfFrame';
           break;
         }
-        if (f && flapOut && shootOut && glideOut) {
+        if (f && flapOut && shootOut) {
           poseControls = {
             lift: flapOut.lift,
-            steer: 0,
+            steer: flapOut.side,
             wingPhase: flapOut.wingPhase,
             flapping: false,
-            gliding: glideOut.gliding,
-            glideSlide: glideOut.slide,
           };
           lastPoseT = now;
           // mirrored view: the player's left is on the screen's left, so the poo flies towards the raised leg
@@ -340,7 +334,6 @@ async function main() {
       vis,
       flap: flapOut,
       shoot: shootOut,
-      glide: glideOut,
       fps: tracker?.fps ?? 0,
       inferenceMs: tracker?.inferenceMs ?? 0,
       now,

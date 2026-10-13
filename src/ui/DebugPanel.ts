@@ -1,5 +1,4 @@
 import type { FlapOutput } from '../gestures/FlapDetector';
-import type { GlideOutput } from '../gestures/GlideDetector';
 import type { ShootOutput } from '../gestures/ShootDetector';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { config } from '../config';
@@ -50,7 +49,6 @@ export class DebugPanel {
     vis: VisibilityOutput | null;
     flap: FlapOutput | null;
     shoot: ShootOutput | null;
-    glide: GlideOutput | null;
     fps: number;
     inferenceMs: number;
     now: number;
@@ -144,17 +142,13 @@ export class DebugPanel {
       `state     ${info.state}`,
       `pose      ${n(info.fps)} fps  ${n(info.inferenceMs, 1)} ms`,
       '',
-      fl ? `arm  angle   vel  power strk  Hz` : '',
-      fl ? `L   ${n(fl.left.angle)} ${n(fl.left.velocity)} ${n(fl.left.power)} ${String(fl.left.strokes).padStart(4)} ${fl.left.frequency.toFixed(1).padStart(4)}` : '',
-      fl ? `R   ${n(fl.right.angle)} ${n(fl.right.velocity)} ${n(fl.right.power)} ${String(fl.right.strokes).padStart(4)} ${fl.right.frequency.toFixed(1).padStart(4)}` : '',
-      fl ? `lift ${n(fl.lift)} px/s²` : '',
+      fl ? `arm  angle   vel  power effrt strk  Hz` : '',
+      fl ? `L   ${n(fl.left.angle)} ${n(fl.left.velocity)} ${n(fl.left.power)} ${n(fl.left.effort)} ${String(fl.left.strokes).padStart(4)} ${fl.left.frequency.toFixed(1).padStart(4)}` : '',
+      fl ? `R   ${n(fl.right.angle)} ${n(fl.right.velocity)} ${n(fl.right.power)} ${n(fl.right.effort)} ${String(fl.right.strokes).padStart(4)} ${fl.right.frequency.toFixed(1).padStart(4)}` : '',
+      fl ? `lift ${n(fl.lift)}  side ${n(fl.side)} px/s²  asym ${fl.asymmetry.toFixed(2)}` : '',
       '',
       sh ? `shoot hips L ${n(sh.left)}  R ${n(sh.right)}  raised ${sh.raisedLeg ?? '-'}` : '',
       sh ? `shooting ${sh.shooting ? 'YES' : 'no'}` : '',
-      info.glide
-        ? `glide line tilt ${info.glide.line ? n(info.glide.line.tilt) : '    -'}° bend ${info.glide.line ? info.glide.line.bend.toFixed(2) : '-'}` +
-          `  ${info.glide.gliding ? `GLIDING slide ${info.glide.slide === null ? 'none' : info.glide.slide.toFixed(1)}` : info.glide.pose ? 'pose' : 'no'}`
-        : '',
       '',
       vis ? 'parts ' + PART_NAMES.map((p) => `${p}:${vis.parts[p].visible ? '✓' : '✗'}`).join(' ') : '',
       vis?.hint ? `hint  ${vis.hint}` : '',

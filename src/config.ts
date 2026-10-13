@@ -54,9 +54,23 @@ export const config = {
     velocityDeadzone: 60,
     /** EMA factor for angular velocity per pose frame (higher = more responsive, noisier) */
     velocitySmoothing: 0.5,
-    /** upward acceleration (px/s²) per deg/s of downstroke speed, averaged over both arms (only while both move down) */
+    /** upward acceleration (px/s²) per deg/s of downstroke speed, averaged over both arms */
     liftGain: 16.8,
     maxLiftAccel: 4800,
+    /**
+     * Each arm's recent flapping effort (its downstroke power averaged over this long, ms) decides how the
+     * stroke force is split: equal effort lifts, lopsided effort (one arm, or one arm flapping faster) pushes sideways.
+     */
+    effortWindowMs: 700,
+    /** effort ratio (weaker / stronger arm) at or above which flapping counts as fully symmetric: no sideways push */
+    symmetricRatio: 0.75,
+    /** sideways acceleration (px/s²) per deg/s of downstroke speed, at full asymmetry (one arm alone) */
+    sideGain: 12,
+    maxSideAccel: 2500,
+    /** fraction of the lift that remains at full asymmetry, so one-arm flapping can hold some height */
+    asymmetricLift: 0.65,
+    /** +1: the stronger LEFT arm pushes the bird RIGHT (like rowing). -1: it moves the bird left */
+    sideSign: 1,
     /** minimum peak-to-trough arm swing (deg) to count as a stroke (stats only) */
     strokeMinAmplitude: 25,
   },
@@ -72,43 +86,6 @@ export const config = {
     cooldownMs: 700,
     /** slowly re-learn the standing hip angles while standing (stance drifts a little) */
     baselineAdaptRate: 0.02,
-  },
-
-  /**
-   * "glide": both arms spread out in a roughly straight line → the bird falls slowly. Tilting the line
-   * slides it sideways; about horizontal it keeps its momentum.
-   */
-  glide: {
-    /** how far the arm points may stray from a straight line: perpendicular RMS / along-line RMS */
-    maxBend: 0.12,
-    /** arm lines steeper than this (deg) aren't a glide */
-    maxTilt: 50,
-    /** arms moving faster than this (deg/s) are flapping, not gliding */
-    maxArmSpeed: 120,
-    /** the pose must hold this long to start gliding... */
-    enterMs: 150,
-    /** ...and be gone this long to stop */
-    exitMs: 150,
-    /** tilts within ±this (deg) count as horizontal: no sideways slide, the bird keeps its momentum */
-    deadZone: 10,
-    /** ...and once sliding, the tilt must drop this much further below the dead zone to stop */
-    deadZoneHysteresis: 4,
-    /** tilt (deg) at which the slide reaches full `slideSpeed` */
-    fullTilt: 35,
-    /** EMA factor for the tilt per pose frame (lower = steadier, laggier) */
-    tiltSmoothing: 0.3,
-    /** -1: arm line rising to the right (as seen on screen) slides left, like a ball rolling downhill. +1: slides right */
-    tiltSign: -1,
-    /** fraction of gravity still acting while gliding and falling */
-    gravityScale: 0.25,
-    /** max fall speed while gliding (px per physics step) */
-    maxFallSpeed: 2.5,
-    /** Matter.js frictionAir while gliding: lower keeps the sideways speed longer */
-    airFriction: 0.01,
-    /** sideways speed (px per physics step) at full tilt */
-    slideSpeed: 4,
-    /** how quickly the bird reaches the slide speed: sideways acceleration, px/s² */
-    sideAccel: 900,
   },
 
   physics: {

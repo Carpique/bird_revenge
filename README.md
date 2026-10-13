@@ -18,7 +18,7 @@ your arms (hands raised included) are visible; the legs may be cut off.
 | Action | Body | Keyboard |
 |---|---|---|
 | Flap / fly up | flap both arms (faster, bigger = more lift) | ↑ |
-| Steer | flap one arm harder than the other | ← → |
+| Fly sideways | flap one arm, or one faster than the other | ← → |
 | Poo | shoot: raise a leg sideways (the poo flies towards that side) | ↓ |
 
 Hotkeys: **D** debug panel · **G** tuning panel · **K** keyboard-only mode · **C** recalibrate ·

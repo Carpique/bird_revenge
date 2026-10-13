@@ -9,6 +9,8 @@ export interface ArmState {
   velocity: number;
   /** downstroke "power": downward speed above the dead zone, deg/s (0 when not moving down) */
   power: number;
+  /** recent flapping effort: power averaged over `effortWindowMs`, deg/s */
+  effort: number;
   visible: boolean;
   /** completed strokes since start */
   strokes: number;
@@ -23,12 +25,16 @@ export interface FlapOutput {
   right: ArmState;
   /** upward acceleration, px/s² */
   lift: number;
+  /** sideways acceleration, px/s² (+ = right on screen) */
+  side: number;
+  /** 0 = both arms flap equally hard … 1 = only one arm flaps */
+  asymmetry: number;
   /** 0 = arms down … 1 = arms up, for picking the bird's wing frame */
   wingPhase: number;
 }
 
 class ArmTracker {
-  state: ArmState = { angle: 0, velocity: 0, power: 0, visible: false, strokes: 0, lastAmplitude: 0, frequency: 0 };
+  state: ArmState = { angle: 0, velocity: 0, power: 0, effort: 0, visible: false, strokes: 0, lastAmplitude: 0, frequency: 0 };
   private prevAngle: number | null = null;
   private prevT = 0;
   private dir: 1 | -1 | 0 = 0;
@@ -45,6 +51,7 @@ class ArmTracker {
       this.prevAngle = null;
       s.velocity = 0;
       s.power = 0;
+      s.effort = 0;
       this.decayFrequency(f.t);
       return;
     }
@@ -63,6 +70,7 @@ class ArmTracker {
     const a = cfg.velocitySmoothing;
     s.velocity = a * rawVel + (1 - a) * s.velocity;
     s.power = Math.max(0, -s.velocity - cfg.velocityDeadzone);
+    s.effort += (1 - Math.exp(-(dt * 1000) / Math.max(1, cfg.effortWindowMs))) * (s.power - s.effort);
 
     // stroke bookkeeping: a stroke = a peak followed by a trough at least strokeMinAmplitude lower
     const newDir: 1 | -1 | 0 = s.velocity > 20 ? 1 : s.velocity < -20 ? -1 : this.dir;
@@ -92,9 +100,11 @@ class ArmTracker {
 }
 
 /**
- * Heuristic flap detector: lift comes from the *speed of downstrokes*, so it reacts mid-stroke
- * (no waiting for a full gesture). Faster / bigger flaps → more lift. Both arms must be on a downstroke
- * together: flapping one arm alone does nothing (no lift, no steering).
+ * Heuristic flap detector: the stroke force comes from the *speed of downstrokes*, so it reacts mid-stroke
+ * (no waiting for a full gesture). Faster / bigger flaps → more force. The arms are read independently:
+ * how the force splits into lift and sideways push depends on each arm's recent effort. Both arms flapping
+ * about equally hard → straight up; one arm alone, or one flapping much faster than the other → sideways,
+ * away from the stronger arm (per `sideSign`), with only part of the lift.
  */
 export class FlapDetector {
   private left = new ArmTracker('left');
@@ -106,11 +116,16 @@ export class FlapDetector {
     const l = this.left.state;
     const r = this.right.state;
     const cfg = config.flap;
-    const bothDown = l.power > 0 && r.power > 0;
-    const lift = bothDown ? Math.min(cfg.maxLiftAccel, (cfg.liftGain * (l.power + r.power)) / 2) : 0;
+    const power = (l.power + r.power) / 2;
+    const strong = Math.max(l.effort, r.effort);
+    const ratio = strong > 1 ? Math.min(l.effort, r.effort) / strong : 1;
+    const asymmetry = Math.max(0, Math.min(1, (cfg.symmetricRatio - ratio) / Math.max(0.01, cfg.symmetricRatio)));
+    const lift = Math.min(cfg.maxLiftAccel, cfg.liftGain * power * (1 - asymmetry * (1 - cfg.asymmetricLift)));
+    const dir = l.effort > r.effort ? 1 : -1;
+    const side = cfg.sideSign * dir * Math.min(cfg.maxSideAccel, cfg.sideGain * power * asymmetry);
     const visAngles = [l, r].filter((a) => a.visible).map((a) => a.angle);
     const avg = visAngles.length ? visAngles.reduce((x, y) => x + y, 0) / visAngles.length : 60;
     const wingPhase = Math.max(0, Math.min(1, (avg - 20) / 140));
-    return { left: { ...l }, right: { ...r }, lift, wingPhase };
+    return { left: { ...l }, right: { ...r }, lift, side, asymmetry, wingPhase };
   }
 }

@@ -8,7 +8,7 @@
 - The player controls a **bird** with their body, tracked by the webcam.
 - **Default state:** the bird rests on the ground.
 - **Flapping arms** → the bird flaps its wings and rises a bit. **Continuous flapping** keeps pushing it upward; stopping lets it fall (gravity).
-- **Sideways movement** comes from gliding with the arms spread out and tilted (left/right flapping asymmetry was tried first and removed).
+- **Sideways movement** comes from flapping the arms unequally: one arm alone, or one clearly faster than the other, pushes the bird sideways. (Instantaneous left/right asymmetry and later gliding with tilted arms were tried before and removed.)
 - **"Shoot" gesture** (a leg raised sideways) → the bird **drops a poo**.
 - **Targets** walk along the bottom of the screen:
   - **Pedestrians** — hitting one scores **negative** points.
@@ -20,14 +20,14 @@
 | ID | Requirement | Status |
 |----|-------------|--------|
 | F1 | Webcam-based pose tracking controls the bird; no keyboard/mouse needed during play | [DECIDED] |
-| F2 | Flap detection per arm; lift (up) only when both arms flap down together. Steering by left/right asymmetry was removed (single-arm flapping does nothing); sideways movement comes from gliding (F12) | [DECIDED] |
+| F2 | Flap detection per arm, arms independent. Both arms flapping about equally hard → up; one arm alone, or one flapping clearly faster (e.g. twice as fast) → sideways, with reduced lift | [DECIDED] |
 | F3 | Shoot detection (leg raised sideways, read from the hip angles) triggers a poo drop (discrete event) | [DECIDED] |
 | F4 | Walking pedestrians and villains with distinct scoring | [DECIDED] |
 | F5 | Short calibration step at game start: stand in the outline with arms lowered, hold still ~1 s; records the standing hip angles | [DECIDED] (v0.1) |
 | F7 | Player must be **in frame**: at minimum torso (shoulders to hips) and both arms, raised included; head and legs are optional. A visibility monitor runs continuously and shows a "get back in frame" overlay when a required part is lost (see §4.5) | [DECIDED] |
 | F8 | The game keeps running while the out-of-frame box is shown, but pose controls are cut off (the bird drops), so the player has an incentive to get back quickly; controls return as soon as the pose is reacquired | [DECIDED] |
 | F6 | Keyboard fallback controls for development/testing (↑ flap, ←/→ steer, ↓ poo; Space/P pause; K = keyboard-only mode) | [DECIDED] (v0.1) |
-| F12 | **Glide**: both arms spread out in a roughly straight line → the bird falls slowly. **Tilting** the arm line slides it sideways (the bird slides towards the lower hand, as seen on screen), faster the more it's tilted; about horizontal it keeps its momentum. Lowering the arms brings normal falling back. Binary on/off with some leeway (see §5) | [DECIDED] |
+| F12 | ~~Glide~~ (arms spread out to fall slowly, tilted to slide sideways): removed, replaced by asymmetric flapping (F2) | [REMOVED] |
 | F9 | Sound | [DEFERRED] |
 | F10 | The player has 3 lives; touching a walking villain costs one: the bird hops and falls off the screen turned on its side (the lost heart blinks meanwhile), then a new bird drops in from the top, blinking and unhurtable for ~2 s. After the last life the "Game Over" sign drops from the top, then a new game starts (countdown, or straight away in keyboard mode) | [DECIDED] |
 | F11 | A villain hit by a poo is knocked off the screen arcade style: a short hop, then a parabolic fall past the bottom edge, growing a little as if flying towards the camera | [DECIDED] |
@@ -65,7 +65,7 @@
   - **Matter.js** [DECIDED]: the most common 2D physics library in JS, simple API, frequently paired with PixiJS. Bodies sync to sprites in a few lines each frame.
   - Alternatives considered: **Rapier 2D** (modern, Rust/WASM, fast, maintained; heavier than we need), **Planck.js** (Box2D port; more verbose), **detect-collisions** (collision only, no dynamics).
 - Game-feel settings for Matter.js: bird body with `inertia: Infinity` (doesn't tumble), `restitution: 0` (no bouncing), `frictionAir` for drag; poo as a small dynamic body; walkers as **sensor** bodies (detect hits without physical pushing); scoring from `collisionStart` events.
-- Flap control maps onto physics as **forces/impulses**: each detected downstroke applies an upward force (scaled by stroke strength); left/right imbalance applies a horizontal force. Tuning of these constants is ours — that's the "feel" of the game.
+- Flap control maps onto physics as **forces/impulses**: each detected downstroke applies a force (scaled by stroke strength), split into lift and a sideways push by how equally the two arms flap. Tuning of these constants is ours — that's the "feel" of the game.
 
 ## 4. Gesture recognition (key risk — tackle first)
 
@@ -78,7 +78,7 @@ webcam → MediaPipe Pose (≈30 fps) → landmark smoothing → feature extract
 ### 4.2 The two gestures are different kinds of problems
 - **Flapping is continuous control, not classification.** The game needs a per-arm signal every frame (how hard / how fast is each arm flapping right now), not a label after the fact.
   - Proposed approach: per arm, compute the **arm elevation angle** (shoulder→wrist vector relative to the torso axis). Track it as a time series; detect **downstrokes** (peak → trough with amplitude above a threshold). Each downstroke delivers an impulse of lift proportional to its amplitude/speed.
-  - Lift = sum of both arms' impulses, only while both arms move down (steering by left/right difference was removed).
+  - Each arm's downstroke power adds to the stroke force; each arm's recent effort (power averaged over ~0.7 s) decides how much of it goes up vs. sideways (§5).
   - This is cheap, low-latency (reacts mid-stroke), explainable and tunable — an ML classifier on fixed windows would add latency (must wait for the window) and is not needed for a periodic signal like this.
 - **Shoot is a discrete event** (renamed from "squat" [DECIDED]: the gesture is now a leg raised sideways). Heuristic first [DECIDED]. Since the legs no longer have to be in frame (§4.5), it relies on the **hip angles** only:
   - **Hip abduction** per leg = angle of the thigh (hip → knee) away from the torso axis (shoulder centre → hip centre), signed so a leg swung out to its own side is positive. Measured against the torso, not the image vertical, so camera tilt and body sway during flapping cancel out.
@@ -154,9 +154,8 @@ Even with heuristics we need recorded data: to tune thresholds, to test detector
 Implemented in v0.1 (all numbers live in `src/config.ts`, tunable at runtime):
 - **World:** fixed 1280×720 logical world scaled to fit the window; ground at y = 640; invisible walls and ceiling keep the bird on screen.
 - **Bird:** Matter.js circle (r = 34), no rotation, no bounce, air friction 0.03, max speed clamp. Gravity 800 px/s².
-- **Flap → lift:** per arm, downstroke power = max(0, −angular velocity − 60°/s dead zone). Lift = liftGain (16.8) × mean of both arms' power, only while **both** have power, capped at 4800 px/s². Lift happens only while arms move down, so it reacts mid-stroke.
-- **No flap steering:** lift needs both arms on a downstroke at once (one arm alone gives nothing). Asymmetric-flap steering (`steerGain` × (left − right power)) was removed to see if it improves control; sideways movement comes from gliding.
-- **Glide:** `GlideDetector` fits a total-least-squares line through both wrists, elbows and shoulders (mirrored screen coords, y up). It's a glide when the points stray little from the line (`maxBend` 0.12 = perpendicular RMS / along-line RMS; a V, arms down, or one arm 30° off the other fail), the line is within ±50° and the arms move ≤ 120°/s; on after holding 150 ms, off after it's gone 150 ms (so a flap sweeping through horizontal doesn't trigger it). While gliding and falling, only 25% of gravity acts, fall speed is capped at 2.5 px/step and air friction drops to 0.01. The smoothed tilt sets the slide: within the ±10° dead zone (4° hysteresis) the bird keeps its momentum; beyond it, it eases (≤ 900 px/s²) to a sideways speed ramping from 0 at 10° up to 4 px/step at 35°, towards where the line falls, i.e. the lower hand (`tiltSign` flips it). It never lifts. Keyboard: Shift (keeps momentum; arrows steer).
+- **Flap → lift and sideways push:** per arm, downstroke power = max(0, −angular velocity − 60°/s dead zone), and effort = power averaged over `effortWindowMs` (700 ms, exponential). Asymmetry = 0 while the weaker arm's effort is ≥ `symmetricRatio` (0.75) of the stronger one's, rising linearly to 1 when only one arm flaps. With P = mean of both arms' power: lift = liftGain (16.8) × P × (1 − asymmetry × (1 − `asymmetricLift` 0.65)), capped at 4800 px/s²; sideways = sideGain (12) × P × asymmetry, capped at 2500 px/s², away from the stronger arm (`sideSign` +1: stronger left arm → right, like rowing). Force comes only while arms move down, so it reacts mid-stroke; the split follows the smoothed efforts, so a 2:1 flap rate gives a steady partial sideways push and starting one arm a moment before the other only tilts the first stroke a little.
+- History: the first steering (`steerGain` × instantaneous left − right power) was removed; then a glide (arms spread out in a straight line to fall slowly, tilted to slide) was tried and removed in favour of this.
 - **Wing animation follows the player:** with pose control the bird's flap frame is chosen from the average arm height, so the wings mirror the arms.
 - **Poo:** shoot (or ↓) → bird squashes (×1.22 wide, ×0.72 tall, ~400 ms) and drops a poo at the deepest point; poo inherits part of the bird's velocity, plus `pooSideSpeed` sideways when one leg was raised (towards that leg's side). Splat on the ground fades after 1.5 s.
 - **Villain:** walks back and forth on the ground (sensor body). A hit scores +1, shows the "hit" frame, he runs off and a new one enters from a random side after 1.5 s.
@@ -191,7 +190,7 @@ index.html, src/style.css
 src/main.ts                 app state machine: loading → menu → calibrating → countdown → playing ⇄ outOfFrame (game keeps running, no pose controls); keyboard mode
 src/config.ts               every tunable number (+ save/load to localStorage)
 src/pose/                   camera.ts, PoseTracker.ts (MediaPipe, One-Euro smoothing), landmarks.ts, types.ts
-src/gestures/               geometry.ts, FlapDetector.ts, ShootDetector.ts, GlideDetector.ts, VisibilityMonitor.ts, Calibration.ts  (pure TS, no DOM)
+src/gestures/               geometry.ts, FlapDetector.ts, ShootDetector.ts, VisibilityMonitor.ts, Calibration.ts  (pure TS, no DOM)
 src/game/                   Game.ts (Pixi stage + Matter engine + scoring), Bird.ts, Villain.ts, Poo.ts, Background.ts (sun, clouds + Ground), Ground.ts (shared with the splash), physics.ts
 src/characters/, src/scenery/   art definition files (§6)
 src/render/                 assets.ts (loads everything named in the definitions), CharacterSprite.ts, fitWorld.ts (scales the 1280x720 world into the window)
@@ -200,5 +199,5 @@ src/ui/                     SplashScreen.ts (title + menu), FrameGuide.ts (calib
 tests/                      synthetic.ts (synthetic pose generator), gestures.test.ts
 tools/generate-placeholder-art.mjs, scripts/copy-mediapipe-wasm.mjs
 ```
-- The game knows nothing about poses: it reads a `Controls` object (`lift`, `steer`, `wingPhase`, `flapping`, `gliding`) and `requestPoo()`. Pose and keyboard both produce `Controls`.
+- The game knows nothing about poses: it reads a `Controls` object (`lift`, `steer`, `wingPhase`, `flapping`) and `requestPoo()`. Pose and keyboard both produce `Controls`.
 - MediaPipe's WASM is copied from `node_modules` into `public/mediapipe/` on `npm install`, so JS and WASM versions always match. The model file (`pose_landmarker_lite.task`) is downloaded from Google's model storage at startup.

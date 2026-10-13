@@ -15,14 +15,14 @@ interface MenuItem {
 
 const PAGE_TEXT: Record<Exclude<Page, 'main'>, string> = {
   instructions: [
-    'Flap both arms to fly.',
-    'Glide: spread your arms out to fall slowly — tilt them to slide.',
+    'Flap both arms to fly up.',
+    'Flap one arm (or one faster than the other) to fly sideways.',
     'Shoot: raise a leg sideways to drop a poo — it flies that way.',
     'Hit the villain to score!',
     "Don't touch him — it costs you one of your 3 lives.",
     '',
     'Stand back so your arms and hips are in view.',
-    'Keyboard: ↑ flap · ← → steer · Shift glide · ↓ poo · Space pause',
+    'Keyboard: ↑ flap · ← → steer · ↓ poo · Space pause',
   ].join('\n'),
   scores: 'No scores yet.\nRounds and high scores are coming soon.',
 };

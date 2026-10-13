@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../src/config';
 import { FlapDetector } from '../src/gestures/FlapDetector';
-import { fitArmLine, GlideDetector } from '../src/gestures/GlideDetector';
 import { armElevation, hipAbduction, kneeAngle } from '../src/gestures/geometry';
 import { ShootDetector } from '../src/gestures/ShootDetector';
 import { VisibilityMonitor } from '../src/gestures/VisibilityMonitor';
@@ -49,11 +48,39 @@ describe('FlapDetector', () => {
     expect(out!.left.frequency).toBeLessThan(1.8);
   });
 
-  it('flapping only one arm gives no lift', () => {
+  /** average lift and sideways acceleration over the last 3 s of a 4 s run */
+  const average = (pose: (t: number) => { armLeft: number; armRight: number }) => {
     const d = new FlapDetector();
-    let maxLift = 0;
-    for (const f of frames(3000, (t) => ({ armLeft: flapAngle(t, 1.5), armRight: 15 }))) maxLift = Math.max(maxLift, d.update(f, true, true).lift);
-    expect(maxLift).toBe(0);
+    let lift = 0, side = 0, n = 0;
+    for (const f of frames(4000, pose)) {
+      const o = d.update(f, true, true);
+      if (f.t < 1000) continue;
+      lift += o.lift;
+      side += o.side;
+      n++;
+    }
+    return { lift: lift / n, side: side / n };
+  };
+
+  it('symmetric flapping goes straight up', () => {
+    const { lift, side } = average((t) => ({ armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) }));
+    expect(side).toBe(0);
+    expect(lift).toBeGreaterThan(0);
+  });
+
+  it('flapping one arm pushes sideways, direction per arm and sideSign', () => {
+    const left = average((t) => ({ armLeft: flapAngle(t, 1.5), armRight: 15 }));
+    const right = average((t) => ({ armLeft: 15, armRight: flapAngle(t, 1.5) }));
+    expect(left.side * config.flap.sideSign).toBeGreaterThan(200);
+    expect(right.side * config.flap.sideSign).toBeLessThan(-200);
+    const both = average((t) => ({ armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) }));
+    expect(left.lift).toBeLessThan(both.lift / 2);
+  });
+
+  it('one arm flapping twice as fast pushes sideways, while still lifting', () => {
+    const o = average((t) => ({ armLeft: flapAngle(t, 0.8), armRight: flapAngle(t, 1.6) }));
+    expect(o.side * config.flap.sideSign).toBeLessThan(-100);
+    expect(o.lift).toBeGreaterThan(0);
   });
 
   it('lift is produced only during downstrokes', () => {
@@ -205,67 +232,5 @@ describe('VisibilityMonitor', () => {
     const o = m.update(null, 1700);
     expect(o.personDetected).toBe(false);
     expect(o.hint).toMatch(/Step in front/);
-  });
-});
-
-describe('GlideDetector', () => {
-  const run = (fs: ReturnType<typeof frames>) => {
-    const flap = new FlapDetector();
-    const glide = new GlideDetector();
-    return fs.map((f) => glide.update(f, true, true, flap.update(f, true, true)));
-  };
-  const last = <T,>(xs: T[]) => xs[xs.length - 1];
-
-  it('fits a straight, level line through arms held out in a T', () => {
-    const line = fitArmLine(synthPose({ t: 0, armLeft: 90, armRight: 90 }));
-    expect(Math.abs(line.tilt)).toBeLessThan(1);
-    expect(line.bend).toBeLessThan(0.01);
-  });
-
-  it('glides with arms held out in a T, after a short hold, keeping the momentum', () => {
-    const out = run(frames(1000, () => ({ armLeft: 90, armRight: 85 })));
-    expect(out[0].gliding).toBe(false);
-    expect(last(out)).toMatchObject({ gliding: true, slide: null });
-  });
-
-  it('stops gliding once the arms are lowered', () => {
-    const out = run([
-      ...frames(1000, () => ({ armLeft: 90, armRight: 90 })),
-      ...frames(1000, () => ({ armLeft: 15, armRight: 15 }), 1000),
-    ]);
-    expect(out[29].gliding).toBe(true);
-    expect(last(out).gliding).toBe(false);
-  });
-
-  it('slides by the arm line tilt (direction per tiltSign), faster when tilted more', () => {
-    // the player's right hand up: on the mirrored screen the line rises to the right
-    const right = last(run(frames(1000, () => ({ armLeft: 60, armRight: 120 }))));
-    expect(right.gliding).toBe(true);
-    expect(right.slide! * config.glide.tiltSign).toBeGreaterThan(0);
-    const left = last(run(frames(1000, () => ({ armLeft: 120, armRight: 60 }))));
-    expect(left.slide! * config.glide.tiltSign).toBeLessThan(0);
-    const steeper = last(run(frames(1000, () => ({ armLeft: 130, armRight: 50 }))));
-    expect(Math.abs(steeper.slide!)).toBeGreaterThan(Math.abs(left.slide!));
-  });
-
-  it('does not flicker while the arms wobble about horizontal', () => {
-    const out = run(frames(3000, (t) => {
-      const wobble = 6 * Math.sin(2 * Math.PI * 2 * (t / 1000));
-      return { armLeft: 90 + wobble, armRight: 90 - wobble };
-    }));
-    expect(out.filter((o) => o.gliding).every((o) => o.slide === null)).toBe(true);
-  });
-
-  it('does not glide when the arms are not in a straight line', () => {
-    // arms down, up, a V, one arm out, one arm level and the other well below
-    for (const [l, r] of [[15, 15], [170, 170], [130, 130], [90, 15], [90, 60]]) {
-      const out = run(frames(1000, () => ({ armLeft: l, armRight: r })));
-      expect(out.some((o) => o.gliding)).toBe(false);
-    }
-  });
-
-  it('does not glide while flapping through horizontal', () => {
-    const out = run(frames(3000, (t) => ({ armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) })));
-    expect(out.some((o) => o.gliding)).toBe(false);
   });
 });
