@@ -37,7 +37,10 @@ export class Bird {
       label: 'bird',
       inertia: Infinity, // never tumbles
       restitution: 0,
-      friction: 0.2,
+      // no friction of its own: Matter combines friction with the larger of the two bodies' values, so this
+      // would make the bird stick to the walls and ceiling; the ground supplies the friction instead
+      friction: 0,
+      frictionStatic: 0,
       frictionAir: config.physics.birdAirFriction,
       collisionFilter: { group: BIRD_GROUP },
     });

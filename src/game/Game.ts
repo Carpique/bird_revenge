@@ -63,10 +63,11 @@ export class Game {
     app.renderer.background.color = scenery.skyColor;
     this.engine = Engine.create({ gravity: { x: 0, y: config.physics.gravity } });
 
-    // static world bounds: ground, walls, ceiling
-    const opts = { isStatic: true, restitution: 0 };
+    // static world bounds: ground, walls, ceiling. Only the ground has friction (the bird has none of its own),
+    // so the bird doesn't stick to the walls or ceiling when pushed against them
+    const opts = { isStatic: true, restitution: 0, friction: 0, frictionStatic: 0 };
     Composite.add(this.engine.world, [
-      Bodies.rectangle(WORLD.width / 2, WORLD.groundY + 100, WORLD.width * 3, 200, { ...opts, label: 'ground' }),
+      Bodies.rectangle(WORLD.width / 2, WORLD.groundY + 100, WORLD.width * 3, 200, { ...opts, friction: 0.2, frictionStatic: 0.5, label: 'ground' }),
       Bodies.rectangle(-50, WORLD.height / 2, 100, WORLD.height * 3, { ...opts, label: 'wall' }),
       Bodies.rectangle(WORLD.width + 50, WORLD.height / 2, 100, WORLD.height * 3, { ...opts, label: 'wall' }),
       Bodies.rectangle(WORLD.width / 2, -60, WORLD.width * 3, 100, { ...opts, label: 'ceiling' }),
