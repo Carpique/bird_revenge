@@ -7,12 +7,19 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #eef3f4; fon
 #debug[hidden] { display: none; }
 #debug-text { margin: 0; font: 12px/1.35 ui-monospace, Menlo, monospace; color: #222; min-width: 230px; }
 #help { position: fixed; left: 50%; bottom: 6px; transform: translateX(-50%); font-size: 15px; color: #555; pointer-events: none; }
-#fullscreen { position: fixed; top: 10px; right: 10px; z-index: 1002; width: 40px; height: 40px; padding: 0;
+/* fullscreen + volume buttons, top-right */
+#corner { position: fixed; top: 10px; right: 10px; z-index: 1002; display: flex; gap: 8px; }
+.corner-button { width: 40px; height: 40px; padding: 0;
   display: flex; align-items: center; justify-content: center; color: #2b2b2b; cursor: pointer;
   background: rgba(255,255,255,0.75); border: 2px solid #333; border-radius: 10px; }
-#fullscreen:hover { background: #fff; }
-#fullscreen[hidden] { display: none; }
-/* keep the tuning panel below the fullscreen button */
+.corner-button:hover { background: #fff; }
+.corner-button[hidden] { display: none; }
+#volume { position: relative; }
+.volume-popup { position: absolute; top: 48px; right: 0; padding: 10px 12px;
+  background: rgba(255,255,255,0.9); border: 2px solid #333; border-radius: 10px; }
+.volume-popup[hidden] { display: none; }
+.volume-popup input { display: block; width: 140px; accent-color: #2b2b2b; cursor: pointer; }
+/* keep the tuning panel below the corner buttons */
 body .lil-gui.autoPlace { top: 60px; max-height: calc(100% - 60px); }
 #status { position: fixed; left: 8px; bottom: 6px; pointer-events: none; white-space: pre;
   font: 300 11px/1 system-ui, -apple-system, sans-serif; color: rgba(0,0,0,0.35); }

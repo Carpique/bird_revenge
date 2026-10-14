@@ -1,4 +1,5 @@
 import { Application } from 'pixi.js';
+import { audio } from './audio/audio';
 import { config, loadSavedConfig } from './config';
 import { Game } from './game/Game';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
@@ -19,6 +20,7 @@ import { FullscreenButton } from './ui/FullscreenButton';
 import { Recorder } from './ui/Recorder';
 import { SplashScreen } from './ui/SplashScreen';
 import { Tuning } from './ui/Tuning';
+import { VolumeButton } from './ui/VolumeButton';
 
 /**
  * App states:
@@ -113,7 +115,9 @@ async function main() {
   const debug = new DebugPanel(video);
   const tuning = new Tuning();
   const recorder = new Recorder();
-  new FullscreenButton();
+  const corner = document.getElementById('corner')!;
+  new FullscreenButton(corner);
+  const volume = new VolumeButton(corner);
   const keyboard = new Keyboard();
   const visibility = new VisibilityMonitor();
   const flap = new FlapDetector();
@@ -121,6 +125,7 @@ async function main() {
   const calibration = new Calibration();
 
   const startCountdown = () => {
+    audio.startMusic();
     state = 'countdown';
     countdownEnd = performance.now() + config.countdownMs;
   };
@@ -204,6 +209,7 @@ async function main() {
     const next = manualPause || !windowActive();
     if (next === suspended) return;
     suspended = next;
+    audio.setSuspended(suspended);
     const now = performance.now();
     if (suspended) {
       suspendedAt = now;
@@ -247,12 +253,16 @@ async function main() {
     if (k === 'd') debug.toggle();
     else if (k === 'g') tuning.toggle();
     else if (k === 'r') recorder.toggle();
+    else if (k === 'm') volume.toggleMute();
     if (state === 'loading' || state === 'menu') return;
     if (k === 'p') keyboard.onPause();
     else if (state === 'gameOver') return;
     else if (k === 'c' && tracker) recalibrate();
     else if (k === 'k') {
-      if (state !== 'keyboard') state = 'keyboard';
+      if (state !== 'keyboard') {
+        state = 'keyboard';
+        audio.startMusic(); // keyboard play skips calibration and the countdown
+      }
       else state = shoot.baseline && !poseError ? 'outOfFrame' : 'calibrating';
     }
   };
@@ -306,6 +316,7 @@ async function main() {
   // per render frame: state timers, controls, HUD, debug
   app.ticker.add(() => {
     const now = performance.now();
+    audio.update();
     if (state === 'countdown' && now >= countdownEnd) state = 'playing';
     if (state === 'gameOver' && now >= gameOverEnd) {
       game.reset();

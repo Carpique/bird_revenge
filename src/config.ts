@@ -161,6 +161,19 @@ export const config = {
     dieTurnMs: 250,
   },
 
+  /** Mix levels (multiplied by the speaker button's volume) and the falling-poo sound. */
+  audio: {
+    music: 0.5,
+    effects: 0.75,
+    /** the falling-poo tone; keep it low, it's on for the whole fall */
+    fall: 0.06,
+    /** its pitch glides from here... */
+    fallFromHz: 900,
+    /** ...down to here, over `fallMs` */
+    fallToHz: 220,
+    fallMs: 1200,
+  },
+
   score: { villain: 1, pedestrian: -1 },
 
   countdownMs: 2000,

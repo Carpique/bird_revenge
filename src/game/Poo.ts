@@ -9,6 +9,8 @@ export class Poo {
   readonly body: MBody;
   readonly view = new CharacterSprite<PooAnim>(pooDef);
   state: 'falling' | 'splat' | 'done' = 'falling';
+  /** stops the falling sound; called when the poo lands or is removed */
+  stopSound: () => void = () => {};
   private splatT = 0;
 
   constructor(x: number, y: number, vx: number, vy: number) {
@@ -23,6 +25,7 @@ export class Poo {
 
   /** Landed on the ground: becomes a splat (caller removes the physics body). */
   splat() {
+    this.stopSound();
     this.state = 'splat';
     this.splatT = 0;
     this.view.play('splat');

@@ -1,4 +1,5 @@
 import { Application, Container, Text } from 'pixi.js';
+import { audio } from '../audio/audio';
 import { config, WORLD } from '../config';
 import { noControls, type Controls } from '../input/controls';
 import { fitWorld } from '../render/fitWorld';
@@ -48,6 +49,8 @@ export class Game {
   private apples: Apple[] = [];
   private popups: Popup[] = [];
   private pending: (() => void)[] = [];
+  /** things to do after a while, in game time (so they wait while paused) */
+  private timers: { ms: number; fn: () => void }[] = [];
   private acc = 0;
   private scoreText: Text;
   private pausedText: Text;
@@ -123,6 +126,7 @@ export class Game {
     Composite.add(this.engine.world, this.bird.body);
     this.villain.reset(200);
     for (const p of this.poos) {
+      p.stopSound();
       Composite.remove(this.engine.world, p.body);
       p.view.destroy();
     }
@@ -132,6 +136,7 @@ export class Game {
     for (const p of this.popups) p.text.destroy();
     this.popups = [];
     this.pending = [];
+    this.timers = [];
     this.acc = 0;
     this.sync();
   }
@@ -167,6 +172,10 @@ export class Game {
     for (const a of this.apples) a.step(STEP_MS);
     Engine.update(this.engine, STEP_MS);
     for (const fn of this.pending.splice(0)) fn();
+    for (const t of this.timers) t.ms -= STEP_MS;
+    const due = this.timers.filter((t) => t.ms <= 0);
+    this.timers = this.timers.filter((t) => t.ms > 0);
+    for (const t of due) t.fn();
     // bird touching a walking villain costs a life
     const b = this.bird.body;
     if (!this.bird.dying && !this.bird.invulnerable && this.villain.touches(b.position.x, b.position.y, config.physics.birdRadius)) {
@@ -224,6 +233,8 @@ export class Game {
     const b = this.bird.body;
     const r = config.physics.birdRadius;
     const poo = new Poo(b.position.x, b.position.y + r * 0.6, b.velocity.x * 0.6 + this.pooDir * config.physics.pooSideSpeed, Math.max(1, b.velocity.y));
+    audio.play('shot');
+    poo.stopSound = audio.startFall();
     this.poos.push(poo);
     Composite.add(this.engine.world, poo.body);
     this.fx.addChild(poo.view);
@@ -240,7 +251,13 @@ export class Game {
     if (other.label === 'villain' && this.villain.hittable) {
       this.pending.push(() => {
         if (poo.state !== 'falling') return;
-        if (this.villain.hit()) this.addScore(config.score.villain, pooBody.position.x, pooBody.position.y);
+        poo.stopSound();
+        audio.play('splat');
+        if (this.villain.hit()) {
+          this.addScore(config.score.villain, pooBody.position.x, pooBody.position.y);
+          audio.play('bad-guy-dies');
+          this.after(1000, () => audio.play('score'));
+        }
         Composite.remove(this.engine.world, pooBody);
         poo.state = 'done';
       });
@@ -249,6 +266,7 @@ export class Game {
         if (poo.state !== 'falling') return;
         Composite.remove(this.engine.world, pooBody);
         poo.splat();
+        audio.play('splat');
       });
     }
   }
@@ -257,7 +275,14 @@ export class Game {
   private loseLife() {
     this.lives = Math.max(0, this.lives - 1);
     this.bird.die();
+    audio.play('player-hit');
+    audio.play('boing');
+    this.after(1000, () => audio.play('sad-audience'));
     Composite.remove(this.engine.world, this.bird.body);
+  }
+
+  private after(ms: number, fn: () => void) {
+    this.timers.push({ ms, fn });
   }
 
   /** The dead bird has left the screen: drop in a new one from the top, or it's game over. */

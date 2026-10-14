@@ -10,9 +10,10 @@ const EXIT_ICON =
 export class FullscreenButton {
   private button = document.createElement('button');
 
-  constructor() {
+  constructor(parent: HTMLElement) {
     const b = this.button;
     b.id = 'fullscreen';
+    b.className = 'corner-button';
     b.type = 'button';
     b.tabIndex = -1;
     if (!document.fullscreenEnabled) b.hidden = true;
@@ -20,7 +21,7 @@ export class FullscreenButton {
     b.addEventListener('click', () => this.toggle());
     document.addEventListener('fullscreenchange', () => this.update());
     this.update();
-    document.body.appendChild(b);
+    parent.appendChild(b);
   }
 
   private toggle() {

@@ -51,9 +51,15 @@ const RANGES: Record<string, [number, number, number]> = {
   'player.dieTurnMs': [0, 2000, 50],
   'smoothing.minCutoff': [0.1, 10, 0.1],
   'smoothing.beta': [0, 3, 0.01],
+  'audio.music': [0, 1, 0.05],
+  'audio.effects': [0, 1, 0.05],
+  'audio.fall': [0, 0.5, 0.01],
+  'audio.fallFromHz': [100, 3000, 10],
+  'audio.fallToHz': [50, 2000, 10],
+  'audio.fallMs': [100, 5000, 50],
 };
 
-const SECTIONS = ['flap', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'player'] as const;
+const SECTIONS = ['flap', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'player', 'audio'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {
