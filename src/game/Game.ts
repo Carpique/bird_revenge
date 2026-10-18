@@ -12,6 +12,9 @@ import { Bodies, Composite, Engine, Events, STEP_MS, type MBody, type MEngine } 
 import { Poo } from './Poo';
 import { Villain } from './Villain';
 
+/** every branch the bird can sit on */
+const BRANCHES = scenery.trees.flatMap((t) => t.branches);
+
 interface Popup {
   text: Text;
   t: number;
@@ -170,7 +173,9 @@ export class Game {
     this.villain.step(STEP_MS, this.bird.dying ? null : this.bird.body.position.x);
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
+    const birdY = this.bird.body.position.y;
     Engine.update(this.engine, STEP_MS);
+    this.bird.perchOn(BRANCHES, birdY);
     for (const fn of this.pending.splice(0)) fn();
     for (const t of this.timers) t.ms -= STEP_MS;
     const due = this.timers.filter((t) => t.ms <= 0);

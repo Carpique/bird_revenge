@@ -99,6 +99,8 @@ export const config = {
     pooRadius: 9,
     /** sideways poo speed (px per physics step) when dropped with one leg raised, towards that leg's side */
     pooSideSpeed: 3,
+    /** fraction of the bird's sideways speed lost per physics step while sitting on a branch */
+    branchFriction: 0.15,
   },
 
   keyboard: {
@@ -111,6 +113,12 @@ export const config = {
   villain: {
     /** px per physics step */
     speed: 1.6,
+    /** random time he walks before stopping for a moment (only while on screen) */
+    minWalkMs: 1200,
+    maxWalkMs: 4000,
+    /** random length of a stop; afterwards he walks on in a random direction */
+    minPauseMs: 300,
+    maxPauseMs: 1200,
     /** how long the "hit" pose is held before he's knocked off the screen */
     hitShowMs: 300,
     /** knock-off: upward speed of the little hop (px per physics step) */

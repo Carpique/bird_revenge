@@ -2,6 +2,7 @@ import { Container } from 'pixi.js';
 import { birdDef, birdSquash } from '../characters/bird';
 import { config, WORLD } from '../config';
 import type { Controls } from '../input/controls';
+import type { Branch } from '../scenery/scenery';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { BIRD_GROUP, Bodies, Body, forceFor, type MBody } from './physics';
 
@@ -30,6 +31,8 @@ export class Bird {
   /** ms of invulnerability left after coming back from losing a life */
   private invulnT = 0;
   private death: Death | null = null;
+  /** sitting on a tree branch (set by `perchOn` after each physics step) */
+  perched = false;
 
   constructor(x: number) {
     const r = config.physics.birdRadius;
@@ -47,7 +50,9 @@ export class Bird {
     this.view.addChild(this.sprite);
   }
 
+  /** standing on the ground or sitting on a branch */
   get onGround(): boolean {
+    if (this.perched) return true;
     const r = config.physics.birdRadius;
     return this.body.position.y >= WORLD.groundY - r - 1.5 && Math.abs(this.body.velocity.y) < 0.6;
   }
@@ -86,6 +91,30 @@ export class Bird {
       turn: back === -1 ? -1 : 1,
     };
     this.squashT = null;
+    this.perched = false;
+  }
+
+  /**
+   * Land on the tree branches, which hold the bird only from above (it flies up through them):
+   * when the bottom of the bird has crossed a branch's top edge going down during this step,
+   * it is put back on top. `prevY` is where the bird's centre was before the step.
+   */
+  perchOn(branches: readonly Branch[], prevY: number) {
+    this.perched = false;
+    const b = this.body;
+    if (this.death || b.velocity.y < 0) return;
+    const r = config.physics.birdRadius;
+    const x = b.position.x;
+    for (const br of branches) {
+      const [x0, y0] = br.from, [x1, y1] = br.to;
+      if (x < Math.min(x0, x1) || x > Math.max(x0, x1)) continue;
+      const top = y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+      if (prevY + r > top + 1 || b.position.y + r < top) continue;
+      Body.setPosition(b, { x, y: top - r });
+      Body.setVelocity(b, { x: b.velocity.x * (1 - config.physics.branchFriction), y: 0 });
+      this.perched = true;
+      return;
+    }
   }
 
   /** Back in play at (x, y), at rest; `invulnerable` makes it blink and unhurtable for a while. */
@@ -94,6 +123,7 @@ export class Bird {
     Body.setVelocity(this.body, { x: 0, y: 0 });
     this.squashT = null;
     this.death = null;
+    this.perched = false;
     this.invulnT = invulnerable ? config.player.invulnerableMs : 0;
   }
 
