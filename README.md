@@ -21,7 +21,7 @@ your arms (hands raised included) are visible; the legs may be cut off.
 | Fly sideways | flap one arm, or one faster than the other | ← → |
 | Poo | shoot: raise a leg sideways (the poo flies towards that side) | ↓ |
 
-Hotkeys: **D** debug panel · **G** tuning panel · **K** keyboard-only mode · **C** recalibrate ·
+Hotkeys: **D** debug panel · **G** tuning panel · **Esc** keyboard-only mode · **C** recalibrate ·
 **Space** / **P** pause in game (also automatic when the window loses focus; camera and pose tracking are switched off while paused or unfocused) · **R** start/stop recording landmarks to a JSON file.
 
 ## Tuning

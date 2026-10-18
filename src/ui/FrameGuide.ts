@@ -11,7 +11,7 @@ export interface GuideState {
   mode: GuideMode;
   title?: string;
   message?: string;
-  /** smaller second line (e.g. "Press K to play with the keyboard") */
+  /** smaller second line (e.g. "Press Esc to play with the keyboard") */
   hint?: string;
   /** show `message` as an error (red) */
   error?: boolean;

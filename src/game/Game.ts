@@ -8,6 +8,7 @@ import { HAND_FONT as FONT, titleStyle } from '../ui/fonts';
 import { Apple } from './Apple';
 import { Background } from './Background';
 import { Bird } from './Bird';
+import { landingBranch } from './branches';
 import { Bodies, Composite, Engine, Events, STEP_MS, type MBody, type MEngine } from './physics';
 import { Poo } from './Poo';
 import { Villain } from './Villain';
@@ -40,8 +41,12 @@ export class Game {
 
   private engine: MEngine;
   private world = new Container();
+  /** the walking villain */
   private actors = new Container();
+  /** poos and apples: in front of the villain, behind the bird */
   private fx = new Container();
+  /** the bird, then score popups */
+  private top = new Container();
   /** in front of everything: the knocked-off villain flying towards the camera */
   private front = new Container();
   private hud = new Container();
@@ -89,8 +94,9 @@ export class Game {
     });
 
     // layers
-    this.actors.addChild(this.villain.view, this.bird.view);
-    this.world.addChild(this.background, this.actors, this.fx, this.front);
+    this.actors.addChild(this.villain.view);
+    this.top.addChild(this.bird.view);
+    this.world.addChild(this.background, this.actors, this.fx, this.top, this.front);
     this.root.addChild(this.world, this.hud);
 
     this.scoreText = new Text({ text: 'Score: 0', style: { fontFamily: FONT, fontSize: 40, fill: '#2b2b2b' } });
@@ -170,12 +176,15 @@ export class Game {
       this.pooQueued = null;
     }
     this.bird.step(this.controls, STEP_MS, () => this.dropPoo());
-    this.villain.step(STEP_MS, this.bird.dying ? null : this.bird.body.position.x);
+    const splatXs = this.poos.filter((p) => p.state === 'splat' && p.onGround).map((p) => p.view.x);
+    this.villain.step(STEP_MS, this.bird.dying ? null : this.bird.body.position.x, splatXs);
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
     const birdY = this.bird.body.position.y;
+    const pooYs = new Map(this.poos.map((p) => [p, p.body.position.y]));
     Engine.update(this.engine, STEP_MS);
     this.bird.perchOn(BRANCHES, birdY);
+    this.landPoosOnBranches(pooYs);
     for (const fn of this.pending.splice(0)) fn();
     for (const t of this.timers) t.ms -= STEP_MS;
     const due = this.timers.filter((t) => t.ms <= 0);
@@ -219,6 +228,21 @@ export class Game {
       a.view.destroy();
       return false;
     });
+  }
+
+  /** A falling poo that crossed a branch's top edge this step splats on the branch. `prevYs`: poo centres before the step. */
+  private landPoosOnBranches(prevYs: Map<Poo, number>) {
+    for (const p of this.poos) {
+      const prevY = prevYs.get(p);
+      if (p.state !== 'falling' || prevY === undefined || p.body.velocity.y < 0) continue;
+      const pos = p.body.position;
+      const landing = landingBranch(BRANCHES, pos.x, prevY, pos.y, config.physics.pooRadius);
+      if (!landing) continue;
+      const [x0, y0] = landing.branch.from, [x1, y1] = landing.branch.to;
+      Composite.remove(this.engine.world, p.body);
+      p.splat(landing.top, Math.atan((y1 - y0) / (x1 - x0)));
+      audio.play('splat');
+    }
   }
 
   /** How fast the villain's apples fly (px per physics step). Constant for now; could grow as the game goes on. */
@@ -329,7 +353,7 @@ export class Game {
     });
     text.anchor.set(0.5);
     text.position.set(x, y - 40);
-    this.fx.addChild(text);
+    this.top.addChild(text);
     this.popups.push({ text, t: 0 });
   }
 

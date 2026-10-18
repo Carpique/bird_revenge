@@ -3,6 +3,7 @@ import { birdDef, birdSquash } from '../characters/bird';
 import { config, WORLD } from '../config';
 import type { Controls } from '../input/controls';
 import type { Branch } from '../scenery/scenery';
+import { landingBranch } from './branches';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { BIRD_GROUP, Bodies, Body, forceFor, type MBody } from './physics';
 
@@ -105,16 +106,11 @@ export class Bird {
     if (this.death || b.velocity.y < 0) return;
     const r = config.physics.birdRadius;
     const x = b.position.x;
-    for (const br of branches) {
-      const [x0, y0] = br.from, [x1, y1] = br.to;
-      if (x < Math.min(x0, x1) || x > Math.max(x0, x1)) continue;
-      const top = y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
-      if (prevY + r > top + 1 || b.position.y + r < top) continue;
-      Body.setPosition(b, { x, y: top - r });
-      Body.setVelocity(b, { x: b.velocity.x * (1 - config.physics.branchFriction), y: 0 });
-      this.perched = true;
-      return;
-    }
+    const landing = landingBranch(branches, x, prevY, b.position.y, r);
+    if (!landing) return;
+    Body.setPosition(b, { x, y: landing.top - r });
+    Body.setVelocity(b, { x: b.velocity.x * (1 - config.physics.branchFriction), y: 0 });
+    this.perched = true;
   }
 
   /** Back in play at (x, y), at rest; `invulnerable` makes it blink and unhurtable for a while. */

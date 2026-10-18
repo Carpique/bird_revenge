@@ -25,13 +25,21 @@ export class Poo {
     Body.setVelocity(this.body, { x: vx, y: vy });
   }
 
-  /** Landed on the ground: becomes a splat (caller removes the physics body). */
-  splat() {
+  /** the splat lies on the ground (not on a branch), where the villain walks */
+  onGround = false;
+
+  /**
+   * Landed: becomes a splat at surface height `y` (the ground by default), tilted by `angle` to lie
+   * along a branch (caller removes the physics body).
+   */
+  splat(y = WORLD.groundY, angle = 0) {
     this.stopSound();
     this.state = 'splat';
     this.splatT = 0;
+    this.onGround = y === WORLD.groundY;
     this.view.play('splat');
-    this.view.position.set(this.body.position.x, WORLD.groundY + 2);
+    this.view.rotation = angle;
+    this.view.position.set(this.body.position.x, y + 2);
   }
 
   /** Hit an apple: stops where it is, then blinks out and drops (caller removes the physics body). */

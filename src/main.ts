@@ -28,7 +28,7 @@ import { VolumeButton } from './ui/VolumeButton';
  *   menu is the splash screen; camera and pose model load in the background meanwhile
  *   calibrating shows a dialog over the paused game (also camera loading / camera errors)
  *   outOfFrame keeps the game running with no pose controls, so the bird drops until the player is back
- *   keyboard (K toggles; pose is ignored)
+ *   keyboard (Esc toggles; pose is ignored)
  *   playing / outOfFrame / keyboard → gameOver (last life lost) → new game: countdown, or keyboard again
  * Pausing (Space / P in game, or the window losing focus during a game) freezes the game and shows "Pause".
  * While paused or while the window is unfocused / hidden, everything is suspended — render loop, guide
@@ -89,9 +89,9 @@ async function main() {
     const gs: GuideState = { mode: 'hidden', frame, vis };
     if (state === 'loading') Object.assign(gs, { mode: 'loading', message: 'Loading…' });
     else if (state === 'calibrating' && poseError)
-      Object.assign(gs, { mode: 'calibrate', title: 'No camera', message: poseError, error: true, hint: 'Press K to play with the keyboard' });
+      Object.assign(gs, { mode: 'calibrate', title: 'No camera', message: poseError, error: true, hint: 'Press Esc to play with the keyboard' });
     else if (state === 'calibrating' && cameraError)
-      Object.assign(gs, { mode: 'calibrate', title: cameraError, message: 'Reconnecting…', hint: 'Press K to play with the keyboard' });
+      Object.assign(gs, { mode: 'calibrate', title: cameraError, message: 'Reconnecting…', hint: 'Press Esc to play with the keyboard' });
     else if (state === 'calibrating' && (!cameraOn || !tracker))
       Object.assign(gs, { mode: 'calibrate', title: 'Getting ready', message: cameraOn ? 'Loading pose model…' : 'Starting camera…' });
     else if (state === 'calibrating')
@@ -258,7 +258,7 @@ async function main() {
     if (k === 'p') keyboard.onPause();
     else if (state === 'gameOver') return;
     else if (k === 'c' && tracker) recalibrate();
-    else if (k === 'k') {
+    else if (k === 'escape') {
       if (state !== 'keyboard') {
         state = 'keyboard';
         audio.startMusic(); // keyboard play skips calibration and the countdown

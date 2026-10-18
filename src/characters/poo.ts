@@ -12,5 +12,7 @@ export const pooDef = {
   defaultAnimation: 'falling',
 } satisfies CharacterDef<'falling' | 'splat'>;
 
-/** how long a splat stays on the ground before fading out */
-export const splatLifetimeMs = 1500;
+/** how long a splat stays (on the ground or a branch), fading out over the last third */
+export const splatLifetimeMs = 4500;
+/** half the width of a splat on the ground (px); the villain won't step into it */
+export const splatHalfWidth = 30;

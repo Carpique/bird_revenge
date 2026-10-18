@@ -1,3 +1,4 @@
+import { splatHalfWidth } from '../characters/poo';
 import { villainDef, villainHitbox } from '../characters/villain';
 import { config, WORLD } from '../config';
 import { CharacterSprite } from '../render/CharacterSprite';
@@ -23,6 +24,8 @@ const nextPauseTime = () => randomBetween(config.villain.minPauseMs, config.vill
  * a little hop, then a parabolic fall past the bottom edge, growing as if flying towards the camera.
  * Then a new one comes in.
  * Every now and then, while walking on screen, he stops, turns to the bird and throws an apple at it.
+ * He never steps into a poo splat: about to, he stops as if for one of his usual stops, then walks on
+ * in a random direction (stopping again if that's still into the splat).
  */
 export class Villain {
   readonly body: MBody;
@@ -88,8 +91,11 @@ export class Villain {
     this.enter('walking');
   }
 
-  /** `targetX`: where the bird is, or null when there's nothing to throw at (bird dying) */
-  step(stepMs: number, targetX: number | null) {
+  /**
+   * `targetX`: where the bird is, or null when there's nothing to throw at (bird dying).
+   * `splatXs`: centres of the poo splats on the ground, which he won't step into.
+   */
+  step(stepMs: number, targetX: number | null, splatXs: number[] = []) {
     const speed = config.villain.speed;
     this.timer += stepMs;
     switch (this.state) {
@@ -136,6 +142,10 @@ export class Villain {
             break;
           }
         }
+        if (this.splatAhead(splatXs, speed)) {
+          this.pauseLeft = nextPauseTime();
+          break;
+        }
         this.x += this.dir * speed;
         if (this.x > MAX_X) this.dir = -1;
         if (this.x < MIN_X) this.dir = 1;
@@ -177,6 +187,15 @@ export class Villain {
     // standing still: in the windup of a throw, or stopped for a moment
     if (this.aimT !== null || this.pauseLeft !== null) this.view.showPhase('walk', 0);
     else this.view.play(this.state === 'walking' ? 'walk' : 'hit');
+  }
+
+  /** Would the next step (of `speed` px) take his feet into a splat in front of him? */
+  private splatAhead(splatXs: number[], speed: number): boolean {
+    const reach = villainHitbox.width / 2 + splatHalfWidth + speed;
+    return splatXs.some((sx) => {
+      const ahead = (sx - this.x) * this.dir;
+      return ahead > 0 && ahead < reach;
+    });
   }
 
   private enter(state: State) {

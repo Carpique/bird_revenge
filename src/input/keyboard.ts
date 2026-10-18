@@ -3,7 +3,7 @@ import type { Controls } from './controls';
 
 /**
  * Keyboard fallback: ↑ flap, ← → steer, ↓ poo. Space toggles pause (`onPause`).
- * Single-letter hotkeys are dispatched to `onHotkey`.
+ * Single-letter hotkeys (and Esc, as 'escape') are dispatched to `onHotkey`.
  */
 export class Keyboard {
   private held = new Set<string>();
@@ -19,6 +19,7 @@ export class Keyboard {
       if (k === ' ' && !e.repeat) this.onPause();
       if ((k === 'ArrowDown' || k === 's') && !e.repeat) this.onPoo();
       if (k.length === 1 && k !== ' ' && !e.repeat) this.onHotkey(k.toLowerCase());
+      if (k === 'Escape' && !e.repeat) this.onHotkey('escape');
       this.held.add(k);
     });
     window.addEventListener('keyup', (e) => this.held.delete(e.key));
