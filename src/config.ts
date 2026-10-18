@@ -134,10 +134,8 @@ export const config = {
 
   /** the villain throws apples at the bird */
   apple: {
-    /** launch speed (px per physics step); sets how high he can reach. Constant for now, may grow as the game goes on */
-    strength: 9.6,
-    /** gravity on a flying apple (px per physics step²) */
-    gravity: 0.092,
+    /** flight speed (px per physics step); apples fly in a straight line, no gravity. Constant for now, may grow as the game goes on */
+    speed: 5,
     /** random time between throws, while he walks on screen */
     minIntervalMs: 2500,
     maxIntervalMs: 6000,
@@ -145,14 +143,14 @@ export const config = {
     windupMs: 400,
     /** random aim error, ± degrees */
     aimSpread: 6,
-    /** launch angle (deg above horizontal) when the bird is out of reach: the apple falls short */
-    outOfReachAngle: 55,
     /** collision radius (px) */
     radius: 13,
     /** spin while flying, turns per second */
     spin: 1.5,
-    /** a landed apple lies on the ground this long, fading out */
-    groundMs: 1200,
+    /** an apple hit by a poo: both stop, blink and fade out over this long */
+    poopedMs: 1000,
+    /** ...and start falling (like a poo) this long after the hit */
+    poopedFallAfterMs: 500,
   },
 
   player: {

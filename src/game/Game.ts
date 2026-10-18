@@ -195,6 +195,18 @@ export class Game {
         this.loseLife();
       }
     }
+    // a falling poo knocks an apple out of the air: both blink out
+    const hitR = config.physics.pooRadius + config.apple.radius;
+    for (const p of this.poos) {
+      if (p.state !== 'falling') continue;
+      const pp = p.body.position;
+      const a = this.apples.find((a) => a.state === 'flying' && (a.x - pp.x) ** 2 + (a.y - pp.y) ** 2 < hitR * hitR);
+      if (!a) continue;
+      Composite.remove(this.engine.world, p.body);
+      p.hit();
+      a.hit();
+      audio.play('splat');
+    }
     if (this.bird.fallen) this.afterDeath();
     // remove finished poos
     this.poos = this.poos.filter((p) => {
@@ -209,27 +221,21 @@ export class Game {
     });
   }
 
-  /** How hard the villain throws (launch speed, px per physics step). Constant for now; could grow as the game goes on. */
-  private appleStrength(): number {
-    return config.apple.strength;
+  /** How fast the villain's apples fly (px per physics step). Constant for now; could grow as the game goes on. */
+  private appleSpeed(): number {
+    return config.apple.speed;
   }
 
   /**
-   * Throw an apple from (x, y) at where the bird is now (no leading, so moving dodges it), on the flatter
-   * of the two arcs that reach it. A bird out of reach gets a lob that falls short.
+   * Throw an apple from (x, y) in a straight line at where the bird is now (no leading, so moving dodges it).
+   * It keeps going until it leaves the screen.
    */
   private throwApple(x: number, y: number) {
     const target = this.bird.body.position;
-    const v = this.appleStrength();
-    const g = config.apple.gravity;
-    const dx = target.x - x;
-    const adx = Math.max(1, Math.abs(dx));
-    const up = y - target.y;
-    const d = v ** 4 - g * (g * adx * adx + 2 * up * v * v);
-    let angle = d >= 0 ? Math.atan((v * v - Math.sqrt(d)) / (g * adx)) : (config.apple.outOfReachAngle * Math.PI) / 180;
+    const v = this.appleSpeed();
+    let angle = Math.atan2(target.y - y, target.x - x);
     angle += ((Math.random() * 2 - 1) * config.apple.aimSpread * Math.PI) / 180;
-    const side = dx < 0 ? -1 : 1;
-    const apple = new Apple(x, y, side * v * Math.cos(angle), -v * Math.sin(angle));
+    const apple = new Apple(x, y, v * Math.cos(angle), v * Math.sin(angle));
     this.apples.push(apple);
     this.fx.addChild(apple.view);
   }
