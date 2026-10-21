@@ -36,6 +36,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'villain.maxWalkMs': [0, 10000, 100],
   'villain.minPauseMs': [0, 5000, 50],
   'villain.maxPauseMs': [0, 5000, 50],
+  'villain.hideDistancePct': [0, 100, 1],
   'villain.fallJumpSpeed': [0, 30, 0.5],
   'villain.fallGravity': [0.05, 2, 0.05],
   'villain.fallSideSpeed': [0, 10, 0.5],

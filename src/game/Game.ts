@@ -9,12 +9,15 @@ import { Apple } from './Apple';
 import { Background } from './Background';
 import { Bird } from './Bird';
 import { landingBranch } from './branches';
+import { coversUnder, type Cover } from './cover';
 import { Bodies, Composite, Engine, Events, STEP_MS, type MBody, type MEngine } from './physics';
 import { Poo } from './Poo';
 import { Villain } from './Villain';
 
 /** every branch the bird can sit on */
 const BRANCHES = scenery.trees.flatMap((t) => t.branches);
+/** where the villain can hide from the bird: under the branches */
+const COVERS = coversUnder(BRANCHES);
 
 interface Popup {
   text: Text;
@@ -177,7 +180,9 @@ export class Game {
     }
     this.bird.step(this.controls, STEP_MS, () => this.dropPoo());
     const splatXs = this.poos.filter((p) => p.state === 'splat' && p.onGround).map((p) => p.view.x);
-    this.villain.step(STEP_MS, this.bird.dying ? null : this.bird.body.position.x, splatXs);
+    const bp = this.bird.body.position;
+    const bird = this.bird.dying ? null : { x: bp.x, y: bp.y, r: config.physics.birdRadius };
+    this.villain.step(STEP_MS, { bird, splatXs, covers: this.covers() });
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
     const birdY = this.bird.body.position.y;
@@ -243,6 +248,11 @@ export class Game {
       p.splat(landing.top, Math.atan((y1 - y0) / (x1 - x0)));
       audio.play('splat');
     }
+  }
+
+  /** Stretches of ground sheltered from above right now. Static for now; moving obstacles would recompute them here each step. */
+  private covers(): readonly Cover[] {
+    return COVERS;
   }
 
   /** How fast the villain's apples fly (px per physics step). Constant for now; could grow as the game goes on. */
