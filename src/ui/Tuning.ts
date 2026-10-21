@@ -94,8 +94,8 @@ export class Tuning {
       const folder = this.gui.addFolder(section);
       for (const key of Object.keys(obj)) {
         const r = RANGES[`${section}.${key}`];
-        if (section === 'flap' && key === 'sideSign') {
-          folder.add(obj, key, { 'stronger left arm → right': 1, 'stronger left arm → left': -1 }).name('side direction');
+        if (section === 'flap' && key === 'invertSideFlap') {
+          folder.add(obj, key).name('Invert side-flap');
         } else if (r) {
           folder.add(obj, key, r[0], r[1], r[2]);
         } else {

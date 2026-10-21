@@ -104,7 +104,7 @@ class ArmTracker {
  * (no waiting for a full gesture). Faster / bigger flaps → more force. The arms are read independently:
  * how the force splits into lift and sideways push depends on each arm's recent effort. Both arms flapping
  * about equally hard → straight up; one arm alone, or one flapping much faster than the other → sideways,
- * away from the stronger arm (per `sideSign`), with only part of the lift.
+ * towards the stronger arm (or away from it with `invertSideFlap` off), with only part of the lift.
  */
 export class FlapDetector {
   private left = new ArmTracker('left');
@@ -122,7 +122,7 @@ export class FlapDetector {
     const asymmetry = Math.max(0, Math.min(1, (cfg.symmetricRatio - ratio) / Math.max(0.01, cfg.symmetricRatio)));
     const lift = Math.min(cfg.maxLiftAccel, cfg.liftGain * power * (1 - asymmetry * (1 - cfg.asymmetricLift)));
     const dir = l.effort > r.effort ? 1 : -1;
-    const side = cfg.sideSign * dir * Math.min(cfg.maxSideAccel, cfg.sideGain * power * asymmetry);
+    const side = (cfg.invertSideFlap ? -1 : 1) * dir * Math.min(cfg.maxSideAccel, cfg.sideGain * power * asymmetry);
     const visAngles = [l, r].filter((a) => a.visible).map((a) => a.angle);
     const avg = visAngles.length ? visAngles.reduce((x, y) => x + y, 0) / visAngles.length : 60;
     const wingPhase = Math.max(0, Math.min(1, (avg - 20) / 140));

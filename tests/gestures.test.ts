@@ -71,18 +71,18 @@ describe('FlapDetector', () => {
     expect(lift).toBeGreaterThan(0);
   });
 
-  it('flapping one arm pushes sideways, direction per arm and sideSign', () => {
+  it('flapping one arm pushes sideways, direction per arm and invertSideFlap', () => {
     const left = average((t) => ({ armLeft: flapAngle(t, 1.5), armRight: 15 }));
     const right = average((t) => ({ armLeft: 15, armRight: flapAngle(t, 1.5) }));
-    expect(left.side * config.flap.sideSign).toBeGreaterThan(200);
-    expect(right.side * config.flap.sideSign).toBeLessThan(-200);
+    expect(left.side * (config.flap.invertSideFlap ? -1 : 1)).toBeGreaterThan(200);
+    expect(right.side * (config.flap.invertSideFlap ? -1 : 1)).toBeLessThan(-200);
     const both = average((t) => ({ armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) }));
     expect(left.lift).toBeLessThan(both.lift / 2);
   });
 
   it('one arm flapping twice as fast pushes sideways, while still lifting', () => {
     const o = average((t) => ({ armLeft: flapAngle(t, 0.8), armRight: flapAngle(t, 1.6) }));
-    expect(o.side * config.flap.sideSign).toBeLessThan(-100);
+    expect(o.side * (config.flap.invertSideFlap ? -1 : 1)).toBeLessThan(-100);
     expect(o.lift).toBeGreaterThan(0);
   });
 

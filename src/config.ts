@@ -69,10 +69,10 @@ export const config = {
     maxSideAccel: 3800,
     /** fraction of the lift that remains at full asymmetry, so one-arm flapping can hold some height */
     asymmetricLift: 0.75,
-    /** +1: the stronger LEFT arm pushes the bird RIGHT (like rowing). -1: it moves the bird left */
-    sideSign: 1,
+    /** on: the bird moves towards the stronger (or only) flapping arm. off: away from it, like rowing */
+    invertSideFlap: true,
     /** minimum peak-to-trough arm swing (deg) to count as a stroke (stats only) */
-    strokeMinAmplitude: 25,
+    strokeMinAmplitude: 38,
   },
 
   /** "shoot": a leg raised sideways, read from the hip angles */
