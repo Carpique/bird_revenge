@@ -22,11 +22,14 @@ import { Recorder } from './ui/Recorder';
 import { SplashScreen } from './ui/SplashScreen';
 import { Tuning } from './ui/Tuning';
 import { VolumeButton } from './ui/VolumeButton';
+import { wakeLock } from './ui/wakeLock';
 
 /**
  * App states:
  *   loading → menu → calibrating → countdown → playing ⇄ outOfFrame
- *   menu is the splash screen; camera and pose model load in the background meanwhile
+ *   menu is the splash screen; the pose model loads in the background meanwhile, the camera stays off
+ *   the camera runs only in states that use the pose: calibrating, countdown, playing, outOfFrame
+ *   and a pose game's gameOver — not in the menu or keyboard play
  *   calibrating shows a dialog over the paused game (also camera loading / camera errors)
  *   outOfFrame keeps the game running with no pose controls, so the bird drops until the player is back
  *   keyboard (Esc toggles; pose is ignored)
@@ -151,7 +154,12 @@ async function main() {
   let focused = document.hasFocus();
   const windowActive = () => focused && !document.hidden;
 
-  // camera + pose tracker follow `suspended`; switching is async, so changes are applied one at a time.
+  /** states that use the pose, so the camera has to run */
+  const needsCamera = () =>
+    state === 'calibrating' || state === 'countdown' || state === 'playing' || state === 'outOfFrame' || (state === 'gameOver' && !keyboardAfterGameOver);
+  const wantCamera = () => !suspended && needsCamera();
+
+  // camera + pose tracker follow `wantCamera()`; switching is async, so changes are applied one at a time.
   // A camera that fails to start (e.g. not ready yet after the laptop wakes — the Vite dev server also
   // reloads the page then) or dies while running is retried with backoff; meanwhile the dialogs say
   // it's reconnecting. Only a blocked permission or a missing camera API is final.
@@ -181,7 +189,7 @@ async function main() {
   const syncPose = () => {
     poseSync = poseSync.then(async () => {
       if (poseError) return;
-      const want = !suspended;
+      const want = wantCamera();
       if (want === cameraOn) return;
       if (want) {
         try {
@@ -199,7 +207,7 @@ async function main() {
         cameraOn = true;
         cameraError = null;
         retryDelay = 500;
-        if (suspended) return syncPose(); // suspended again while the camera was starting
+        if (!wantCamera()) return syncPose(); // no longer wanted while the camera was starting
         tracker?.start(); // if the model is still loading, it starts the tracker once it's ready
       } else {
         cameraOff();
@@ -213,6 +221,7 @@ async function main() {
     if (next === suspended) return;
     suspended = next;
     audio.setSuspended(suspended);
+    wakeLock.set(!suspended);
     const now = performance.now();
     if (suspended) {
       suspendedAt = now;
@@ -247,6 +256,7 @@ async function main() {
   window.addEventListener('focus', onWindowChange);
   document.addEventListener('visibilitychange', onWindowChange);
   updateSuspended(); // the page may have loaded in the background
+  wakeLock.set(!suspended);
 
   keyboard.onPoo = () => game.requestPoo();
   keyboard.onPause = () => {
@@ -318,6 +328,15 @@ async function main() {
     }
   };
 
+  // the camera follows the state; while suspended `updateSuspended` takes care of it
+  let cameraWanted = false;
+  const updateCamera = () => {
+    const want = wantCamera();
+    if (want === cameraWanted) return;
+    cameraWanted = want;
+    syncPose();
+  };
+
   // per render frame: state timers, controls, HUD, debug
   app.ticker.add(() => {
     const now = performance.now();
@@ -328,6 +347,7 @@ async function main() {
       if (keyboardAfterGameOver) state = 'keyboard';
       else startCountdown();
     }
+    updateCamera();
 
     const poseFresh = state === 'playing' && now - lastPoseT < 300;
     game.controls = keyboard.apply(poseFresh ? poseControls : noControls());
@@ -357,9 +377,8 @@ async function main() {
     });
   });
 
-  // splash screen first; camera + pose model load in the background
+  // splash screen first; the pose model loads in the background, the camera starts with the game
   state = 'menu';
-  syncPose(); // starts the camera (retrying if it isn't available yet)
   try {
     const t = await PoseTracker.create(video);
     t.onFrame = onPose;
