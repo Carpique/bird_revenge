@@ -18,6 +18,21 @@ const RANGES: Record<string, [number, number, number]> = {
   'shoot.legRaiseMin': [0, 60, 1],
   'shoot.cooldownMs': [0, 3000, 50],
   'shoot.baselineAdaptRate': [0, 0.2, 0.005],
+  'glide.maxBend': [0, 0.5, 0.01],
+  'glide.maxTilt': [10, 90, 1],
+  'glide.maxArmSpeed': [0, 600, 10],
+  'glide.enterMs': [0, 1000, 10],
+  'glide.exitMs': [0, 1000, 10],
+  'glide.tiltSmoothing': [0.05, 1, 0.05],
+  'glide.sinkSpeed': [0, 8, 0.1],
+  'glide.parachuteDrag': [0, 1, 0.01],
+  'glide.horizontalDrag': [0, 0.2, 0.005],
+  'glide.airFriction': [0, 0.2, 0.005],
+  'glide.deadZone': [0, 30, 1],
+  'glide.fullTilt': [5, 90, 1],
+  'glide.diveSpeed': [0, 30, 0.5],
+  'glide.diveAccel': [0, 8000, 100],
+  'glide.bank': [0, 1.5, 0.05],
   'visibility.minLandmarkVisibility': [0, 1, 0.05],
   'visibility.frameMargin': [0, 0.1, 0.005],
   'visibility.emaAlpha': [0.05, 1, 0.05],
@@ -31,6 +46,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'physics.branchFriction': [0, 1, 0.05],
   'keyboard.lift': [0, 5000, 50],
   'keyboard.steer': [0, 5000, 50],
+  'keyboard.diveTilt': [0, 90, 1],
   'villain.speed': [0, 8, 0.1],
   'villain.minWalkMs': [0, 10000, 100],
   'villain.maxWalkMs': [0, 10000, 100],
@@ -65,7 +81,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'audio.fallMs': [100, 5000, 50],
 };
 
-const SECTIONS = ['flap', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'player', 'audio'] as const;
+const SECTIONS = ['flap', 'glide', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'player', 'audio'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {
@@ -86,7 +102,7 @@ export class Tuning {
           folder.add(obj, key);
         }
       }
-      if (section !== 'flap' && section !== 'shoot') folder.close();
+      if (section !== 'flap' && section !== 'glide' && section !== 'shoot') folder.close();
     }
     this.gui.add({ save: () => saveConfig() }, 'save').name('💾 save to this browser');
     this.gui.add({ copy: () => navigator.clipboard?.writeText(JSON.stringify(config, null, 2)) }, 'copy').name('📋 copy as JSON');

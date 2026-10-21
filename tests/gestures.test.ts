@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../src/config';
 import { FlapDetector } from '../src/gestures/FlapDetector';
+import { fitArmLine, GlideDetector } from '../src/gestures/GlideDetector';
+import { diveAmount, glideStep } from '../src/game/glide';
+import { STEP_MS } from '../src/game/physics';
 import { armElevation, hipAbduction, kneeAngle } from '../src/gestures/geometry';
 import { ShootDetector } from '../src/gestures/ShootDetector';
 import { VisibilityMonitor } from '../src/gestures/VisibilityMonitor';
@@ -232,5 +235,97 @@ describe('VisibilityMonitor', () => {
     const o = m.update(null, 1700);
     expect(o.personDetected).toBe(false);
     expect(o.hint).toMatch(/Step in front/);
+  });
+});
+
+describe('GlideDetector', () => {
+  const run = (fs: ReturnType<typeof frames>) => {
+    const flap = new FlapDetector();
+    const glide = new GlideDetector();
+    return fs.map((f) => glide.update(f, true, true, flap.update(f, true, true)));
+  };
+  const last = <T,>(xs: T[]) => xs[xs.length - 1];
+
+  it('fits a straight, level line through arms held out in a T', () => {
+    const line = fitArmLine(synthPose({ t: 0, armLeft: 90, armRight: 90 }));
+    expect(Math.abs(line.tilt)).toBeLessThan(1);
+    expect(line.bend).toBeLessThan(0.01);
+  });
+
+  it('glides with arms held out in a T, after a short hold, about level', () => {
+    const out = run(frames(1000, () => ({ armLeft: 90, armRight: 85 })));
+    expect(out[0].gliding).toBe(false);
+    expect(last(out).gliding).toBe(true);
+    expect(diveAmount(last(out).tilt)).toBe(0);
+  });
+
+  it('stops gliding once the arms are lowered', () => {
+    const out = run([
+      ...frames(1000, () => ({ armLeft: 90, armRight: 90 })),
+      ...frames(1000, () => ({ armLeft: 15, armRight: 15 }), 1000),
+    ]);
+    expect(out[29].gliding).toBe(true);
+    expect(last(out).gliding).toBe(false);
+  });
+
+  it('dives towards the lower hand (as seen on screen), harder when tilted more', () => {
+    // the player's left hand down: it's on the screen's left (mirrored view), so the bird dives left
+    const left = last(run(frames(1000, () => ({ armLeft: 70, armRight: 110 }))));
+    expect(left.gliding).toBe(true);
+    expect(diveAmount(left.tilt)).toBeLessThan(0);
+    const right = last(run(frames(1000, () => ({ armLeft: 110, armRight: 70 }))));
+    expect(diveAmount(right.tilt)).toBeGreaterThan(0);
+    const steeper = last(run(frames(1000, () => ({ armLeft: 135, armRight: 45 }))));
+    expect(steeper.gliding).toBe(true);
+    expect(diveAmount(steeper.tilt)).toBeGreaterThan(diveAmount(right.tilt));
+  });
+
+  it('does not glide when the arms are not in a straight line', () => {
+    // arms down, up, a V, one arm out, one arm level and the other well below
+    for (const [l, r] of [[15, 15], [170, 170], [130, 130], [90, 15], [90, 60]]) {
+      const out = run(frames(1000, () => ({ armLeft: l, armRight: r })));
+      expect(out.some((o) => o.gliding)).toBe(false);
+    }
+  });
+
+  it('does not glide while flapping through horizontal', () => {
+    const out = run(frames(3000, (t) => ({ armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) })));
+    expect(out.some((o) => o.gliding)).toBe(false);
+  });
+});
+
+describe('glide physics', () => {
+  /** 2 s of airborne gliding at a fixed tilt with Matter's gravity and air friction, from velocity v0 (px/step) */
+  const fly = (tilt: number, v0 = { x: 0, y: 0 }) => {
+    const g = config.physics.gravity * 1e-3 * STEP_MS ** 2;
+    let v = { ...v0 };
+    for (let i = 0; i < 120; i++) {
+      const s = glideStep(v, tilt, STEP_MS);
+      const k = 1 - config.glide.airFriction;
+      v = { x: s.x * k, y: (s.y + (s.holdUp ? 0 : g)) * k };
+    }
+    return v;
+  };
+
+  it('level arms: sinks slowly like a parachute, and the sideways speed decays', () => {
+    const v = fly(0, { x: 8, y: 7 });
+    expect(v.y).toBeGreaterThan(0);
+    expect(v.y).toBeLessThan(config.glide.sinkSpeed + 0.5);
+    expect(Math.abs(v.x)).toBeLessThan(4);
+    expect(v.x).toBeGreaterThan(0); // slowly, not braked to a stop
+  });
+
+  it('tilted arms: dives sideways and down, faster with more tilt', () => {
+    const shallow = fly(-20); // falls to the right
+    const steep = fly(-45);
+    expect(shallow.x).toBeGreaterThan(1);
+    expect(steep.x).toBeGreaterThan(shallow.x);
+    expect(steep.y).toBeGreaterThan(shallow.y);
+    expect(Math.hypot(steep.x, steep.y)).toBeGreaterThan(2 * Math.hypot(shallow.x, shallow.y) - 1);
+    expect(fly(45).x).toBeLessThan(-1); // the other way
+  });
+
+  it('turns a sideways flight around when diving the other way', () => {
+    expect(fly(30, { x: 8, y: 0 }).x).toBeLessThan(-1);
   });
 });

@@ -5,6 +5,7 @@ import type { Controls } from '../input/controls';
 import type { Branch } from '../scenery/scenery';
 import { landingBranch } from './branches';
 import { CharacterSprite } from '../render/CharacterSprite';
+import { glideStep } from './glide';
 import { BIRD_GROUP, Bodies, Body, forceFor, type MBody } from './physics';
 
 type BirdAnim = keyof typeof birdDef.animations;
@@ -32,6 +33,10 @@ export class Bird {
   /** ms of invulnerability left after coming back from losing a life */
   private invulnT = 0;
   private death: Death | null = null;
+  /** gliding in the air this step (it does nothing on the ground or a branch) */
+  private gliding = false;
+  /** current lean while gliding, radians (eased towards the arm line) */
+  private bankAngle = 0;
   /** sitting on a tree branch (set by `perchOn` after each physics step) */
   perched = false;
 
@@ -120,6 +125,7 @@ export class Bird {
     this.squashT = null;
     this.death = null;
     this.perched = false;
+    this.bankAngle = 0;
     this.invulnT = invulnerable ? config.player.invulnerableMs : 0;
   }
 
@@ -131,7 +137,7 @@ export class Bird {
     return true;
   }
 
-  /** Physics step: apply flap forces, clamp speed, advance squash. */
+  /** Physics step: apply flap forces and the glide, clamp speed, advance squash. */
   step(c: Controls, stepMs: number, drop: () => void) {
     const d = this.death;
     if (d) {
@@ -143,8 +149,16 @@ export class Bird {
     }
     const b = this.body;
     this.invulnT = Math.max(0, this.invulnT - stepMs);
-    b.frictionAir = config.physics.birdAirFriction;
-    Body.applyForce(b, b.position, { x: forceFor(b, c.steer), y: -forceFor(b, c.lift) });
+    this.gliding = c.glideTilt !== null && !this.onGround;
+    b.frictionAir = this.gliding ? config.glide.airFriction : config.physics.birdAirFriction;
+    let antiGravity = 0;
+    if (this.gliding) {
+      const g = glideStep(b.velocity, c.glideTilt!, stepMs);
+      Body.setVelocity(b, { x: g.x, y: g.y });
+      // Matter applies the full gravity itself; the parachute holds against it
+      if (g.holdUp) antiGravity = config.physics.gravity * 1000;
+    }
+    Body.applyForce(b, b.position, { x: forceFor(b, c.steer), y: -forceFor(b, c.lift + antiGravity) });
     const v = b.velocity;
     const speed = Math.hypot(v.x, v.y);
     const max = config.physics.maxSpeed;
@@ -172,7 +186,10 @@ export class Bird {
       this.view.rotation = d.turn * (Math.PI / 2) * Math.min(1, d.t / Math.max(1, config.player.dieTurnMs));
       return;
     }
-    this.view.rotation = 0;
+    // lean with the player's arm line while gliding (screen rotation is clockwise, the tilt is anticlockwise)
+    const bankTo = this.gliding && c.glideTilt !== null ? (-c.glideTilt * config.glide.bank * Math.PI) / 180 : 0;
+    this.bankAngle += 0.2 * (bankTo - this.bankAngle);
+    this.view.rotation = this.bankAngle;
     const b = this.body;
     const r = config.physics.birdRadius;
     if (Math.abs(b.velocity.x) > 0.4) this.facing = b.velocity.x > 0 ? 'right' : 'left';

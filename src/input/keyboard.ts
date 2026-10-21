@@ -2,7 +2,7 @@ import { config } from '../config';
 import type { Controls } from './controls';
 
 /**
- * Keyboard fallback: ↑ flap, ← → steer, ↓ poo. Space toggles pause (`onPause`).
+ * Keyboard fallback: ↑ flap, ← → steer, ↓ poo, Shift glide (Shift + ← → dive). Space toggles pause (`onPause`).
  * Single-letter hotkeys (and Esc, as 'escape') are dispatched to `onHotkey`.
  */
 export class Keyboard {
@@ -32,12 +32,16 @@ export class Keyboard {
     const left = this.held.has('ArrowLeft');
     const right = this.held.has('ArrowRight');
     const steer = (right ? 1 : 0) - (left ? 1 : 0);
-    if (!flap && !steer) return base;
+    const glide = this.held.has('Shift');
+    if (!flap && !steer && !glide) return base;
     return {
       lift: base.lift + (flap ? config.keyboard.lift : 0),
-      steer: base.steer + steer * config.keyboard.steer,
+      // with Shift the arrows dive instead of steering
+      steer: base.steer + (glide ? 0 : steer * config.keyboard.steer),
       wingPhase: flap ? null : base.wingPhase,
       flapping: flap || base.flapping,
+      // diving right = the arm line falling to the right = negative tilt
+      glideTilt: glide ? -steer * config.keyboard.diveTilt : base.glideTilt,
     };
   }
 }

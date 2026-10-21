@@ -19,6 +19,8 @@ your arms (hands raised included) are visible; the legs may be cut off.
 |---|---|---|
 | Flap / fly up | flap both arms (faster, bigger = more lift) | ↑ |
 | Fly sideways | flap one arm, or one faster than the other | ← → |
+| Glide (parachute) | spread both arms out in a T, held still: the bird sinks slowly, sideways speed fades | Shift |
+| Dive | tilt the spread arms (one hand down, the other up): the bird dives towards the lower hand, faster the more you tilt | Shift + ← → |
 | Poo | shoot: raise a leg sideways (the poo flies towards that side) | ↓ |
 
 Hotkeys: **D** debug panel · **G** tuning panel · **Esc** keyboard-only mode · **C** recalibrate ·
@@ -26,7 +28,7 @@ Hotkeys: **D** debug panel · **G** tuning panel · **Esc** keyboard-only mode �
 
 ## Tuning
 
-Press **G** for live sliders over everything in `src/config.ts` (flap gains, shoot thresholds,
+Press **G** for live sliders over everything in `src/config.ts` (flap gains, glide/dive feel, shoot thresholds,
 visibility timing, physics). "save" stores your values in this browser; "copy as JSON" lets you
 paste them into `src/config.ts` to make them the defaults.
 

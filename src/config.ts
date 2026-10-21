@@ -55,8 +55,8 @@ export const config = {
     /** EMA factor for angular velocity per pose frame (higher = more responsive, noisier) */
     velocitySmoothing: 0.5,
     /** upward acceleration (px/s²) per deg/s of downstroke speed, averaged over both arms */
-    liftGain: 16.8,
-    maxLiftAccel: 4800,
+    liftGain: 21,
+    maxLiftAccel: 6000,
     /**
      * Each arm's recent flapping effort (its downstroke power averaged over this long, ms) decides how the
      * stroke force is split: equal effort lifts, lopsided effort (one arm, or one arm flapping faster) pushes sideways.
@@ -65,10 +65,10 @@ export const config = {
     /** effort ratio (weaker / stronger arm) at or above which flapping counts as fully symmetric: no sideways push */
     symmetricRatio: 0.75,
     /** sideways acceleration (px/s²) per deg/s of downstroke speed, at full asymmetry (one arm alone) */
-    sideGain: 12,
-    maxSideAccel: 2500,
+    sideGain: 22,
+    maxSideAccel: 3800,
     /** fraction of the lift that remains at full asymmetry, so one-arm flapping can hold some height */
-    asymmetricLift: 0.65,
+    asymmetricLift: 0.75,
     /** +1: the stronger LEFT arm pushes the bird RIGHT (like rowing). -1: it moves the bird left */
     sideSign: 1,
     /** minimum peak-to-trough arm swing (deg) to count as a stroke (stats only) */
@@ -78,14 +78,52 @@ export const config = {
   /** "shoot": a leg raised sideways, read from the hip angles */
   shoot: {
     /** hip abduction (deg above the standing baseline) of either leg that enters a shoot */
-    angleEnter: 25,
+    angleEnter: 21,
     /** ...and both legs back below this to leave it */
     angleExit: 12,
     /** left-right hip angle difference (deg) above which one leg counts as the raised one */
-    legRaiseMin: 15,
+    legRaiseMin: 13,
     cooldownMs: 700,
     /** slowly re-learn the standing hip angles while standing (stance drifts a little) */
     baselineAdaptRate: 0.02,
+  },
+
+  /**
+   * "glide": both arms spread out in a T, in a roughly straight line and held still. Level arms work as a
+   * parachute: the fall slows to `sinkSpeed` and the sideways speed slowly decays. Tilting the arm line
+   * (one hand down, the other up) dives along it towards the lower hand, faster the more it's tilted.
+   */
+  glide: {
+    /** how far the arm points may stray from a straight line: perpendicular RMS / along-line RMS */
+    maxBend: 0.12,
+    /** arm lines steeper than this (deg) aren't a glide */
+    maxTilt: 45,
+    /** arms moving faster than this (deg/s) are flapping, not gliding */
+    maxArmSpeed: 120,
+    /** the pose must hold this long to start gliding... */
+    enterMs: 150,
+    /** ...and be gone this long to stop */
+    exitMs: 150,
+    /** EMA factor for the tilt per pose frame (lower = steadier, laggier) */
+    tiltSmoothing: 0.3,
+    /** parachute: fall speed with the arms level (px per physics step; normal free fall tops out around 7) */
+    sinkSpeed: 1.5,
+    /** parachute: fraction of the fall speed above `sinkSpeed` braked away per physics step */
+    parachuteDrag: 0.24,
+    /** fraction of the sideways speed lost per physics step while gliding level (on top of `airFriction`) */
+    horizontalDrag: 0.01,
+    /** Matter.js frictionAir while gliding (normal flight: physics.birdAirFriction) */
+    airFriction: 0.01,
+    /** tilts within ±this (deg) count as level: parachute only, no dive */
+    deadZone: 8,
+    /** tilt (deg) at which the dive reaches full `diveSpeed`; steeper tilts only dive more steeply */
+    fullTilt: 45,
+    /** dive speed along the arm line at full tilt, px per physics step (on top of `sinkSpeed`; capped by physics.maxSpeed) */
+    diveSpeed: 8,
+    /** how quickly the bird picks up the dive speed, px/s² */
+    diveAccel: 2400,
+    /** how much the bird leans with the arm line while gliding (1 = exactly like the arms, 0 = upright) */
+    bank: 0.8,
   },
 
   physics: {
@@ -108,6 +146,8 @@ export const config = {
     lift: 1600,
     /** sideways accel (px/s²) while arrow held */
     steer: 1400,
+    /** arm tilt (deg) that Shift + ← / → stands for: Shift alone glides level, with an arrow it dives that way */
+    diveTilt: 30,
   },
 
   villain: {

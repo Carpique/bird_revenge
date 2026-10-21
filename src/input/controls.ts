@@ -8,6 +8,11 @@ export interface Controls {
   wingPhase: number | null;
   /** keyboard flap held (bird plays the flap loop) */
   flapping: boolean;
+  /**
+   * arms spread out (or Shift held): the arm line's tilt, deg, as seen on screen with y up (+ = rises to the
+   * right); level = parachute, tilted = dive towards the lower hand. null when not gliding
+   */
+  glideTilt: number | null;
 }
 
-export const noControls = (): Controls => ({ lift: 0, steer: 0, wingPhase: null, flapping: false });
+export const noControls = (): Controls => ({ lift: 0, steer: 0, wingPhase: null, flapping: false, glideTilt: null });
