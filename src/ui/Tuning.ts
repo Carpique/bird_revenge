@@ -8,6 +8,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'flap.liftGain': [0, 40, 0.5],
   'flap.maxLiftAccel': [500, 8000, 100],
   'flap.effortWindowMs': [100, 2000, 50],
+  'flap.phaseGraceMs': [0, 300, 10],
   'flap.symmetricRatio': [0.05, 1, 0.05],
   'flap.sideGain': [0, 40, 0.5],
   'flap.maxSideAccel': [0, 6000, 100],

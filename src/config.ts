@@ -58,10 +58,15 @@ export const config = {
     liftGain: 21,
     maxLiftAccel: 6000,
     /**
-     * Each arm's recent flapping effort (its downstroke power averaged over this long, ms) decides how the
+     * Each arm's recent flapping effort (its downstroke power averaged over the last this-many ms) decides how the
      * stroke force is split: equal effort lifts, lopsided effort (one arm, or one arm flapping faster) pushes sideways.
      */
-    effortWindowMs: 700,
+    effortWindowMs: 600,
+    /**
+     * how far apart (ms) the two arms' strokes may start or end and still count as the same flap when comparing
+     * their effort; the sideways push from one arm alone kicks in this much later
+     */
+    phaseGraceMs: 100,
     /** effort ratio (weaker / stronger arm) at or above which flapping counts as fully symmetric: no sideways push */
     symmetricRatio: 0.75,
     /** sideways acceleration (px/s²) per deg/s of downstroke speed, at full asymmetry (one arm alone) */

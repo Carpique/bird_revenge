@@ -9,7 +9,7 @@ export interface ArmState {
   velocity: number;
   /** downstroke "power": downward speed above the dead zone, deg/s (0 when not moving down) */
   power: number;
-  /** recent flapping effort: power averaged over `effortWindowMs`, deg/s */
+  /** recent flapping effort: power averaged over the last `effortWindowMs`, deg/s */
   effort: number;
   visible: boolean;
   /** completed strokes since start */
@@ -40,6 +40,12 @@ class ArmTracker {
   private dir: 1 | -1 | 0 = 0;
   private lastPeak: number | null = null;
   private lastStrokeT = 0;
+  /**
+   * Power samples (power × ms) within the effort window plus `phaseGraceMs`, oldest first. A plain sliding
+   * window, not an exponential average, so an arm that stops flapping reaches zero effort once the window has passed.
+   */
+  private effortSamples: { t: number; work: number }[] = [];
+  private effortSum = 0;
 
   constructor(private side: Side) {}
 
@@ -52,6 +58,8 @@ class ArmTracker {
       s.velocity = 0;
       s.power = 0;
       s.effort = 0;
+      this.effortSamples = [];
+      this.effortSum = 0;
       this.decayFrequency(f.t);
       return;
     }
@@ -63,6 +71,7 @@ class ArmTracker {
       this.prevT = f.t;
       s.velocity = 0;
       s.power = 0;
+      this.updateEffort(f.t, 0);
       return;
     }
     const dt = Math.max(1, f.t - this.prevT) / 1000;
@@ -70,7 +79,7 @@ class ArmTracker {
     const a = cfg.velocitySmoothing;
     s.velocity = a * rawVel + (1 - a) * s.velocity;
     s.power = Math.max(0, -s.velocity - cfg.velocityDeadzone);
-    s.effort += (1 - Math.exp(-(dt * 1000) / Math.max(1, cfg.effortWindowMs))) * (s.power - s.effort);
+    this.updateEffort(f.t, s.power * dt * 1000);
 
     // stroke bookkeeping: a stroke = a peak followed by a trough at least strokeMinAmplitude lower
     const newDir: 1 | -1 | 0 = s.velocity > 20 ? 1 : s.velocity < -20 ? -1 : this.dir;
@@ -92,6 +101,27 @@ class ArmTracker {
     this.prevAngle = angle;
     this.prevT = f.t;
     this.decayFrequency(f.t);
+  }
+
+  /** Add `work` (power × ms) at time t, drop samples older than the window, and refresh `effort`. */
+  private updateEffort(t: number, work: number) {
+    const win = Math.max(1, config.flap.effortWindowMs);
+    const q = this.effortSamples;
+    if (work > 0) {
+      q.push({ t, work });
+      this.effortSum += work;
+    }
+    // keep a little extra history for `workIn`'s phase grace
+    while (q.length && q[0].t <= t - win - config.flap.phaseGraceMs) this.effortSum -= q.shift()!.work;
+    if (!q.length) this.effortSum = 0; // no float drift once empty
+    this.state.effort = this.workIn(t - win, t) / win;
+  }
+
+  /** total power × ms of the samples in (t0, t1] */
+  workIn(t0: number, t1: number): number {
+    let w = 0;
+    for (const s of this.effortSamples) if (s.t > t0 && s.t <= t1) w += s.work;
+    return w;
   }
 
   private decayFrequency(t: number) {
@@ -117,8 +147,16 @@ export class FlapDetector {
     const r = this.right.state;
     const cfg = config.flap;
     const power = (l.power + r.power) / 2;
-    const strong = Math.max(l.effort, r.effort);
-    const ratio = strong > 1 ? Math.min(l.effort, r.effort) / strong : 1;
+    // Each arm, as the possibly weaker one, is compared against the other with `phaseGraceMs` of slack on
+    // both ends of the window: an arm starting or finishing its stroke a moment later than the other isn't
+    // weaker. Without this, quick flaps spaced further apart than the window push sideways at every onset.
+    const win = Math.max(1, cfg.effortWindowMs);
+    const g = Math.min(cfg.phaseGraceMs, win / 2);
+    const weakerVs = (weak: ArmTracker, strong: ArmTracker) => {
+      const strict = strong.workIn(f.t - win, f.t - g);
+      return strict > win ? weak.workIn(f.t - win - g, f.t) / strict : 1;
+    };
+    const ratio = Math.min(1, weakerVs(this.left, this.right), weakerVs(this.right, this.left));
     const asymmetry = Math.max(0, Math.min(1, (cfg.symmetricRatio - ratio) / Math.max(0.01, cfg.symmetricRatio)));
     const lift = Math.min(cfg.maxLiftAccel, cfg.liftGain * power * (1 - asymmetry * (1 - cfg.asymmetricLift)));
     const dir = l.effort > r.effort ? 1 : -1;
