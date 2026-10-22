@@ -29,8 +29,9 @@ export const REQUIRED_PARTS: PartName[] = ['torso', 'leftArm', 'rightArm'];
 export const PART_LANDMARKS: Record<PartName, number[]> = {
   head: [L.nose, L.leftEye, L.rightEye],
   torso: [L.leftShoulder, L.rightShoulder, L.leftHip, L.rightHip],
-  leftArm: [L.leftElbow, L.leftWrist],
-  rightArm: [L.rightElbow, L.rightWrist],
+  // the hands may leave the frame: the arms also need the start of the forearm in view (VisibilityMonitor)
+  leftArm: [L.leftElbow],
+  rightArm: [L.rightElbow],
   leftLeg: [L.leftKnee, L.leftAnkle],
   rightLeg: [L.rightKnee, L.rightAnkle],
 };

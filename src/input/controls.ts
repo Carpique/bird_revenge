@@ -1,3 +1,5 @@
+import type { PostureIntent } from '../game/posture';
+
 /** What the bird is told to do this frame, from pose and/or keyboard. */
 export interface Controls {
   /** upward acceleration, px/s² */
@@ -13,6 +15,8 @@ export interface Controls {
    * right); level = parachute, tilted = dive towards the lower hand. null when not gliding
    */
   glideTilt: number | null;
+  /** posture control (`config.posture.enabled`): what the arm angles ask for; null when off or no arms in view */
+  posture: PostureIntent | null;
 }
 
-export const noControls = (): Controls => ({ lift: 0, steer: 0, wingPhase: null, flapping: false, glideTilt: null });
+export const noControls = (): Controls => ({ lift: 0, steer: 0, wingPhase: null, flapping: false, glideTilt: null, posture: null });

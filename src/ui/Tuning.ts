@@ -34,9 +34,21 @@ const RANGES: Record<string, [number, number, number]> = {
   'glide.diveSpeed': [0, 30, 0.5],
   'glide.diveAccel': [0, 8000, 100],
   'glide.bank': [0, 1.5, 0.05],
+  'posture.smoothing': [0.05, 1, 0.05],
+  'posture.deadZone': [0, 30, 1],
+  'posture.fullRaise': [20, 90, 1],
+  'posture.flySpeed': [0, 20, 0.5],
+  'posture.diveSpeed': [0, 20, 0.5],
+  'posture.accel': [100, 6000, 100],
+  'posture.fallDrag': [0, 0.5, 0.01],
+  'posture.airFriction': [0, 0.2, 0.005],
+  'posture.leanDeg': [0, 60, 1],
+  'posture.flapRateMin': [0.1, 3, 0.05],
+  'posture.flapRateMax': [0.1, 3, 0.05],
   'visibility.minLandmarkVisibility': [0, 1, 0.05],
   'visibility.frameMargin': [0, 0.1, 0.005],
   'visibility.emaAlpha': [0.05, 1, 0.05],
+  'visibility.forearmInFrame': [0, 1, 0.05],
   'visibility.lostAfterMs': [0, 2000, 50],
   'visibility.armLostAfterMs': [0, 3000, 50],
   'visibility.recoverAfterMs': [0, 2000, 50],
@@ -82,7 +94,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'audio.fallMs': [100, 5000, 50],
 };
 
-const SECTIONS = ['flap', 'glide', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'player', 'audio'] as const;
+const SECTIONS = ['posture', 'flap', 'glide', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'player', 'audio'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {
@@ -97,13 +109,15 @@ export class Tuning {
         const r = RANGES[`${section}.${key}`];
         if (section === 'flap' && key === 'invertSideFlap') {
           folder.add(obj, key).name('Invert side-flap');
+        } else if (section === 'posture' && key === 'enabled') {
+          folder.add(obj, key).name('Posture control (off = flapping)');
         } else if (r) {
           folder.add(obj, key, r[0], r[1], r[2]);
         } else {
           folder.add(obj, key);
         }
       }
-      if (section !== 'flap' && section !== 'glide' && section !== 'shoot') folder.close();
+      if (section !== 'posture' && section !== 'flap' && section !== 'glide' && section !== 'shoot') folder.close();
     }
     this.gui.add({ save: () => saveConfig() }, 'save').name('💾 save to this browser');
     this.gui.add({ copy: () => navigator.clipboard?.writeText(JSON.stringify(config, null, 2)) }, 'copy').name('📋 copy as JSON');

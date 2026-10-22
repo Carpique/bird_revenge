@@ -42,6 +42,8 @@ export class Keyboard {
       flapping: flap || base.flapping,
       // diving right = the arm line falling to the right = negative tilt
       glideTilt: glide ? -steer * config.keyboard.diveTilt : base.glideTilt,
+      // Shift is the keyboard's own glide, so it takes over from the posture
+      posture: glide ? null : base.posture,
     };
   }
 }

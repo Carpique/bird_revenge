@@ -7,6 +7,7 @@ import { STEP_MS } from '../src/game/physics';
 import { armElevation, hipAbduction, kneeAngle } from '../src/gestures/geometry';
 import { ShootDetector } from '../src/gestures/ShootDetector';
 import { VisibilityMonitor } from '../src/gestures/VisibilityMonitor';
+import { L } from '../src/pose/landmarks';
 import { frames, synthPose } from './synthetic';
 
 const flapAngle = (t: number, hz: number, lo = 20, hi = 150) =>
@@ -201,6 +202,20 @@ describe('VisibilityMonitor', () => {
     const out = run(m, frames(1000, () => ({})));
     expect(out[0].inFrame).toBe(false);
     expect(out[out.length - 1].inFrame).toBe(true);
+  });
+
+  it('does not need the hands, only the elbows and the start of the forearms', () => {
+    const cut = (f: ReturnType<typeof frames>[number], wristY: number) => {
+      for (const i of [L.leftWrist, L.rightWrist]) f.lm[i] = { ...f.lm[i], y: wristY, v: 0.1 };
+      for (const i of [L.leftElbow, L.rightElbow]) f.lm[i] = { ...f.lm[i], y: 0.1 };
+      return f;
+    };
+    // hands just above the frame: most of the forearm still in view
+    const handsOut = run(new VisibilityMonitor(), frames(1000, () => ({ armLeft: 170, armRight: 170 })).map((f) => cut(f, -0.05)));
+    expect(handsOut[handsOut.length - 1].inFrame).toBe(true);
+    // forearms leave the frame right at the elbow
+    const forearmsOut = run(new VisibilityMonitor(), frames(1000, () => ({ armLeft: 170, armRight: 170 })).map((f) => cut(f, -0.4)));
+    expect(forearmsOut[forearmsOut.length - 1].parts.leftArm.visible).toBe(false);
   });
 
   it('does not need the legs', () => {

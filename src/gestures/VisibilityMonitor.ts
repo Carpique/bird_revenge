@@ -61,7 +61,12 @@ export class VisibilityMonitor {
     for (const name of PART_NAMES) {
       const timer = this.parts[name];
       const st = timer.status;
-      st.raw = !!f && PART_LANDMARKS[name].every((i) => isVisible(f.lm[i], cfg.minLandmarkVisibility, cfg.frameMargin));
+      st.raw =
+        !!f &&
+        PART_LANDMARKS[name].every((i) => isVisible(f.lm[i], cfg.minLandmarkVisibility, cfg.frameMargin)) &&
+        (name === 'leftArm' ? forearmInFrame(f, L.leftElbow, L.leftWrist)
+          : name === 'rightArm' ? forearmInFrame(f, L.rightElbow, L.rightWrist)
+          : true);
       st.score = cfg.emaAlpha * (st.raw ? 1 : 0) + (1 - cfg.emaAlpha) * st.score;
 
       if (st.score < cfg.lostBelow) {
@@ -84,6 +89,14 @@ export class VisibilityMonitor {
     const box = f ? upperBodyBox(f) : null;
     return { personDetected: this.personDetected, parts, inFrame, box, hint: makeHint(this.personDetected, parts, box, f) };
   }
+}
+
+/** The first `visibility.forearmInFrame` of the forearm (elbow → estimated wrist) lies inside the frame. */
+function forearmInFrame(f: PoseFrame, elbow: number, wrist: number): boolean {
+  const { forearmInFrame: k, frameMargin: m } = config.visibility;
+  const e = f.lm[elbow], w = f.lm[wrist];
+  const x = e.x + k * (w.x - e.x), y = e.y + k * (w.y - e.y);
+  return x >= m && x <= 1 - m && y >= m && y <= 1 - m;
 }
 
 function upperBodyBox(f: PoseFrame) {

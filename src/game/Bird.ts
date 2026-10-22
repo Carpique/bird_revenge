@@ -6,6 +6,7 @@ import type { Branch } from '../scenery/scenery';
 import { landingBranch } from './branches';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { glideStep } from './glide';
+import { postureLean, postureStep } from './posture';
 import { BIRD_GROUP, Bodies, Body, forceFor, type MBody } from './physics';
 
 type BirdAnim = keyof typeof birdDef.animations;
@@ -35,6 +36,8 @@ export class Bird {
   private death: Death | null = null;
   /** gliding in the air this step (it does nothing on the ground or a branch) */
   private gliding = false;
+  /** posture control is steering the bird this step */
+  private posturing = false;
   /** current lean while gliding, radians (eased towards the arm line) */
   private bankAngle = 0;
   /** sitting on a tree branch (set by `perchOn` after each physics step) */
@@ -149,10 +152,20 @@ export class Bird {
     }
     const b = this.body;
     this.invulnT = Math.max(0, this.invulnT - stepMs);
-    this.gliding = c.glideTilt !== null && !this.onGround;
-    b.frictionAir = this.gliding ? config.glide.airFriction : config.physics.birdAirFriction;
+    const p = c.posture;
+    // flying can take off from the ground or a branch; the rest only acts in the air
+    this.posturing = p !== null && (p.mode === 'fly' || !this.onGround);
+    this.gliding = !this.posturing && c.glideTilt !== null && !this.onGround;
+    b.frictionAir =
+      this.posturing && p!.mode !== 'fall' ? config.posture.airFriction
+      : this.gliding ? config.glide.airFriction
+      : config.physics.birdAirFriction;
     let antiGravity = 0;
-    if (this.gliding) {
+    if (this.posturing) {
+      const g = postureStep(b.velocity, p!, stepMs);
+      Body.setVelocity(b, { x: g.x, y: g.y });
+      if (g.holdUp) antiGravity = config.physics.gravity * 1000;
+    } else if (this.gliding) {
       const g = glideStep(b.velocity, c.glideTilt!, stepMs);
       Body.setVelocity(b, { x: g.x, y: g.y });
       // Matter applies the full gravity itself; the parachute holds against it
@@ -187,7 +200,10 @@ export class Bird {
       return;
     }
     // lean with the player's arm line while gliding (screen rotation is clockwise, the tilt is anticlockwise)
-    const bankTo = this.gliding && c.glideTilt !== null ? (-c.glideTilt * config.glide.bank * Math.PI) / 180 : 0;
+    const bankTo =
+      this.posturing && c.posture ? (postureLean(c.posture) * Math.PI) / 180
+      : this.gliding && c.glideTilt !== null ? (-c.glideTilt * config.glide.bank * Math.PI) / 180
+      : 0;
     this.bankAngle += 0.2 * (bankTo - this.bankAngle);
     this.view.rotation = this.bankAngle;
     const b = this.body;
@@ -195,7 +211,10 @@ export class Bird {
     if (Math.abs(b.velocity.x) > 0.4) this.facing = b.velocity.x > 0 ? 'right' : 'left';
     this.sprite.setFacing(this.facing);
 
-    if (this.onGround && c.lift < 50 && !c.flapping) this.sprite.play('idle');
+    const p = this.posturing ? c.posture : null;
+    // posture control: flap while the arms push the bird up or sideways, faster the faster it flies
+    if (p?.mode === 'fly' && p.speed > 0) this.sprite.play('flap', config.posture.flapRateMin + (config.posture.flapRateMax - config.posture.flapRateMin) * p.speed);
+    else if (this.onGround && c.lift < 50 && !c.flapping) this.sprite.play('idle');
     else if (c.wingPhase !== null) this.sprite.showPhase('flap', c.wingPhase);
     else if (c.flapping) this.sprite.play('flap');
     else this.sprite.showPhase('flap', 0.5); // gliding

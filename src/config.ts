@@ -32,6 +32,11 @@ export const config = {
     recoverAbove: 0.7,
     /** how long a part must stay below `lostBelow` before it is declared lost */
     lostAfterMs: 400,
+    /**
+     * an arm counts as visible with its elbow in view plus this fraction of the forearm (elbow → wrist, using the
+     * wrist position MediaPipe estimates even off-frame), so raised hands may leave the frame
+     */
+    forearmInFrame: 0.2,
     /** arms get longer, since hands briefly leave the frame at the top of a big flap */
     armLostAfterMs: 800,
     recoverAfterMs: 300,
@@ -129,6 +134,42 @@ export const config = {
     diveAccel: 2400,
     /** how much the bird leans with the arm line while gliding (1 = exactly like the arms, 0 = upright) */
     bank: 0.8,
+  },
+
+  /**
+   * "posture" control, an alternative to flapping + glide (`enabled` switches between them). Each arm's angle
+   * above or below horizontal steers the bird directly:
+   * - the higher arm, raised above horizontal, sets the speed (straight up = full speed)
+   * - the other arm sets the direction: level → sideways towards it, as high as the speed arm → straight up,
+   *   in between → diagonally; below horizontal → the lift is lost and the bird dives towards it, steeper the lower it is
+   * - both arms level (a T) → parachute (as the glide: `glide.sinkSpeed`, `glide.parachuteDrag`)
+   * - no arm above horizontal, one below → free fall, the momentum fades
+   */
+  posture: {
+    /** on: posture control. off: flapping + glide */
+    enabled: true,
+    /** EMA factor for the arm angles per pose frame (lower = steadier, laggier) */
+    smoothing: 0.4,
+    /** arm angles within ±this (deg) of horizontal count as level */
+    deadZone: 10,
+    /** arm angle above horizontal (deg) for full speed; also the below-horizontal angle for a straight-down dive */
+    fullRaise: 80,
+    /** flying speed at full raise, px per physics step */
+    flySpeed: 8,
+    /** dive speed at full raise, px per physics step (gravity adds to it; capped by physics.maxSpeed) */
+    diveSpeed: 10,
+    /** how quickly the bird reaches the flying/dive speed, px/s² */
+    accel: 1800,
+    /** free fall: fraction of the sideways and upward speed lost per physics step */
+    fallDrag: 0.08,
+    /** Matter.js frictionAir while flying, diving or in the parachute (free fall: physics.birdAirFriction) */
+    airFriction: 0.01,
+    /** how far the bird leans (deg) flying flat out sideways; up to twice that in a straight-down dive */
+    leanDeg: 30,
+    /** wing flapping while flying (up or sideways), as a multiple of the flap animation's fps: at the slowest... */
+    flapRateMin: 0.6,
+    /** ...and at full speed */
+    flapRateMax: 1.4,
   },
 
   physics: {
