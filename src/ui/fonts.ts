@@ -5,10 +5,13 @@ export const HAND_FONT = '"Patrick Hand", "Comic Sans MS", cursive';
 /** 19th-century poster style (Didone "fat face") font for the game title and menu. */
 export const TITLE_FONT = '"Abril Fatface", "Didot", "Bodoni 72", Georgia, serif';
 
+/** Polish letters, so the fonts' Latin Extended subsets get loaded too. */
+const SAMPLE = 'Aaąćęłńóśźż';
+
 /** Wait for the web fonts (index.html) so PixiJS text is rasterised with the right glyphs. */
 export async function loadFonts() {
   try {
-    await Promise.all([document.fonts.load('40px "Patrick Hand"'), document.fonts.load('40px "Abril Fatface"')]);
+    await Promise.all([document.fonts.load('40px "Patrick Hand"', SAMPLE), document.fonts.load('40px "Abril Fatface"', SAMPLE)]);
   } catch {
     /* fallback fonts */
   }

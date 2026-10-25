@@ -19,6 +19,8 @@ import { DebugPanel } from './ui/DebugPanel';
 import { loadFonts } from './ui/fonts';
 import { FrameGuide, type GuideState } from './ui/FrameGuide';
 import { FullscreenButton } from './ui/FullscreenButton';
+import { t, type Msg } from './ui/i18n';
+import { LanguageButton } from './ui/LanguageButton';
 import { Recorder } from './ui/Recorder';
 import { SplashScreen } from './ui/SplashScreen';
 import { Tuning } from './ui/Tuning';
@@ -58,10 +60,10 @@ async function main() {
   const guide = new FrameGuide(document.getElementById('guide') as HTMLCanvasElement, video);
 
   let state: AppState = 'loading';
-  /** camera / pose model status, shown in the calibration dialog */
+  /** camera / pose model status, shown in the calibration dialog (already translated) */
   let poseError: string | null = null;
   /** the camera stopped working after it had started; it's being retried */
-  let cameraError: string | null = null;
+  let cameraError: Msg | null = null;
   let manualPause = false;
   let countdownEnd = 0;
   let gameOverEnd = 0;
@@ -94,17 +96,20 @@ async function main() {
       return;
     }
     const gs: GuideState = { mode: 'hidden', frame, vis };
-    if (state === 'loading') Object.assign(gs, { mode: 'loading', message: 'Loading…' });
+    if (state === 'loading') Object.assign(gs, { mode: 'loading', message: t('Loading…') });
     else if (state === 'calibrating' && poseError)
-      Object.assign(gs, { mode: 'calibrate', title: 'No camera', message: poseError, error: true, hint: 'Press Esc to play with the keyboard' });
+      Object.assign(gs, { mode: 'calibrate', title: t('No camera'), message: poseError, error: true, hint: t('Press Esc to play with the keyboard') });
     else if (state === 'calibrating' && cameraError)
-      Object.assign(gs, { mode: 'calibrate', title: cameraError, message: 'Reconnecting…', hint: 'Press Esc to play with the keyboard' });
+      Object.assign(gs, { mode: 'calibrate', title: t(cameraError), message: t('Reconnecting…'), hint: t('Press Esc to play with the keyboard') });
     else if (state === 'calibrating' && (!cameraOn || !tracker))
-      Object.assign(gs, { mode: 'calibrate', title: 'Getting ready', message: cameraOn ? 'Loading pose model…' : 'Starting camera…' });
+      Object.assign(gs, { mode: 'calibrate', title: t('Getting ready'), message: t(cameraOn ? 'Loading pose model…' : 'Starting camera…') });
     else if (state === 'calibrating')
-      Object.assign(gs, { mode: 'calibrate', message: calibStatus?.message ?? 'Get into view', progress: calibStatus?.progress });
+      Object.assign(gs, { mode: 'calibrate', message: calibStatus?.message ?? t('Get into view'), progress: calibStatus?.progress });
     else if (state === 'outOfFrame')
-      Object.assign(gs, { mode: 'outOfFrame', message: cameraError ? `${cameraError} – reconnecting…` : (vis?.hint ?? 'Get into view') });
+      Object.assign(gs, {
+        mode: 'outOfFrame',
+        message: cameraError ? t('{error} – reconnecting…', { error: t(cameraError) }) : (vis?.hint ?? t('Get into view')),
+      });
     else if (state === 'countdown') Object.assign(gs, { mode: 'countdown', countdown: (countdownEnd - now) / 1000 });
     guide.draw(gs, now);
     requestAnimationFrame(drawGuide);
@@ -124,6 +129,7 @@ async function main() {
   const corner = document.getElementById('corner')!;
   new FullscreenButton(corner);
   const volume = new VolumeButton(corner);
+  const language = new LanguageButton();
   const keyboard = new Keyboard();
   const visibility = new VisibilityMonitor();
   const flap = new FlapDetector();
@@ -198,8 +204,8 @@ async function main() {
           await startCamera(video, onCameraLost);
         } catch (e) {
           console.error(e);
-          if (isPermissionError(e)) poseError = 'Camera access was blocked';
-          else if (!navigator.mediaDevices?.getUserMedia) poseError = e instanceof Error ? e.message : String(e);
+          if (isPermissionError(e)) poseError = t('Camera access was blocked');
+          else if (!navigator.mediaDevices?.getUserMedia) poseError = t('Camera API not available (the page must be served from localhost or https).');
           else {
             cameraError ??= 'Camera unavailable';
             scheduleRetry();
@@ -361,6 +367,7 @@ async function main() {
     game.paused = manualPause || !(state === 'playing' || state === 'outOfFrame' || state === 'keyboard' || state === 'gameOver');
     game.showPausedText = manualPause;
     splash.visible = state === 'menu';
+    language.visible = splash.visible;
     game.root.visible = !splash.visible;
 
     const mode = state === 'keyboard' || poseError ? 'keyboard' : 'pose';
@@ -393,7 +400,7 @@ async function main() {
   } catch (e) {
     console.error(e);
     const msg = e instanceof Error ? e.message : String(e);
-    poseError = `Could not start pose tracking: ${msg}`;
+    poseError = t('Could not start pose tracking: {error}', { error: msg });
     clearTimeout(retryTimer);
     cameraOff();
   }

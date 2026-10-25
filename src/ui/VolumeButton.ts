@@ -1,4 +1,5 @@
 import { audio } from '../audio/audio';
+import { i18n, t } from './i18n';
 
 const SPEAKER = '<path d="M4 9h4l5-4v14l-5-4H4z"/>';
 const WAVE_LOW = '<path d="M16.5 9.5a3.5 3.5 0 0 1 0 5"/>';
@@ -29,7 +30,6 @@ export class VolumeButton {
     s.min = '0';
     s.max = '100';
     s.tabIndex = -1;
-    s.setAttribute('aria-label', 'Volume');
     s.addEventListener('input', () => {
       audio.setVolume(Number(s.value) / 100, false);
       this.update();
@@ -47,6 +47,7 @@ export class VolumeButton {
     document.addEventListener('pointerdown', (e) => {
       if (!wrap.contains(e.target as Node)) this.popup.hidden = true;
     });
+    i18n.onChange(() => this.update());
     this.update();
   }
 
@@ -60,7 +61,8 @@ export class VolumeButton {
   private update() {
     const silent = audio.muted || audio.volume === 0;
     this.slider.value = String(Math.round((audio.muted ? 0 : audio.volume) * 100));
-    this.button.setAttribute('aria-label', silent ? 'Sound off' : 'Volume');
+    this.button.setAttribute('aria-label', t(silent ? 'Sound off' : 'Volume'));
+    this.slider.setAttribute('aria-label', t('Volume'));
     const waves = silent ? CROSS : audio.volume < 0.5 ? WAVE_LOW : WAVE_LOW + WAVE_HIGH;
     this.button.innerHTML =
       `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" ` +

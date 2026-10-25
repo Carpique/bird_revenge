@@ -4,6 +4,7 @@ import { PART_NAMES, REQUIRED_PARTS, SKELETON, type PartName } from '../pose/lan
 import type { PoseFrame } from '../pose/types';
 import { scenery } from '../scenery/scenery';
 import { HAND_FONT as FONT } from './fonts';
+import { t } from './i18n';
 
 export type GuideMode = 'hidden' | 'loading' | 'calibrate' | 'outOfFrame' | 'countdown';
 
@@ -89,13 +90,13 @@ export class FrameGuide {
       case 'loading':
         ctx.fillStyle = scenery.skyColor;
         ctx.fillRect(0, 0, W, H);
-        this.text(s.message ?? 'Loading…', W / 2, H / 2, 34, INK);
+        this.text(s.message ?? t('Loading…'), W / 2, H / 2, 34, INK);
         break;
       case 'countdown':
         ctx.fillStyle = 'rgba(255,255,255,0.45)';
         ctx.fillRect(0, 0, W, H);
         this.text(String(Math.max(1, Math.ceil(s.countdown ?? 0))), W / 2, H / 2, 180, INK);
-        this.text('Get ready to flap!', W / 2, H / 2 + 120, 34, INK);
+        this.text(t('Get ready to flap!'), W / 2, H / 2 + 120, 34, INK);
         break;
       case 'calibrate':
         this.drawCalibrateDialog(s, W, H, now);
@@ -136,7 +137,7 @@ export class FrameGuide {
     const pad = textSize * 0.8;
     const barH = Math.max(8, h * 0.025);
     const cx = box.x + w / 2;
-    this.text(s.title ?? 'Stand in the outline', cx, box.y + pad + titleSize / 2, titleSize, INK, w - 2 * pad);
+    this.text(s.title ?? t('Stand in the outline'), cx, box.y + pad + titleSize / 2, titleSize, INK, w - 2 * pad);
 
     const poseTop = box.y + pad * 1.5 + titleSize;
     const footer = textSize * 1.5 + (s.hint ? textSize * 1.3 : 0) + barH + pad * 1.5;
@@ -180,7 +181,7 @@ export class FrameGuide {
     const pad = textSize * 0.6;
     const ctx = this.ctx;
     ctx.font = `${textSize}px ${FONT}`;
-    const lines = this.wrap(s.message ?? 'Get back in frame!', box.w - 2 * pad);
+    const lines = this.wrap(s.message ?? t('Get back in frame!'), box.w - 2 * pad);
     const lineH = textSize * 1.15;
     const textTop = box.y + box.h - pad - lines.length * lineH;
 

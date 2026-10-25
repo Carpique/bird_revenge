@@ -5,6 +5,7 @@ import { noControls, type Controls } from '../input/controls';
 import { fitWorld } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
 import { HAND_FONT as FONT, titleStyle } from '../ui/fonts';
+import { i18n, t } from '../ui/i18n';
 import { Apple } from './Apple';
 import { Background } from './Background';
 import { Bird } from './Bird';
@@ -102,12 +103,19 @@ export class Game {
     this.world.addChild(this.background, this.actors, this.fx, this.top, this.front);
     this.root.addChild(this.world, this.hud);
 
-    this.scoreText = new Text({ text: 'Score: 0', style: { fontFamily: FONT, fontSize: 40, fill: '#2b2b2b' } });
+    this.scoreText = new Text({ text: '', style: { fontFamily: FONT, fontSize: 40, fill: '#2b2b2b' } });
     this.scoreText.position.set(24, 14);
     this.hearts.position.set(WORLD.width - 24, 14);
     this.buildHearts();
-    this.pausedText = bigText('Pause');
-    this.gameOverText = bigText('Game Over');
+    this.pausedText = bigText('');
+    this.gameOverText = bigText('');
+    const relabel = () => {
+      this.updateScoreText();
+      this.pausedText.text = t('Pause');
+      this.gameOverText.text = t('Game Over');
+    };
+    i18n.onChange(relabel);
+    relabel();
     this.gameOverText.visible = false;
     this.hud.addChild(this.scoreText, this.hearts, this.pausedText, this.gameOverText);
 
@@ -127,7 +135,7 @@ export class Game {
   /** Start a new game: score, lives, bird, villain and poos back to the start. */
   reset() {
     this.score = 0;
-    this.scoreText.text = 'Score: 0';
+    this.updateScoreText();
     this.lives = config.player.lives;
     this.buildHearts();
     this.over = false;
@@ -354,9 +362,13 @@ export class Game {
     }
   }
 
+  private updateScoreText() {
+    this.scoreText.text = t('Score: {score}', { score: this.score });
+  }
+
   private addScore(points: number, x: number, y: number) {
     this.score += points;
-    this.scoreText.text = `Score: ${this.score}`;
+    this.updateScoreText();
     const text = new Text({
       text: points > 0 ? `+${points}` : `${points}`,
       style: { fontFamily: FONT, fontSize: 44, fill: points > 0 ? '#2f8a3c' : '#c0392b', stroke: { color: '#fff', width: 5 } },

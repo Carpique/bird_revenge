@@ -13,6 +13,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #eef3f4; fon
   background: rgba(255,255,255,0.75); border: 2px solid #333; border-radius: 10px; }
 .corner-button:hover { background: #fff; }
 .corner-button[hidden] { display: none; }
+/* language flag, top-left, title screen only */
+#language { position: fixed; top: 10px; left: 10px; z-index: 1002; }
+#language svg { display: block; box-shadow: 0 0 0 1px rgba(0,0,0,0.35); }
 #volume { position: relative; }
 .volume-popup { position: absolute; top: 48px; right: 0; padding: 10px 12px;
   background: rgba(255,255,255,0.9); border: 2px solid #333; border-radius: 10px; }

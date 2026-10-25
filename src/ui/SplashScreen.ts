@@ -5,28 +5,28 @@ import { Ground } from '../game/Ground';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { fitWorld } from '../render/fitWorld';
 import { ACCENT, HAND_FONT, INK, TITLE_FONT, titleStyle } from './fonts';
+import { i18n, t, type Msg } from './i18n';
 
-type Page = 'main' | 'instructions' | 'scores';
+type Page = 'main' | 'instructions';
 
 interface MenuItem {
-  label: string;
+  /** the page it opens, so coming back keeps it selected */
+  page?: Page;
+  label: Msg;
   action: () => void;
 }
 
-const PAGE_TEXT: Record<Exclude<Page, 'main'>, string> = {
-  instructions: [
-    'Flap both arms to fly up.',
-    'Flap one arm (or one faster than the other) to fly sideways.',
-    'Spread your arms in a T to glide down slowly — tilt them to dive that way.',
-    'Shoot: raise a leg sideways to drop a poo — it flies that way.',
-    'Hit the villain to score!',
-    "Don't touch him — it costs you one of your 3 lives.",
-    '',
-    'Stand back so your arms and hips are in view.',
-    'Keyboard: ↑ flap · ← → steer · Shift glide (+ ← → dive) · ↓ poo · Space pause',
-  ].join('\n'),
-  scores: 'No scores yet.\nRounds and high scores are coming soon.',
-};
+const INSTRUCTIONS: (Msg | '')[] = [
+  'Flap both arms to fly up.',
+  'Flap one arm (or one faster than the other) to fly sideways.',
+  'Spread your arms in a T to glide down slowly — tilt them to dive that way.',
+  'Shoot: raise a leg sideways to drop a poo — it flies that way.',
+  'Hit the villain to score!',
+  "Don't touch him — it costs you one of your 3 lives.",
+  '',
+  'Stand back so your arms and hips are in view.',
+  'Keyboard: ↑ flap · ← → steer · Shift glide (+ ← → dive) · ↓ poo · Space pause',
+];
 
 /**
  * Title screen drawn in the game world (1280x720): sky, the game's ground, the title and the
@@ -39,6 +39,7 @@ export class SplashScreen extends Container {
   private items: MenuItem[] = [];
   private selected = 0;
   private menu = new Container();
+  private tagline: Text;
   private pageText: Text;
   private cursors: CharacterSprite<keyof typeof birdDef.animations>[] = [];
   private t = 0;
@@ -50,20 +51,21 @@ export class SplashScreen extends Container {
 
     root.addChild(new Ground());
 
-    const title = new Text({ text: 'Bird Revenge', style: titleStyle(150) });
+    const title = new Text({ text: '', style: titleStyle(150) });
     title.anchor.set(0.5);
     title.position.set(WORLD.width / 2, 170);
 
-    const tagline = new Text({ text: 'flap · shoot · splat', style: { fontFamily: HAND_FONT, fontSize: 34, fill: '#555' } });
+    const tagline = (this.tagline = new Text({ text: '', style: { fontFamily: HAND_FONT, fontSize: 34, fill: '#555' } }));
     tagline.anchor.set(0.5);
     tagline.position.set(WORLD.width / 2, 275);
 
     this.pageText = new Text({
       text: '',
-      style: { fontFamily: HAND_FONT, fontSize: 30, fill: INK, align: 'center', lineHeight: 36 },
+      style: { fontFamily: HAND_FONT, fontSize: 28, fill: INK, align: 'center', lineHeight: 32 },
     });
     this.pageText.anchor.set(0.5, 0);
-    this.pageText.position.set(WORLD.width / 2, 320);
+    // the instructions take the tagline's place, so they end above the Back button
+    this.pageText.position.set(WORLD.width / 2, 258);
 
     // a small flapping bird on each side of the selected item
     for (const facing of ['right', 'left'] as const) {
@@ -81,7 +83,13 @@ export class SplashScreen extends Container {
       fitWorld(app, root);
       if (this.visible) this.animate(ticker.deltaMS);
     });
-    this.showPage('main');
+    const relabel = () => {
+      title.text = t('Bird Revenge');
+      tagline.text = t("Sun is shining, yet it's raining...");
+      this.showPage(this.page);
+    };
+    i18n.onChange(relabel);
+    relabel();
   }
 
   private showPage(page: Page) {
@@ -91,22 +99,23 @@ export class SplashScreen extends Container {
       this.pageText.text = '';
       this.items = [
         { label: 'Start', action: () => this.onStart() },
-        { label: 'Instructions', action: () => this.showPage('instructions') },
-        { label: 'Scores', action: () => this.showPage('scores') },
+        { page: 'instructions', label: 'Instructions', action: () => this.showPage('instructions') },
       ];
     } else {
-      this.pageText.text = PAGE_TEXT[page];
+      this.pageText.text = INSTRUCTIONS.map((line) => line && t(line)).join('\n');
       this.items = [{ label: 'Back', action: () => this.showPage('main') }];
     }
-    this.buildMenu(page === 'main' ? 370 : 585);
-    // coming back to the main menu, keep the item we came from selected
-    this.select(page === 'main' ? Math.max(0, this.items.findIndex((it) => it.label.toLowerCase() === from)) : 0);
+    this.tagline.visible = page === 'main';
+    this.buildMenu(page === 'main' ? 370 : 590);
+    // coming back to the main menu, keep the item we came from selected (also when re-labelled)
+    const keep = from === page ? this.selected : this.items.findIndex((it) => it.page === from);
+    this.select(Math.max(0, keep));
   }
 
   private buildMenu(top: number) {
     for (const c of this.menu.removeChildren()) c.destroy();
     this.items.forEach((item, i) => {
-      const text = new Text({ text: item.label, style: { fontFamily: TITLE_FONT, fontSize: 54, fill: INK } });
+      const text = new Text({ text: t(item.label), style: { fontFamily: TITLE_FONT, fontSize: 54, fill: INK } });
       text.anchor.set(0.5);
       text.position.set(WORLD.width / 2, top + i * 82);
       text.eventMode = 'static';

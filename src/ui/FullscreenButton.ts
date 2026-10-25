@@ -1,3 +1,5 @@
+import { i18n, t } from './i18n';
+
 const ENTER_ICON =
   '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>';
 const EXIT_ICON =
@@ -20,6 +22,7 @@ export class FullscreenButton {
     b.addEventListener('mousedown', (e) => e.preventDefault());
     b.addEventListener('click', () => this.toggle());
     document.addEventListener('fullscreenchange', () => this.update());
+    i18n.onChange(() => this.update());
     this.update();
     parent.appendChild(b);
   }
@@ -31,7 +34,7 @@ export class FullscreenButton {
 
   private update() {
     const full = !!document.fullscreenElement;
-    this.button.setAttribute('aria-label', full ? 'Exit full screen' : 'Full screen');
+    this.button.setAttribute('aria-label', t(full ? 'Exit full screen' : 'Full screen'));
     this.button.innerHTML =
       `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" ` +
       `stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${full ? EXIT_ICON : ENTER_ICON}</svg>`;

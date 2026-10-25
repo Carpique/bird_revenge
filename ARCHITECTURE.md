@@ -136,7 +136,9 @@ Even with heuristics we need recorded data: to tune thresholds, to test detector
 - Deliberately unobtrusive: a small box in the **lower right corner** (portrait 3:4, 30% of the screen height; shows the middle strip of the camera view, the hint wraps) with a **blinking frame**, shown automatically when a part is lost and hidden as soon as the pose is reacquired.
 - No camera image: the box uses the game's sky colour as background and shows only the **target outline** and the player's live **skeleton**, plus the short text hint.
 
-**Splash screen** [DECIDED]: title "Bird Revenge" (Abril Fatface, a Didone "fat face" in the style of 19th-century French posters), menu **Start / Instructions / Scores** (arrow keys + Enter, Esc back, or mouse), the game's sky colour and the same `Ground` as the game. Camera and pose model load in the background while it is shown. Scores is a placeholder until rounds exist.
+**Splash screen** [DECIDED]: title "Bird Revenge" (Abril Fatface, a Didone "fat face" in the style of 19th-century French posters), menu **Start / Instructions** (arrow keys + Enter, Esc back, or mouse), the game's sky colour and the same `Ground` as the game. Camera and pose model load in the background while it is shown.
+
+**Languages** [DECIDED]: English and Polish ("Zemsta Ptaka"). Only user-facing text is translated: the code passes the English text to `t()` (`src/ui/i18n.ts`), which looks up the Polish in one typed table, so a missing translation is a type error. A flag in the top-left corner of the splash screen (hidden during the game) switches language; the choice is saved in `localStorage`, defaulting to Polish. Debug panel, tuning GUI and the status line stay English.
 
 **Calibration dialog** [DECIDED, replaces the v0.1 full-screen camera view]:
 - After **Start**, a portrait dialog (80% of the screen height, 3:4, centred; the schematic shows the middle strip of the camera view) over the paused game shows the same schematic as the out-of-frame box: game-sky background, **target outline** and the player's live skeleton, no camera image. It also shows camera/model loading and camera errors ("Press K to play with the keyboard"). A camera that fails to start — at page load or after a pause / focus loss (e.g. not ready yet after the laptop wakes; the Vite dev server also reloads the page then) — or whose stream ends on its own is **retried with backoff** (0.5 s doubling to 5 s) and shown as "Reconnecting…" (in the out-of-frame box during a game) instead of a permanent error; only a blocked camera permission is final. When calibration succeeds it closes, the countdown runs and the game starts. The outline has **arms lowered, slightly away from the body** [DECIDED] (a natural rest pose; headroom for flapping is covered by the longer arm "lost" delay below).
@@ -198,7 +200,7 @@ src/game/                   Game.ts (Pixi stage + Matter engine + scoring), Bird
 src/characters/, src/scenery/   art definition files (§6)
 src/render/                 assets.ts (loads everything named in the definitions), CharacterSprite.ts, fitWorld.ts (scales the 1280x720 world into the window)
 src/input/                  controls.ts (Controls interface), keyboard.ts
-src/ui/                     SplashScreen.ts (title + menu), FrameGuide.ts (calibration dialog, out-of-frame corner box, countdown overlay), fonts.ts, DebugPanel.ts (D), Tuning.ts (G), Recorder.ts (R)
+src/ui/                     SplashScreen.ts (title + menu), i18n.ts (English → Polish texts), LanguageButton.ts (flag), FrameGuide.ts (calibration dialog, out-of-frame corner box, countdown overlay), fonts.ts, DebugPanel.ts (D), Tuning.ts (G), Recorder.ts (R)
 tests/                      synthetic.ts (synthetic pose generator), gestures.test.ts
 tools/generate-placeholder-art.mjs, scripts/copy-mediapipe-wasm.mjs
 ```

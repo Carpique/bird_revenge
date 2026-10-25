@@ -1,6 +1,7 @@
 import { config } from '../config';
 import { L, PART_LANDMARKS, PART_NAMES, REQUIRED_PARTS, type PartName } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
+import { t } from '../ui/i18n';
 import { isVisible } from './geometry';
 
 export interface PartStatus {
@@ -121,21 +122,21 @@ function makeHint(
   box: VisibilityOutput['box'],
   f: PoseFrame | null,
 ): string | null {
-  if (!person) return 'Step in front of the camera';
+  if (!person) return t('Step in front of the camera');
   const cfg = config.visibility;
   const armsLost = !parts.leftArm.visible || !parts.rightArm.visible;
   const h = box ? box.maxY - box.minY : 0;
   // hips below the frame edge: too close (or camera too high)
   const hipsBelow = !!f && Math.max(f.lm[L.leftHip].y, f.lm[L.rightHip].y) > 1 - cfg.frameMargin;
-  if (!parts.torso.visible && hipsBelow) return 'Step back — your hips are out of view';
+  if (!parts.torso.visible && hipsBelow) return t('Step back — your hips are out of view');
   if (box && armsLost) {
     // box is in camera coords; on the mirrored screen left/right swap
     const centre = 1 - (box.minX + box.maxX) / 2;
-    if (centre < 0.4) return 'Move right — an arm is out of view';
-    if (centre > 0.6) return 'Move left — an arm is out of view';
-    return 'Step back — your arms are out of view';
+    if (centre < 0.4) return t('Move right — an arm is out of view');
+    if (centre > 0.6) return t('Move left — an arm is out of view');
+    return t('Step back — your arms are out of view');
   }
-  if (!parts.torso.visible) return 'Face the camera';
-  if (box && h < cfg.minUpperBodyHeight) return 'Come a bit closer';
+  if (!parts.torso.visible) return t('Face the camera');
+  if (box && h < cfg.minUpperBodyHeight) return t('Come a bit closer');
   return null;
 }
