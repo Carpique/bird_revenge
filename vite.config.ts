@@ -1,6 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 const AUDIO_DIR = 'public/assets/audio';
 
@@ -31,8 +32,13 @@ function audioFiles(): Plugin {
   };
 }
 
-export default defineConfig({
-  base: './',
-  plugins: [audioFiles()],
-  server: { port: 5173, open: true },
+// `npm run dev:lan`: HTTPS on the local network, so phones and tablets can use the camera
+// (browsers only allow the camera on https or localhost). The certificate is self-signed.
+export default defineConfig(({ mode }) => {
+  const lan = mode === 'lan';
+  return {
+    base: './',
+    plugins: lan ? [audioFiles(), basicSsl()] : [audioFiles()],
+    server: { port: 5173, open: !lan, host: lan },
+  };
 });

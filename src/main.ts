@@ -117,7 +117,6 @@ async function main() {
   const game = new Game(app);
   const splash = new SplashScreen(app);
   app.stage.addChild(splash);
-  const help = document.getElementById('help')!;
   const status = document.getElementById('status')!;
   const debug = new DebugPanel(video);
   const tuning = new Tuning();
@@ -363,7 +362,6 @@ async function main() {
     game.showPausedText = manualPause;
     splash.visible = state === 'menu';
     game.root.visible = !splash.visible;
-    help.hidden = state === 'menu' || state === 'loading';
 
     const mode = state === 'keyboard' || poseError ? 'keyboard' : 'pose';
     const rec = recorder.recording ? `  ● REC ${recorder.seconds.toFixed(0)}s` : '';
