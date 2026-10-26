@@ -11,7 +11,7 @@ import type { Branch, FriendKind, JointDef, LevelDef, Material, Shape } from './
  * | Branch    | polyline                       | one-way platform, one per segment         |
  * | Rope      | point                          | rope from the point to `body`             |
  * | Hinge     | point                          | `body` pinned at the point                |
- * | Villain   | point                          | a villain starting at that x              |
+ * | Villain   | polyline                       | a villain walking its x range, on what's under its first point, starting there |
  * | Friend    | point                          | a friend to save, standing on the point   |
  * | BirdStart | point                          | where the bird starts                     |
  *
@@ -76,7 +76,7 @@ export const CLASS_DEFAULTS = {
   Branch: {},
   Rope: { body: 0, to: 0, length: 0, stiffness: 1 },
   Hinge: { body: 0, to: 0, stiffness: 1 },
-  Villain: {},
+  Villain: { throwDelay: 4 },
   Friend: { kind: 'bunny' },
   BirdStart: {},
 } as const;
@@ -168,10 +168,17 @@ function addObject(level: LevelDef, o: TiledObject) {
       level.joints.push(joint);
       break;
     }
-    case 'Villain':
-      requirePoint(o);
-      level.villains.push({ x: o.x });
+    case 'Villain': {
+      const throwDelay = num(p.throwDelay);
+      if (throwDelay < 0) throw new Error('"throwDelay" can\'t be negative (0 = never throws)');
+      if (!o.polyline) throw new Error('a Villain must be a polyline: his path');
+      const pts = pointsOf(o, o.polyline);
+      const xs = pts.map(([x]) => x);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs);
+      if (x0 === x1) throw new Error('a Villain path needs some width');
+      level.villains.push({ x: pts[0][0], y: pts[0][1], path: { x0, x1 }, throwDelay });
       break;
+    }
     case 'Friend': {
       requirePoint(o);
       const kind = String(p.kind) as FriendKind;
@@ -219,9 +226,14 @@ function shapeOf(o: TiledObject): Shape {
   return { kind: 'rect', x: cx, y: cy, width: o.width, height: o.height, angle: a };
 }
 
-function branchesOf(o: TiledObject): Branch[] {
+/** A polyline's or polygon's points in world coordinates. */
+function pointsOf(o: TiledObject, pts: { x: number; y: number }[]): [number, number][] {
   const a = ((o.rotation ?? 0) * Math.PI) / 180;
-  const pts = o.polyline!.map((v) => add(o, rotate(v.x, v.y, a)));
+  return pts.map((v) => add(o, rotate(v.x, v.y, a)));
+}
+
+function branchesOf(o: TiledObject): Branch[] {
+  const pts = pointsOf(o, o.polyline!);
   const out: Branch[] = [];
   for (let i = 1; i < pts.length; i++) {
     if (pts[i][0] === pts[i - 1][0]) throw new Error('a Branch segment can\'t be vertical');

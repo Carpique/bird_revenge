@@ -202,11 +202,9 @@ export const config = {
     /** random time he walks before stopping for a moment (only while on screen) */
     minWalkMs: 1200,
     maxWalkMs: 4000,
-    /** random length of a stop; afterwards he walks on (in a random direction only when hiding under cover) */
+    /** random length of a stop; afterwards he walks on the same way */
     minPauseMs: 300,
     maxPauseMs: 1200,
-    /** the bird closer than this horizontally (% of the screen width): he runs for the nearest cover and keeps under it */
-    hideDistancePct: 20,
     /** how long the "hit" pose is held before he's knocked off the screen */
     hitShowMs: 300,
     /** knock-off: upward speed of the little hop (px per physics step) */
@@ -217,16 +215,16 @@ export const config = {
     fallSideSpeed: 1.5,
     /** knock-off: scale gained per second, as if flying towards the camera */
     fallGrowth: 0.6,
-    respawnDelayMs: 1500,
   },
 
   /** the villain throws apples at the bird */
   apple: {
     /** flight speed (px per physics step); apples fly in a straight line, no gravity. Constant for now, may grow as the game goes on */
     speed: 5,
-    /** random time between throws, counted only while he hides from the bird (on screen, not running for cover) */
-    minIntervalMs: 2500,
-    maxIntervalMs: 6000,
+    /**
+     * time between throws is random within ± this fraction of the villain's `throwDelay` (set per villain in Tiled)
+     */
+    intervalSpread: 0.4,
     /** before a throw he stops and turns to the bird this long: the player's warning */
     windupMs: 400,
     /** random aim error, ± degrees */

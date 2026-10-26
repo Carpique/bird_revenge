@@ -143,6 +143,11 @@
             "drawFill": true,
             "id": 7,
             "members": [
+                {
+                    "name": "throwDelay",
+                    "type": "float",
+                    "value": 4
+                }
             ],
             "name": "Villain",
             "type": "class",

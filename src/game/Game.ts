@@ -1,5 +1,6 @@
 import { Application, Container, Text } from 'pixi.js';
 import { audio } from '../audio/audio';
+import { splatHalfWidth } from '../characters/poo';
 import { villainHitbox } from '../characters/villain';
 import { config, WORLD } from '../config';
 import { noControls, type Controls } from '../input/controls';
@@ -15,10 +16,12 @@ import { Background } from './Background';
 import { Bird } from './Bird';
 import { Friend } from './Friend';
 import { landingBranch } from './branches';
-import { coversUnder, mergeCovers, type Cover } from './cover';
 import { Bodies, Composite, Engine, Events, Query, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
 import { Poo } from './Poo';
-import { Villain } from './Villain';
+import { Villain, type Span } from './Villain';
+
+/** how far (px) a surface may be from a villain's feet and still be what he walks on */
+const SURFACE_TOLERANCE = 8;
 
 interface Popup {
   text: Text;
@@ -49,7 +52,7 @@ export class Game {
 
   private engine: MEngine;
   private world = new Container();
-  /** the walking villain */
+  /** the walking villains */
   private actors = new Container();
   /** the friends to save: behind the villain */
   private friendLayer = new Container();
@@ -69,10 +72,9 @@ export class Game {
   private levelBodies: MBody[] = [];
   /** the level's branches the bird can sit on */
   private branches: readonly Branch[] = [];
-  /** where the villain can hide from the bird: under the branches and the terrain above his head */
-  private levelCovers: readonly Cover[] = [];
   private bird: Bird;
-  private villain: Villain;
+  /** the level's villains; a knocked-off one stays (gone) until the level restarts */
+  private villains: Villain[] = [];
   private poos: Poo[] = [];
   private apples: Apple[] = [];
   private friends: Friend[] = [];
@@ -114,16 +116,13 @@ export class Game {
     ]);
 
     this.bird = new Bird(this.birdStart().x);
-    this.villain = new Villain(this.villainStart());
-    this.villain.onThrow = (x, y) => this.throwApple(x, y);
-    Composite.add(this.engine.world, [this.bird.body, this.villain.body]);
+    Composite.add(this.engine.world, this.bird.body);
 
     Events.on(this.engine, 'collisionStart', (e) => {
       for (const pair of e.pairs) this.onCollision(pair);
     });
 
     // layers
-    this.actors.addChild(this.villain.view);
     this.top.addChild(this.bird.view);
     this.world.addChild(this.background, this.levelLayer, this.friendLayer, this.actors, this.fx, this.top, this.front);
     this.root.addChild(this.world, this.hud);
@@ -187,7 +186,17 @@ export class Game {
     this.bird.respawn(start.x, start.y, false);
     Composite.remove(this.engine.world, this.bird.body); // no-op unless it was left in
     Composite.add(this.engine.world, this.bird.body);
-    this.villain.reset(this.villainStart());
+    for (const v of this.villains) {
+      Composite.remove(this.engine.world, v.body);
+      v.view.destroy();
+    }
+    this.villains = this.level.villains.map((def) => {
+      const v = new Villain(def);
+      v.onThrow = (x, y) => this.throwApple(x, y);
+      Composite.add(this.engine.world, v.body);
+      this.actors.addChildAt(v.view, 0);
+      return v;
+    });
     for (const p of this.poos) {
       p.stopSound();
       Composite.remove(this.engine.world, p.body);
@@ -218,20 +227,10 @@ export class Game {
     this.levelLayer.addChild(this.levelView);
     this.levelBodies = this.built.bodies.map((b) => b.body);
     this.branches = this.level.branches;
-    const head = WORLD.groundY - villainHitbox.height;
-    const overhead = this.built.bodies
-      .filter((b) => b.def.kind === 'terrain' && b.body.bounds.max.y < head)
-      .map((b) => ({ x0: b.body.bounds.min.x, x1: b.body.bounds.max.x }));
-    this.levelCovers = mergeCovers([...coversUnder(this.branches), ...overhead]);
-    if (this.level.villains.length > 1) console.warn(`Level "${this.level.name}": only one villain is supported for now, the first one plays`);
   }
 
   private birdStart() {
     return this.level.birdStart ?? { x: WORLD.width / 2, y: WORLD.groundY - config.physics.birdRadius };
-  }
-
-  private villainStart() {
-    return this.level.villains[0]?.x ?? 200;
   }
 
   private update(dtMs: number) {
@@ -268,10 +267,9 @@ export class Game {
       this.pooQueued = null;
     }
     this.bird.step(this.controls, STEP_MS, () => this.dropPoo());
-    const splatXs = this.poos.filter((p) => p.state === 'splat' && p.onGround).map((p) => p.view.x);
     const bp = this.bird.body.position;
-    const bird = this.bird.dying ? null : { x: bp.x, y: bp.y, r: config.physics.birdRadius };
-    this.villain.step(STEP_MS, { bird, splatXs, covers: this.covers() });
+    const bird = this.bird.dying ? null : { x: bp.x, y: bp.y };
+    for (const v of this.villains) v.step(STEP_MS, { bird, obstacles: this.villainObstacles(v.feet) });
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
     for (const f of this.friends) f.step(STEP_MS);
@@ -289,7 +287,7 @@ export class Game {
     this.saveFriends();
     // bird touching a walking villain costs a life
     const b = this.bird.body;
-    if (!this.bird.dying && !this.bird.invulnerable && this.villain.touches(b.position.x, b.position.y, config.physics.birdRadius)) {
+    if (!this.bird.dying && !this.bird.invulnerable && this.villains.some((v) => v.touches(b.position.x, b.position.y, config.physics.birdRadius))) {
       this.loseLife();
     }
     // ...and so does an apple
@@ -366,8 +364,34 @@ export class Game {
   }
 
   /** Stretches of ground sheltered from above right now. Static for now; moving obstacles would recompute them here each step. */
-  private covers(): readonly Cover[] {
-    return this.levelCovers;
+  /**
+   * What a villain with his feet at `feetY` won't walk into (crates move, so every step): the poo splats he'd step in,
+   * the level's bodies reaching into his height, and wherever there's nothing to stand on at his feet
+   * (all but the ground's or his shelf's top).
+   */
+  private villainObstacles(feetY: number): Span[] {
+    const near = (y: number) => Math.abs(y - feetY) <= SURFACE_TOLERANCE;
+    const head = feetY - villainHitbox.height;
+    const splats = this.poos
+      .filter((p) => p.state === 'splat' && near(p.view.y))
+      .map((p) => ({ x0: p.view.x - splatHalfWidth, x1: p.view.x + splatHalfWidth }));
+    const bodies = this.levelBodies
+      .filter((b) => b.bounds.max.y > head && b.bounds.min.y < feetY - SURFACE_TOLERANCE)
+      .map((b) => ({ x0: b.bounds.min.x, x1: b.bounds.max.x }));
+    if (near(WORLD.groundY)) return [...splats, ...bodies];
+    // off the ground: he stands only on the tops of bodies at his feet
+    const tops = this.levelBodies
+      .filter((b) => near(b.bounds.min.y))
+      .map((b) => ({ x0: b.bounds.min.x, x1: b.bounds.max.x }))
+      .sort((a, b) => a.x0 - b.x0);
+    const gaps: Span[] = [];
+    let from = -WORLD.width;
+    for (const t of tops) {
+      if (t.x0 > from) gaps.push({ x0: from, x1: t.x0 });
+      from = Math.max(from, t.x1);
+    }
+    gaps.push({ x0: from, x1: 2 * WORLD.width });
+    return [...splats, ...bodies, ...gaps];
   }
 
   /** How fast the villain's apples fly (px per physics step). Constant for now; could grow as the game goes on. */
@@ -409,12 +433,13 @@ export class Game {
     const poo = this.poos.find((p) => p.body === pooBody);
     if (!poo || poo.state !== 'falling') return;
 
-    if (other.label === 'villain' && this.villain.hittable) {
+    const villain = this.villains.find((v) => v.body === other);
+    if (villain?.hittable) {
       this.pending.push(() => {
         if (poo.state !== 'falling') return;
         poo.stopSound();
         audio.play('splat');
-        if (this.villain.hit()) {
+        if (villain.hit()) {
           this.addScore(config.score.villain, pooBody.position.x, pooBody.position.y);
           audio.play('bad-guy-dies');
           this.after(1000, () => audio.play('score'));
@@ -527,11 +552,13 @@ export class Game {
     dropIn(this.completeText, this.completeT, config.levelComplete.dropMs);
     this.levelView?.sync();
     this.bird.sync(this.controls);
-    this.villain.sync();
-    // the knocked-off villain flies towards the camera, in front of everything; walking, he's behind the bird
-    const v = this.villain.view;
-    if (this.villain.falling && v.parent !== this.front) this.front.addChild(v);
-    else if (!this.villain.falling && v.parent !== this.actors) this.actors.addChildAt(v, 0);
+    for (const villain of this.villains) {
+      villain.sync();
+      // the knocked-off villain flies towards the camera, in front of everything; walking, he's behind the bird
+      const v = villain.view;
+      if (villain.falling && v.parent !== this.front) this.front.addChild(v);
+      else if (!villain.falling && v.parent !== this.actors) this.actors.addChildAt(v, 0);
+    }
     for (const p of this.poos) p.sync();
     for (const a of this.apples) a.sync();
     for (const f of this.friends) f.sync();

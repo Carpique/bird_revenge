@@ -33,12 +33,14 @@ describe('Tiled levels', () => {
     const level = parseTiledMap('shelf', JSON.parse(shelfText));
     expect(level.width).toBe(1280);
     expect(level.height).toBe(720);
-    expect(level.villains).toEqual([{ x: 200 }]);
-    expect(level.friends).toEqual([
-      { kind: 'bunny', x: 740, y: 380 },
-      { kind: 'bunny', x: 1100, y: 640 },
+    expect(level.villains).toEqual([
+      // under the shelf (480..800), reaching 20% of its width beyond each of its ends
+      { x: 416, y: 640, path: { x0: 416, x1: 864 }, throwDelay: 4 },
+      // on it
+      { x: 480, y: 380, path: { x0: 480, x1: 800 }, throwDelay: 4 },
     ]);
-    expect(level.birdStart).toEqual({ x: 640, y: 606 });
+    expect(level.friends).toEqual([{ kind: 'bunny', x: 640, y: 640 }]);
+    expect(level.birdStart).toEqual({ x: 1100, y: 606 });
     expect(level.bodies).toHaveLength(1);
     expect(level.bodies[0]).toMatchObject({ kind: 'terrain', name: 'shelf', friction: 0.2, shape: { kind: 'rect', x: 640, y: 392, width: 320, height: 24 } });
   });
@@ -86,6 +88,30 @@ describe('Tiled levels', () => {
     ]);
     expect(() => parseTiledMap('t', mapOf([{ type: 'Friend', point: true, properties: [prop('kind', 'string', 'dragon')] }]))).toThrow('unknown friend kind "dragon"');
     expect(() => parseTiledMap('t', mapOf([{ type: 'Friend', width: 10, height: 10 }]))).toThrow('must be a point');
+  });
+
+  it('reads each villain\'s throw delay, 0 for one who never throws', () => {
+    const level = parseTiledMap(
+      't',
+      mapOf([
+        { type: 'Villain', x: 100, polyline: [{ x: 0, y: 0 }, { x: 50, y: 0 }] },
+        { type: 'Villain', x: 300, polyline: [{ x: 0, y: 0 }, { x: 50, y: 0 }], properties: [prop('throwDelay', 'float', 0)] },
+      ]),
+    );
+    expect(level.villains).toEqual([
+      { x: 100, y: 0, path: { x0: 100, x1: 150 }, throwDelay: 4 },
+      { x: 300, y: 0, path: { x0: 300, x1: 350 }, throwDelay: 0 },
+    ]);
+    expect(() => parseTiledMap('t', mapOf([{ type: 'Villain', polyline: [{ x: 0, y: 0 }, { x: 50, y: 0 }], properties: [prop('throwDelay', 'float', -1)] }]))).toThrow(
+      "can't be negative",
+    );
+  });
+
+  it('takes a Villain polyline\'s x range as his path, starting at its first point', () => {
+    const level = parseTiledMap('t', mapOf([{ type: 'Villain', x: 500, y: 640, polyline: [{ x: 0, y: 0 }, { x: -300, y: 0 }, { x: 100, y: 0 }] }]));
+    expect(level.villains).toEqual([{ x: 500, y: 640, path: { x0: 200, x1: 600 }, throwDelay: 4 }]);
+    expect(() => parseTiledMap('t', mapOf([{ type: 'Villain', polyline: [{ x: 0, y: 0 }, { x: 0, y: 50 }] }]))).toThrow('needs some width');
+    expect(() => parseTiledMap('t', mapOf([{ type: 'Villain', point: true }]))).toThrow('must be a polyline');
   });
 
   it('skips hidden layers', () => {

@@ -94,44 +94,60 @@
                  "type":"BirdStart",
                  "visible":true,
                  "width":0,
-                 "x":640,
+                 "x":1100,
                  "y":606
                 },
                 {
                  "height":0,
                  "id":4,
                  "name":"villain",
-                 "point":true,
+                 "polyline":[
+                        {
+                         "x":0,
+                         "y":0
+                        },
+                        {
+                         "x":448,
+                         "y":0
+                        }],
                  "rotation":0,
                  "type":"Villain",
                  "visible":true,
                  "width":0,
-                 "x":200,
+                 "x":416,
                  "y":640
-                },
-                {
-                 "height":0,
-                 "id":5,
-                 "name":"bunny on the shelf",
-                 "point":true,
-                 "rotation":0,
-                 "type":"Friend",
-                 "visible":true,
-                 "width":0,
-                 "x":740,
-                 "y":380
                 },
                 {
                  "height":0,
                  "id":6,
-                 "name":"bunny",
+                 "name":"bunny under the shelf",
                  "point":true,
                  "rotation":0,
                  "type":"Friend",
                  "visible":true,
                  "width":0,
-                 "x":1100,
+                 "x":640,
                  "y":640
+                },
+                {
+                 "height":0,
+                 "id":7,
+                 "name":"villain on the shelf",
+                 "polyline":[
+                        {
+                         "x":0,
+                         "y":0
+                        },
+                        {
+                         "x":320,
+                         "y":0
+                        }],
+                 "rotation":0,
+                 "type":"Villain",
+                 "visible":true,
+                 "width":0,
+                 "x":480,
+                 "y":380
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -140,7 +156,7 @@
          "y":0
         }],
  "nextlayerid":7,
- "nextobjectid":7,
+ "nextobjectid":8,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.11.2",

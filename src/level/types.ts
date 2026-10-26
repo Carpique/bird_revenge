@@ -71,14 +71,25 @@ export interface FriendDef {
   y: number;
 }
 
+/** A villain walking along the ground. */
+export interface VillainDef {
+  /** where he starts */
+  x: number;
+  /** where his feet are: the ground, or the top of what he walks on */
+  y: number;
+  /** the stretch of ground he walks back and forth (his centre stays within `x0`..`x1`) */
+  path: { x0: number; x1: number };
+  /** average time between his throws (s); 0 = he never throws */
+  throwDelay: number;
+}
+
 export interface LevelDef {
   name: string;
   width: number;
   height: number;
   /** where the bird starts (its centre), or null for the default spot */
   birdStart: { x: number; y: number } | null;
-  /** villains walk along the ground; only `x` matters */
-  villains: { x: number }[];
+  villains: VillainDef[];
   /** saving all of them completes the level (a level without any never ends) */
   friends: FriendDef[];
   bodies: BodyDef[];
