@@ -3,3 +3,5 @@ dist/
 public/mediapipe/
 .DS_Store
 *.log
+# Tiled keeps open files and window layout here (per user)
+*.tiled-session
