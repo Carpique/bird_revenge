@@ -8,7 +8,10 @@ import { armElevation, hipAbduction, kneeAngle } from '../src/gestures/geometry'
 import { ShootDetector } from '../src/gestures/ShootDetector';
 import { VisibilityMonitor } from '../src/gestures/VisibilityMonitor';
 import { L } from '../src/pose/landmarks';
+import { i18n } from '../src/ui/i18n';
 import { frames, synthPose } from './synthetic';
+
+i18n.set('en'); // hints are matched in English
 
 const flapAngle = (t: number, hz: number, lo = 20, hi = 150) =>
   lo + ((hi - lo) * (1 - Math.cos(2 * Math.PI * hz * (t / 1000)))) / 2;
@@ -78,7 +81,8 @@ describe('FlapDetector', () => {
     expect(left.side * (config.flap.invertSideFlap ? -1 : 1)).toBeGreaterThan(200);
     expect(right.side * (config.flap.invertSideFlap ? -1 : 1)).toBeLessThan(-200);
     const both = average((t) => ({ armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) }));
-    expect(left.lift).toBeLessThan(both.lift / 2);
+    // one arm: half the power, scaled by asymmetricLift (two arms hit maxLiftAccel at their peaks, so the ratio sits above that)
+    expect(left.lift).toBeLessThan(both.lift * config.flap.asymmetricLift);
   });
 
   it('one arm flapping twice as fast pushes sideways, while still lifting', () => {
