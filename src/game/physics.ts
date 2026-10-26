@@ -1,8 +1,10 @@
 import Matter from 'matter-js';
 
-export const { Engine, Bodies, Body, Composite, Events } = Matter;
+export const { Engine, Bodies, Body, Common, Composite, Constraint, Events, Query, Vertices } = Matter;
 export type MBody = Matter.Body;
+export type MConstraint = Matter.Constraint;
 export type MEngine = Matter.Engine;
+export type MPair = Matter.Pair;
 
 /** Fixed physics step (ms). */
 export const STEP_MS = 1000 / 60;

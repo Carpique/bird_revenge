@@ -2,12 +2,12 @@ import { Container } from 'pixi.js';
 import { birdDef, birdSquash } from '../characters/bird';
 import { config, WORLD } from '../config';
 import type { Controls } from '../input/controls';
-import type { Branch } from '../scenery/scenery';
+import type { Branch } from '../level/types';
 import { landingBranch } from './branches';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { glideStep } from './glide';
 import { postureLean, postureStep } from './posture';
-import { BIRD_GROUP, Bodies, Body, forceFor, type MBody } from './physics';
+import { BIRD_GROUP, Bodies, Body, forceFor, Query, type MBody } from './physics';
 
 type BirdAnim = keyof typeof birdDef.animations;
 
@@ -40,8 +40,10 @@ export class Bird {
   private posturing = false;
   /** current lean while gliding, radians (eased towards the arm line) */
   private bankAngle = 0;
-  /** sitting on a tree branch (set by `perchOn` after each physics step) */
+  /** sitting on a branch (set by `perchOn` after each physics step) */
   perched = false;
+  /** standing on a level body: a shelf, a crate (set by `standOn` after each physics step) */
+  private supported = false;
 
   constructor(x: number) {
     const r = config.physics.birdRadius;
@@ -55,13 +57,15 @@ export class Bird {
       frictionStatic: 0,
       frictionAir: config.physics.birdAirFriction,
       collisionFilter: { group: BIRD_GROUP },
+      // never sleeps: a sleeping body ignores the flap forces
+      sleepThreshold: Infinity,
     });
     this.view.addChild(this.sprite);
   }
 
-  /** standing on the ground or sitting on a branch */
+  /** standing on the ground or on something, or sitting on a branch */
   get onGround(): boolean {
-    if (this.perched) return true;
+    if (this.perched || this.supported) return true;
     const r = config.physics.birdRadius;
     return this.body.position.y >= WORLD.groundY - r - 1.5 && Math.abs(this.body.velocity.y) < 0.6;
   }
@@ -101,10 +105,24 @@ export class Bird {
     };
     this.squashT = null;
     this.perched = false;
+    this.supported = false;
   }
 
   /**
-   * Land on the tree branches, which hold the bird only from above (it flies up through them):
+   * Is the bird resting on one of `bodies` (shelves, crates)? Looks just under its bottom, straight down
+   * and a little to each side (so it also counts at the edge of a shelf).
+   */
+  standOn(bodies: readonly MBody[]) {
+    const b = this.body;
+    const r = config.physics.birdRadius;
+    this.supported =
+      !this.death &&
+      Math.abs(b.velocity.y) < 0.6 &&
+      [-0.6, 0, 0.6].some((k) => Query.point(bodies as MBody[], { x: b.position.x + k * r, y: b.position.y + r * Math.sqrt(1 - k * k) + 3 }).length > 0);
+  }
+
+  /**
+   * Land on the branches, which hold the bird only from above (it flies up through them):
    * when the bottom of the bird has crossed a branch's top edge going down during this step,
    * it is put back on top. `prevY` is where the bird's centre was before the step.
    */
@@ -128,6 +146,7 @@ export class Bird {
     this.squashT = null;
     this.death = null;
     this.perched = false;
+    this.supported = false;
     this.bankAngle = 0;
     this.invulnT = invulnerable ? config.player.invulnerableMs : 0;
   }

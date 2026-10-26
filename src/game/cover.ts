@@ -1,4 +1,4 @@
-import type { Branch } from '../scenery/scenery';
+import type { Branch } from '../level/types';
 
 /**
  * A stretch of ground sheltered from above (world px, `x0` < `x1`): something overhead catches the poos
@@ -9,7 +9,7 @@ export interface Cover {
   x1: number;
 }
 
-/** The ground under the branches, overlapping spans merged into one cover. */
+/** The ground under the branches, overlapping spans merged into one cover (add other spans with `mergeCovers`). */
 export function coversUnder(branches: readonly Branch[]): Cover[] {
   return mergeCovers(branches.map((br) => ({ x0: Math.min(br.from[0], br.to[0]), x1: Math.max(br.from[0], br.to[0]) })));
 }

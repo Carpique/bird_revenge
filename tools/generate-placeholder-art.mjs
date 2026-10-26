@@ -1,12 +1,12 @@
 // Generates the hand-drawn-looking PLACEHOLDER art into public/assets/ using Rough.js.
 // Run with `npm run art`. Replace the generated files with real drawings any time —
 // the game only knows the file paths listed in src/characters/*.ts and src/scenery/scenery.ts.
+// (Level obstacles aren't images: the game draws them from the level's shapes, see src/level/LevelView.ts.)
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import rough from 'roughjs';
-import { scenery } from '../src/scenery/scenery.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = (p) => join(root, 'public', 'assets', p);
@@ -189,41 +189,3 @@ write('scenery/cloud_1.svg', cloud(620, [[52, 70, 52], [94, 52, 70], [142, 46, 7
   write('scenery/ground.svg', svg(W, H + 20, d, 12));
 }
 
-// ---------------------------------------------------------------- trees (layout and perch branches come from src/scenery/scenery.ts)
-const GROUND_Y = 640;
-const bark = '#8a6440', leaves = '#7fae5e', leavesInk = '#4f7a3a';
-
-function tree(t, seed) {
-  // world -> image coordinates
-  const p = ([x, y]) => [x - t.left, y - t.top];
-  const d = [];
-  const fill = (s, color, extra = {}) => o(s, { fill: color, fillStyle: 'hachure', hachureGap: 5, fillWeight: 1.4, ...extra });
-  // branches first, so the trunk covers where they join it
-  t.branches.forEach((b, i) => {
-    const dir = Math.sign(b.to[0] - b.from[0]);
-    const back = [b.from[0] - dir * 14, b.from[1]];
-    // tapered: thick at the trunk, thin at the tip; the top edge is where the bird sits
-    d.push(gen.polygon([p(back), p(b.to), p([b.to[0], b.to[1] + 6]), p([back[0], back[1] + 18])], fill(seed + 10 + i * 7, bark, { hachureAngle: 20 })));
-    // a twig and a little bunch of leaves past the tip
-    const twig = [b.to[0] - dir * 30, b.to[1] + 2];
-    d.push(gen.line(...p(twig), ...p([twig[0] + dir * 22, twig[1] - 26]), o(seed + 11 + i * 7, { strokeWidth: 2.4, stroke: bark })));
-    d.push(gen.ellipse(...p([twig[0] + dir * 26, twig[1] - 32]), 34, 24, fill(seed + 12 + i * 7, leaves, { stroke: leavesInk, strokeWidth: 1.8 })));
-    d.push(gen.ellipse(...p([b.to[0] + dir * 12, b.to[1] + 8]), 30, 20, fill(seed + 13 + i * 7, leaves, { stroke: leavesInk, strokeWidth: 1.8 })));
-  });
-  // trunk, from just under the grass up to the crown
-  const w = t.trunkWidth;
-  d.push(gen.polygon([
-    p([t.trunkX - w / 2 - 8, GROUND_Y + 14]),
-    p([t.trunkX - w / 2, GROUND_Y - 30]),
-    p([t.trunkX - w * 0.2, t.trunkTop]),
-    p([t.trunkX + w * 0.2, t.trunkTop]),
-    p([t.trunkX + w / 2, GROUND_Y - 30]),
-    p([t.trunkX + w / 2 + 8, GROUND_Y + 14]),
-  ], fill(seed + 1, bark, { hachureAngle: 80, hachureGap: 6 })));
-  // a knot in the bark
-  d.push(gen.ellipse(...p([t.trunkX + 4, GROUND_Y - 120]), 10, 16, o(seed + 2, { strokeWidth: 1.6 })));
-  // crown
-  t.crown.forEach(([x, y, size], i) => d.push(gen.circle(...p([x, y]), size, fill(seed + 50 + i, leaves, { stroke: leavesInk, strokeWidth: 2, hachureGap: 6 }))));
-  return svg(t.width, t.height, d);
-}
-scenery.trees.forEach((t, i) => write(t.image.replace(/^assets\//, ''), tree(t, 900 + i * 100)));

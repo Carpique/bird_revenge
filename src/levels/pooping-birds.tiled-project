@@ -1,0 +1,166 @@
+{
+    "automappingRulesFile": "",
+    "commands": [
+    ],
+    "extensionsPath": "extensions",
+    "folders": [
+        "."
+    ],
+    "properties": [
+    ],
+    "propertyTypes": [
+        {
+            "id": 1,
+            "name": "Material",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "wood",
+                "stone",
+                "rubber",
+                "ice"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "color": "#ff8a6440",
+            "drawFill": true,
+            "id": 2,
+            "members": [
+                {
+                    "name": "friction",
+                    "type": "float",
+                    "value": 0.2
+                }
+            ],
+            "name": "Terrain",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffc79a6b",
+            "drawFill": true,
+            "id": 3,
+            "members": [
+                {
+                    "name": "density",
+                    "type": "float",
+                    "value": 0
+                },
+                {
+                    "name": "material",
+                    "propertyType": "Material",
+                    "type": "string",
+                    "value": "wood"
+                },
+                {
+                    "name": "sleeping",
+                    "type": "bool",
+                    "value": false
+                }
+            ],
+            "name": "Body",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff5e8a45",
+            "drawFill": true,
+            "id": 4,
+            "members": [
+            ],
+            "name": "Branch",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff2b2b2b",
+            "drawFill": true,
+            "id": 5,
+            "members": [
+                {
+                    "name": "body",
+                    "type": "object",
+                    "value": 0
+                },
+                {
+                    "name": "length",
+                    "type": "float",
+                    "value": 0
+                },
+                {
+                    "name": "stiffness",
+                    "type": "float",
+                    "value": 1
+                },
+                {
+                    "name": "to",
+                    "type": "object",
+                    "value": 0
+                }
+            ],
+            "name": "Rope",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff2b2b2b",
+            "drawFill": true,
+            "id": 6,
+            "members": [
+                {
+                    "name": "body",
+                    "type": "object",
+                    "value": 0
+                },
+                {
+                    "name": "stiffness",
+                    "type": "float",
+                    "value": 1
+                },
+                {
+                    "name": "to",
+                    "type": "object",
+                    "value": 0
+                }
+            ],
+            "name": "Hinge",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffc0392b",
+            "drawFill": true,
+            "id": 7,
+            "members": [
+            ],
+            "name": "Villain",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff2f8a3c",
+            "drawFill": true,
+            "id": 8,
+            "members": [
+            ],
+            "name": "BirdStart",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        }
+    ]
+}

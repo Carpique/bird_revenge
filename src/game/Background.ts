@@ -17,19 +17,12 @@ export class Background extends Container {
 
   constructor() {
     super();
-    const { sun, clouds, trees } = scenery;
+    const { sun, clouds } = scenery;
     this.addChild(spriteAt(sun.image, sun.x, sun.y, sun.height));
     for (const c of clouds) {
       const sprite = spriteAt(c.image, c.x, c.y, c.height);
       this.clouds.push({ sprite, speed: c.driftSpeed });
       this.addChild(sprite);
-    }
-    // in front of the clouds; the ground's grass covers the foot of the trunks
-    for (const t of trees) {
-      const s = new Sprite(tex(t.image));
-      s.scale.set(t.height / s.texture.height);
-      s.position.set(t.left, t.top);
-      this.addChild(s);
     }
     this.addChild(new Ground());
   }

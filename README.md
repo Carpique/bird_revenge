@@ -56,6 +56,13 @@ To use real drawings, replace those files (SVG or PNG) and/or edit the paths in:
 - `src/characters/poo.ts` — falling and splat frames
 - `src/scenery/scenery.ts` — sky colour, sun, clouds, ground
 
+## Levels
+
+Levels are [Tiled](https://www.mapeditor.org/) maps in `src/levels/` (`*.tmj`). Open `src/levels/pooping-birds.tiled-project`
+in Tiled first: it defines the object classes the game understands (Terrain, Body, Branch, Rope, Hinge, Villain, BirdStart —
+see `src/level/tiled.ts`). Play a level with `?level=<file name>` (default: `shelf`). With `npm run dev` running,
+saving a map swaps it into the running game.
+
 ## Tests
 
 ```bash

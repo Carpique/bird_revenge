@@ -1,7 +1,11 @@
 import { Application, Container, Text } from 'pixi.js';
 import { audio } from '../audio/audio';
+import { villainHitbox } from '../characters/villain';
 import { config, WORLD } from '../config';
 import { noControls, type Controls } from '../input/controls';
+import { buildLevel, type BuiltLevel } from '../level/build';
+import { LevelView } from '../level/LevelView';
+import type { Branch, LevelDef } from '../level/types';
 import { fitWorld } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
 import { HAND_FONT as FONT, titleStyle } from '../ui/fonts';
@@ -10,15 +14,10 @@ import { Apple } from './Apple';
 import { Background } from './Background';
 import { Bird } from './Bird';
 import { landingBranch } from './branches';
-import { coversUnder, type Cover } from './cover';
-import { Bodies, Composite, Engine, Events, STEP_MS, type MBody, type MEngine } from './physics';
+import { coversUnder, mergeCovers, type Cover } from './cover';
+import { Bodies, Composite, Engine, Events, Query, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
 import { Poo } from './Poo';
 import { Villain } from './Villain';
-
-/** every branch the bird can sit on */
-const BRANCHES = scenery.trees.flatMap((t) => t.branches);
-/** where the villain can hide from the bird: under the branches */
-const COVERS = coversUnder(BRANCHES);
 
 interface Popup {
   text: Text;
@@ -55,6 +54,16 @@ export class Game {
   private front = new Container();
   private hud = new Container();
   private background = new Background();
+  /** the level's shelves, crates, ropes: in front of the background, behind the villain */
+  private levelLayer = new Container();
+  private built: BuiltLevel = { bodies: [], joints: [] };
+  private levelView: LevelView | null = null;
+  /** the level's bodies, which the bird can stand on and apples stop at */
+  private levelBodies: MBody[] = [];
+  /** the level's branches the bird can sit on */
+  private branches: readonly Branch[] = [];
+  /** where the villain can hide from the bird: under the branches and the terrain above his head */
+  private levelCovers: readonly Cover[] = [];
   private bird: Bird;
   private villain: Villain;
   private poos: Poo[] = [];
@@ -74,9 +83,13 @@ export class Game {
   private pooQueued: number | null = null;
   private pooDir = 0;
 
-  constructor(private app: Application) {
+  constructor(
+    private app: Application,
+    private level: LevelDef,
+  ) {
     app.renderer.background.color = scenery.skyColor;
-    this.engine = Engine.create({ gravity: { x: 0, y: config.physics.gravity } });
+    // resting bodies sleep until something touches them (the bird never does)
+    this.engine = Engine.create({ gravity: { x: 0, y: config.physics.gravity }, enableSleeping: true });
 
     // static world bounds: ground, walls, ceiling. Only the ground has friction (the bird has none of its own),
     // so the bird doesn't stick to the walls or ceiling when pushed against them
@@ -88,19 +101,19 @@ export class Game {
       Bodies.rectangle(WORLD.width / 2, -60, WORLD.width * 3, 100, { ...opts, label: 'ceiling' }),
     ]);
 
-    this.bird = new Bird(WORLD.width / 2);
-    this.villain = new Villain(200);
+    this.bird = new Bird(this.birdStart().x);
+    this.villain = new Villain(this.villainStart());
     this.villain.onThrow = (x, y) => this.throwApple(x, y);
     Composite.add(this.engine.world, [this.bird.body, this.villain.body]);
 
     Events.on(this.engine, 'collisionStart', (e) => {
-      for (const pair of e.pairs) this.onCollision(pair.bodyA, pair.bodyB);
+      for (const pair of e.pairs) this.onCollision(pair);
     });
 
     // layers
     this.actors.addChild(this.villain.view);
     this.top.addChild(this.bird.view);
-    this.world.addChild(this.background, this.actors, this.fx, this.top, this.front);
+    this.world.addChild(this.background, this.levelLayer, this.actors, this.fx, this.top, this.front);
     this.root.addChild(this.world, this.hud);
 
     this.scoreText = new Text({ text: '', style: { fontFamily: FONT, fontSize: 40, fill: '#2b2b2b' } });
@@ -121,7 +134,7 @@ export class Game {
 
     app.stage.addChild(this.root);
     app.ticker.add((ticker) => this.update(ticker.deltaMS));
-    this.sync();
+    this.restartLevel();
   }
 
   /**
@@ -132,7 +145,7 @@ export class Game {
     if (!this.paused && !this.over) this.pooQueued = dir;
   }
 
-  /** Start a new game: score, lives, bird, villain and poos back to the start. */
+  /** Start a new game: score, lives, the level, bird, villain and poos back to the start. */
   reset() {
     this.score = 0;
     this.updateScoreText();
@@ -140,11 +153,24 @@ export class Game {
     this.buildHearts();
     this.over = false;
     this.overT = 0;
+    this.restartLevel();
+  }
+
+  /** Play another level, or a new version of this one (saved in the editor): from its start, keeping score and lives. */
+  loadLevel(level: LevelDef) {
+    this.level = level;
+    this.restartLevel();
+  }
+
+  /** The level, bird, villain and poos back to the start. */
+  private restartLevel() {
     this.pooQueued = null;
-    this.bird.respawn(WORLD.width / 2, WORLD.groundY - config.physics.birdRadius, false);
+    this.buildLevel();
+    const start = this.birdStart();
+    this.bird.respawn(start.x, start.y, false);
     Composite.remove(this.engine.world, this.bird.body); // no-op unless it was left in
     Composite.add(this.engine.world, this.bird.body);
-    this.villain.reset(200);
+    this.villain.reset(this.villainStart());
     for (const p of this.poos) {
       p.stopSound();
       Composite.remove(this.engine.world, p.body);
@@ -159,6 +185,33 @@ export class Game {
     this.timers = [];
     this.acc = 0;
     this.sync();
+  }
+
+  /** (Re)creates the level's bodies, joints and their drawing from `this.level`. */
+  private buildLevel() {
+    const world = this.engine.world;
+    Composite.remove(world, [...this.built.bodies.map((b) => b.body), ...this.built.joints.map((j) => j.constraint)]);
+    this.levelView?.destroy();
+    this.built = buildLevel(this.level);
+    Composite.add(world, [...this.built.bodies.map((b) => b.body), ...this.built.joints.map((j) => j.constraint)]);
+    this.levelView = new LevelView(this.level, this.built);
+    this.levelLayer.addChild(this.levelView);
+    this.levelBodies = this.built.bodies.map((b) => b.body);
+    this.branches = this.level.branches;
+    const head = WORLD.groundY - villainHitbox.height;
+    const overhead = this.built.bodies
+      .filter((b) => b.def.kind === 'terrain' && b.body.bounds.max.y < head)
+      .map((b) => ({ x0: b.body.bounds.min.x, x1: b.body.bounds.max.x }));
+    this.levelCovers = mergeCovers([...coversUnder(this.branches), ...overhead]);
+    if (this.level.villains.length > 1) console.warn(`Level "${this.level.name}": only one villain is supported for now, the first one plays`);
+  }
+
+  private birdStart() {
+    return this.level.birdStart ?? { x: WORLD.width / 2, y: WORLD.groundY - config.physics.birdRadius };
+  }
+
+  private villainStart() {
+    return this.level.villains[0]?.x ?? 200;
   }
 
   private update(dtMs: number) {
@@ -196,7 +249,8 @@ export class Game {
     const birdY = this.bird.body.position.y;
     const pooYs = new Map(this.poos.map((p) => [p, p.body.position.y]));
     Engine.update(this.engine, STEP_MS);
-    this.bird.perchOn(BRANCHES, birdY);
+    this.bird.perchOn(this.branches, birdY);
+    this.bird.standOn(this.levelBodies);
     this.landPoosOnBranches(pooYs);
     for (const fn of this.pending.splice(0)) fn();
     for (const t of this.timers) t.ms -= STEP_MS;
@@ -217,6 +271,8 @@ export class Game {
         this.loseLife();
       }
     }
+    // an apple stops at whatever of the level is in its way
+    for (const a of this.apples) if (a.state === 'flying' && Query.point(this.levelBodies, { x: a.x, y: a.y }).length) a.hit();
     // a falling poo knocks an apple out of the air: both blink out
     const hitR = config.physics.pooRadius + config.apple.radius;
     for (const p of this.poos) {
@@ -249,7 +305,7 @@ export class Game {
       const prevY = prevYs.get(p);
       if (p.state !== 'falling' || prevY === undefined || p.body.velocity.y < 0) continue;
       const pos = p.body.position;
-      const landing = landingBranch(BRANCHES, pos.x, prevY, pos.y, config.physics.pooRadius);
+      const landing = landingBranch(this.branches, pos.x, prevY, pos.y, config.physics.pooRadius);
       if (!landing) continue;
       const [x0, y0] = landing.branch.from, [x1, y1] = landing.branch.to;
       Composite.remove(this.engine.world, p.body);
@@ -260,7 +316,7 @@ export class Game {
 
   /** Stretches of ground sheltered from above right now. Static for now; moving obstacles would recompute them here each step. */
   private covers(): readonly Cover[] {
-    return COVERS;
+    return this.levelCovers;
   }
 
   /** How fast the villain's apples fly (px per physics step). Constant for now; could grow as the game goes on. */
@@ -293,7 +349,8 @@ export class Game {
     this.fx.addChild(poo.view);
   }
 
-  private onCollision(a: MBody, b: MBody) {
+  private onCollision(pair: MPair) {
+    const { bodyA: a, bodyB: b } = pair;
     const labels = [a.label, b.label];
     if (!labels.includes('poo')) return;
     const pooBody = a.label === 'poo' ? a : b;
@@ -321,6 +378,25 @@ export class Game {
         poo.splat();
         audio.play('splat');
       });
+    } else if (other.label === 'terrain') {
+      // lies along the surface it hit, where it touched (read now: Matter reuses the collision object)
+      const y = pair.collision.supports[0]?.y ?? pooBody.position.y + config.physics.pooRadius;
+      const angle = surfaceAngle(pair.collision.normal);
+      this.pending.push(() => {
+        if (poo.state !== 'falling') return;
+        Composite.remove(this.engine.world, pooBody);
+        poo.splat(y, angle);
+        audio.play('splat');
+      });
+    } else if (other.label === 'body') {
+      // a splat wouldn't stay on a moving thing: the poo just goes
+      this.pending.push(() => {
+        if (poo.state !== 'falling') return;
+        poo.stopSound();
+        audio.play('splat');
+        Composite.remove(this.engine.world, pooBody);
+        poo.state = 'done';
+      });
     }
   }
 
@@ -341,7 +417,7 @@ export class Game {
   /** The dead bird has left the screen: drop in a new one from the top, or it's game over. */
   private afterDeath() {
     if (this.lives > 0) {
-      this.bird.respawn(WORLD.width / 2, 120, true);
+      this.bird.respawn(this.birdStart().x, 120, true);
       Composite.add(this.engine.world, this.bird.body);
       return;
     }
@@ -400,6 +476,7 @@ export class Game {
     const k = Math.min(1, this.overT / Math.max(1, config.gameOver.dropMs));
     const top = -this.gameOverText.height / 2;
     this.gameOverText.y = top + (WORLD.height / 2 - top) * easeOutBounce(k);
+    this.levelView?.sync();
     this.bird.sync(this.controls);
     this.villain.sync();
     // the knocked-off villain flies towards the camera, in front of everything; walking, he's behind the bird
@@ -417,6 +494,14 @@ function bigText(text: string) {
   t.anchor.set(0.5);
   t.position.set(WORLD.width / 2, WORLD.height / 2);
   return t;
+}
+
+/** The angle of the surface with contact normal `n`, as a splat lying on it (between -90° and 90°). */
+function surfaceAngle(n: { x: number; y: number }): number {
+  let a = Math.atan2(n.x, -n.y);
+  if (a > Math.PI / 2) a -= Math.PI;
+  if (a < -Math.PI / 2) a += Math.PI;
+  return a;
 }
 
 const easeOutBounce = (x: number) => {

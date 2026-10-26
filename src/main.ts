@@ -2,6 +2,7 @@ import { Application } from 'pixi.js';
 import { audio } from './audio/audio';
 import { config, loadSavedConfig } from './config';
 import { Game } from './game/Game';
+import { currentLevel, onLevelEdited } from './levels';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
 import { FlapDetector, type FlapOutput } from './gestures/FlapDetector';
 import { GlideDetector, type GlideOutput } from './gestures/GlideDetector';
@@ -119,7 +120,9 @@ async function main() {
   await loadFonts();
   await loadAllAssets();
 
-  const game = new Game(app);
+  const game = new Game(app, currentLevel());
+  // saving the level in Tiled while the dev server runs swaps it in, without reloading the page
+  onLevelEdited((level) => game.loadLevel(level));
   const splash = new SplashScreen(app);
   app.stage.addChild(splash);
   const status = document.getElementById('status')!;
