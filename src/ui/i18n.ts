@@ -16,6 +16,8 @@ const PL = {
   'Spread your arms in a T to glide down slowly — tilt them to dive that way.':
     'Rozłóż ręce w literę T, żeby powoli szybować w dół — przechyl je, żeby zanurkować w tę stronę.',
   'Shoot: raise a leg sideways to drop a poo — it flies that way.': 'Strzał: unieś nogę w bok, żeby zrzucić kupę — poleci w tę stronę.',
+  'Fly into the little animals to save them — save them all to finish the level!':
+    'Wleć w zwierzątka, żeby je uratować — uratuj wszystkie, żeby przejść poziom!',
   'Hit the villain to score!': 'Traf złoczyńcę, żeby zdobyć punkt!',
   "Don't touch him — it costs you one of your 3 lives.": 'Nie dotykaj go — stracisz jedno z 3 żyć.',
   'Stand back so your arms and hips are in view.': 'Stań dalej, żeby kamera widziała twoje ręce i biodra.',
@@ -26,6 +28,7 @@ const PL = {
   'Score: {score}': 'Trafienia: {score}',
   Pause: 'Pauza',
   'Game Over': 'Koniec Gry',
+  'Hooray!': 'Hurra!',
 
   // overlays and the calibration dialog
   'Loading…': 'Ładowanie…',

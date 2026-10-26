@@ -54,14 +54,16 @@ To use real drawings, replace those files (SVG or PNG) and/or edit the paths in:
 - `src/characters/bird.ts` — idle frame, flap frames (ordered wings **down → up**), squash amounts
 - `src/characters/villain.ts` — walk cycle, hit frame, hitbox
 - `src/characters/poo.ts` — falling and splat frames
+- `src/characters/friend.ts` — the friends to save (the bunny: idle, blink and ear-twitch frames; how often they fidget)
 - `src/scenery/scenery.ts` — sky colour, sun, clouds, ground
 
 ## Levels
 
 Levels are [Tiled](https://www.mapeditor.org/) maps in `src/levels/` (`*.tmj`). Open `src/levels/pooping-birds.tiled-project`
-in Tiled first: it defines the object classes the game understands (Terrain, Body, Branch, Rope, Hinge, Villain, BirdStart —
-see `src/level/tiled.ts`). Play a level with `?level=<file name>` (default: `shelf`). With `npm run dev` running,
-saving a map swaps it into the running game.
+in Tiled first: it defines the object classes the game understands (Terrain, Body, Branch, Rope, Hinge, Villain, Friend, BirdStart —
+see `src/level/tiled.ts`). Saving all the Friends (points, standing on the ground or a shelf) completes a level; the
+levels are played in file name order, round and round. Start at another level with `?level=<file name>` (default: the
+first). With `npm run dev` running, saving a map swaps it into the running game.
 
 ## Tests
 

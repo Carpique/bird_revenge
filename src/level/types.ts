@@ -61,6 +61,16 @@ export interface JointDef {
   stiffness: number;
 }
 
+export type FriendKind = 'bunny';
+
+/** A little animal to save (the first kind of collectible): it sits still until the bird flies into it. */
+export interface FriendDef {
+  kind: FriendKind;
+  /** where its feet are */
+  x: number;
+  y: number;
+}
+
 export interface LevelDef {
   name: string;
   width: number;
@@ -69,6 +79,8 @@ export interface LevelDef {
   birdStart: { x: number; y: number } | null;
   /** villains walk along the ground; only `x` matters */
   villains: { x: number }[];
+  /** saving all of them completes the level (a level without any never ends) */
+  friends: FriendDef[];
   bodies: BodyDef[];
   branches: Branch[];
   joints: JointDef[];

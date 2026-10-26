@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Constraint, Engine, Composite } from '../src/game/physics';
 import { buildLevel } from '../src/level/build';
+import { nextLevel } from '../src/levels';
 import { CLASS_DEFAULTS, LevelError, parseTiledMap, type TiledMap, type TiledObject } from '../src/level/tiled';
 import projectText from '../src/levels/pooping-birds.tiled-project?raw';
 import shelfText from '../src/levels/shelf.tmj?raw';
@@ -33,6 +34,10 @@ describe('Tiled levels', () => {
     expect(level.width).toBe(1280);
     expect(level.height).toBe(720);
     expect(level.villains).toEqual([{ x: 200 }]);
+    expect(level.friends).toEqual([
+      { kind: 'bunny', x: 740, y: 380 },
+      { kind: 'bunny', x: 1100, y: 640 },
+    ]);
     expect(level.birdStart).toEqual({ x: 640, y: 606 });
     expect(level.bodies).toHaveLength(1);
     expect(level.bodies[0]).toMatchObject({ kind: 'terrain', name: 'shelf', friction: 0.2, shape: { kind: 'rect', x: 640, y: 392, width: 320, height: 24 } });
@@ -71,6 +76,16 @@ describe('Tiled levels', () => {
       { from: [300, 300], to: [400, 290] },
       { from: [400, 290], to: [450, 300] },
     ]);
+  });
+
+  it('reads friends, bunnies by default', () => {
+    const level = parseTiledMap('t', mapOf([{ type: 'Friend', x: 10, y: 20, point: true }, { type: 'Friend', x: 30, y: 40, point: true, properties: [prop('kind', 'string', 'bunny')] }]));
+    expect(level.friends).toEqual([
+      { kind: 'bunny', x: 10, y: 20 },
+      { kind: 'bunny', x: 30, y: 40 },
+    ]);
+    expect(() => parseTiledMap('t', mapOf([{ type: 'Friend', point: true, properties: [prop('kind', 'string', 'dragon')] }]))).toThrow('unknown friend kind "dragon"');
+    expect(() => parseTiledMap('t', mapOf([{ type: 'Friend', width: 10, height: 10 }]))).toThrow('must be a point');
   });
 
   it('skips hidden layers', () => {
@@ -142,5 +157,18 @@ describe('building a level', () => {
     expect(p.x).toBeCloseTo(100, 0);
     expect(p.y).toBeCloseTo(100, 0);
     expect(Math.abs(built.bodies[0].body.angle)).toBeGreaterThan(0.3);
+  });
+});
+
+describe('level order', () => {
+  const a = parseTiledMap('a', mapOf([]));
+  const b = parseTiledMap('b', mapOf([]));
+  const all = new Map([['a', a], ['b', b]]);
+
+  it('goes round in order', () => {
+    expect(nextLevel(all, 'a')).toBe(b);
+    expect(nextLevel(all, 'b')).toBe(a);
+    // a level that's gone (renamed while playing): the first
+    expect(nextLevel(all, 'gone')).toBe(a);
   });
 });

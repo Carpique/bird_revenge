@@ -94,7 +94,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'audio.fallMs': [100, 5000, 50],
 };
 
-const SECTIONS = ['posture', 'flap', 'glide', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'player', 'audio'] as const;
+const SECTIONS = ['posture', 'flap', 'glide', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'friend', 'player', 'audio'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {

@@ -270,12 +270,21 @@ export const config = {
 
   score: { villain: 1, pedestrian: -1 },
 
+  /** a saved friend grows to this many times its size while fading out, in this long */
+  friend: { savedScale: 3, savedMs: 2000 },
+
   countdownMs: 2000,
   gameOver: {
     /** the "Game Over" sign drops from the top to the middle in this long */
     dropMs: 1000,
     /** ...and the screen is shown this long (from the start of the drop) before a new game starts */
     showMs: 4000,
+  },
+  levelComplete: {
+    /** the "Hooray" sign drops from the top to the middle in this long */
+    dropMs: 1000,
+    /** ...and the next level starts this long after the last friend is saved */
+    nextMs: 3000,
   },
 };
 

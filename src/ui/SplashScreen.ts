@@ -21,9 +21,9 @@ const INSTRUCTIONS: (Msg | '')[] = [
   'Flap one arm (or one faster than the other) to fly sideways.',
   'Spread your arms in a T to glide down slowly — tilt them to dive that way.',
   'Shoot: raise a leg sideways to drop a poo — it flies that way.',
+  'Fly into the little animals to save them — save them all to finish the level!',
   'Hit the villain to score!',
   "Don't touch him — it costs you one of your 3 lives.",
-  '',
   'Stand back so your arms and hips are in view.',
   'Keyboard: ↑ flap · ← → steer · Shift glide (+ ← → dive) · ↓ poo · Space pause',
 ];

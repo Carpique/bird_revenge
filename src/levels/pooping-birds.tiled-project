@@ -161,6 +161,34 @@
             "useAs": [
                 "object"
             ]
+        },
+        {
+            "id": 9,
+            "name": "FriendKind",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "bunny"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "color": "#ffffb627",
+            "drawFill": true,
+            "id": 10,
+            "members": [
+                {
+                    "name": "kind",
+                    "propertyType": "FriendKind",
+                    "type": "string",
+                    "value": "bunny"
+                }
+            ],
+            "name": "Friend",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
         }
     ]
 }

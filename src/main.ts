@@ -2,7 +2,7 @@ import { Application } from 'pixi.js';
 import { audio } from './audio/audio';
 import { config, loadSavedConfig } from './config';
 import { Game } from './game/Game';
-import { currentLevel, onLevelEdited } from './levels';
+import { firstLevel, levels, nextLevel, onLevelEdited } from './levels';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
 import { FlapDetector, type FlapOutput } from './gestures/FlapDetector';
 import { GlideDetector, type GlideOutput } from './gestures/GlideDetector';
@@ -120,9 +120,17 @@ async function main() {
   await loadFonts();
   await loadAllAssets();
 
-  const game = new Game(app, currentLevel());
-  // saving the level in Tiled while the dev server runs swaps it in, without reloading the page
-  onLevelEdited((level) => game.loadLevel(level));
+  const game = new Game(app, firstLevel());
+  let allLevels = levels;
+  // all friends saved: on to the next level, keeping score and lives
+  game.onLevelComplete = () => game.loadLevel(nextLevel(allLevels, game.level.name));
+  // saving the level being played in Tiled while the dev server runs swaps it in, without reloading the page
+  onLevelEdited((next) => {
+    allLevels = next;
+    const level = next.get(game.level.name);
+    // a map saved broken is left out: the game keeps the version it has
+    if (level && JSON.stringify(level) !== JSON.stringify(game.level)) game.loadLevel(level);
+  });
   const splash = new SplashScreen(app);
   app.stage.addChild(splash);
   const status = document.getElementById('status')!;

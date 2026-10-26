@@ -1,4 +1,4 @@
-import type { Branch, JointDef, LevelDef, Material, Shape } from './types';
+import type { Branch, FriendKind, JointDef, LevelDef, Material, Shape } from './types';
 
 /**
  * Loads a map saved by the Tiled editor (JSON, `.tmj`) into a `LevelDef`.
@@ -12,6 +12,7 @@ import type { Branch, JointDef, LevelDef, Material, Shape } from './types';
  * | Rope      | point                          | rope from the point to `body`             |
  * | Hinge     | point                          | `body` pinned at the point                |
  * | Villain   | point                          | a villain starting at that x              |
+ * | Friend    | point                          | a friend to save, standing on the point   |
  * | BirdStart | point                          | where the bird starts                     |
  *
  * Objects without a class are ignored (handy for notes and guides); hidden layers and objects are skipped.
@@ -76,11 +77,13 @@ export const CLASS_DEFAULTS = {
   Rope: { body: 0, to: 0, length: 0, stiffness: 1 },
   Hinge: { body: 0, to: 0, stiffness: 1 },
   Villain: {},
+  Friend: { kind: 'bunny' },
   BirdStart: {},
 } as const;
 
 type ClassName = keyof typeof CLASS_DEFAULTS;
 const MATERIALS: readonly Material[] = ['wood', 'stone', 'rubber', 'ice'];
+const FRIEND_KINDS: readonly FriendKind[] = ['bunny'];
 
 export class LevelError extends Error {}
 
@@ -95,6 +98,7 @@ export function parseTiledMap(name: string, map: TiledMap): LevelDef {
     height: map.height * map.tileheight,
     birdStart: null,
     villains: [],
+    friends: [],
     bodies: [],
     branches: [],
     joints: [],
@@ -168,6 +172,13 @@ function addObject(level: LevelDef, o: TiledObject) {
       requirePoint(o);
       level.villains.push({ x: o.x });
       break;
+    case 'Friend': {
+      requirePoint(o);
+      const kind = String(p.kind) as FriendKind;
+      if (!FRIEND_KINDS.includes(kind)) throw new Error(`unknown friend kind "${kind}"`);
+      level.friends.push({ kind, x: o.x, y: o.y });
+      break;
+    }
     case 'BirdStart':
       requirePoint(o);
       if (level.birdStart) throw new Error('there is more than one BirdStart');

@@ -13,6 +13,7 @@ import { i18n, t } from '../ui/i18n';
 import { Apple } from './Apple';
 import { Background } from './Background';
 import { Bird } from './Bird';
+import { Friend } from './Friend';
 import { landingBranch } from './branches';
 import { coversUnder, mergeCovers, type Cover } from './cover';
 import { Bodies, Composite, Engine, Events, Query, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
@@ -39,6 +40,10 @@ export class Game {
   over = false;
   /** called once when the bird has fallen off the screen for the last time */
   onGameOver: (() => void) | null = null;
+  /** all friends saved; frozen behind "Hooray" until the next level loads */
+  complete = false;
+  /** called once, a while after the last friend is saved: time to load the next level */
+  onLevelComplete: (() => void) | null = null;
   /** latest controls; set by main from pose + keyboard */
   controls: Controls = noControls();
 
@@ -46,11 +51,13 @@ export class Game {
   private world = new Container();
   /** the walking villain */
   private actors = new Container();
+  /** the friends to save: behind the villain */
+  private friendLayer = new Container();
   /** poos and apples: in front of the villain, behind the bird */
   private fx = new Container();
   /** the bird, then score popups */
   private top = new Container();
-  /** in front of everything: the knocked-off villain flying towards the camera */
+  /** in front of everything: the knocked-off villain flying towards the camera, a saved friend growing */
   private front = new Container();
   private hud = new Container();
   private background = new Background();
@@ -68,6 +75,7 @@ export class Game {
   private villain: Villain;
   private poos: Poo[] = [];
   private apples: Apple[] = [];
+  private friends: Friend[] = [];
   private popups: Popup[] = [];
   private pending: (() => void)[] = [];
   /** things to do after a while, in game time (so they wait while paused) */
@@ -79,13 +87,17 @@ export class Game {
   private gameOverText: Text;
   /** ms since game over (drives the falling sign) */
   private overT = 0;
+  private completeText: Text;
+  /** ms since the last friend was saved (drives the falling sign and the next level) */
+  private completeT = 0;
   /** queued poo request: sideways direction (-1 left, 0 straight down, +1 right), or null */
   private pooQueued: number | null = null;
   private pooDir = 0;
 
   constructor(
     private app: Application,
-    private level: LevelDef,
+    /** the level being played; change it with `loadLevel` */
+    public level: LevelDef,
   ) {
     app.renderer.background.color = scenery.skyColor;
     // resting bodies sleep until something touches them (the bird never does)
@@ -113,7 +125,7 @@ export class Game {
     // layers
     this.actors.addChild(this.villain.view);
     this.top.addChild(this.bird.view);
-    this.world.addChild(this.background, this.levelLayer, this.actors, this.fx, this.top, this.front);
+    this.world.addChild(this.background, this.levelLayer, this.friendLayer, this.actors, this.fx, this.top, this.front);
     this.root.addChild(this.world, this.hud);
 
     this.scoreText = new Text({ text: '', style: { fontFamily: FONT, fontSize: 40, fill: '#2b2b2b' } });
@@ -122,15 +134,18 @@ export class Game {
     this.buildHearts();
     this.pausedText = bigText('');
     this.gameOverText = bigText('');
+    this.completeText = bigText('');
     const relabel = () => {
       this.updateScoreText();
       this.pausedText.text = t('Pause');
       this.gameOverText.text = t('Game Over');
+      this.completeText.text = t('Hooray!');
     };
     i18n.onChange(relabel);
     relabel();
     this.gameOverText.visible = false;
-    this.hud.addChild(this.scoreText, this.hearts, this.pausedText, this.gameOverText);
+    this.completeText.visible = false;
+    this.hud.addChild(this.scoreText, this.hearts, this.pausedText, this.gameOverText, this.completeText);
 
     app.stage.addChild(this.root);
     app.ticker.add((ticker) => this.update(ticker.deltaMS));
@@ -142,7 +157,7 @@ export class Game {
    * `dir` gives the poo a little sideways speed on screen: -1 left, 0 straight down, +1 right.
    */
   requestPoo(dir = 0) {
-    if (!this.paused && !this.over) this.pooQueued = dir;
+    if (!this.paused && !this.over && !this.complete) this.pooQueued = dir;
   }
 
   /** Start a new game: score, lives, the level, bird, villain and poos back to the start. */
@@ -162,9 +177,11 @@ export class Game {
     this.restartLevel();
   }
 
-  /** The level, bird, villain and poos back to the start. */
+  /** The level, bird, villain, friends and poos back to the start. */
   private restartLevel() {
     this.pooQueued = null;
+    this.complete = false;
+    this.completeT = 0;
     this.buildLevel();
     const start = this.birdStart();
     this.bird.respawn(start.x, start.y, false);
@@ -179,6 +196,9 @@ export class Game {
     this.poos = [];
     for (const a of this.apples) a.view.destroy();
     this.apples = [];
+    for (const f of this.friends) f.view.destroy();
+    this.friends = this.level.friends.map((def) => new Friend(def));
+    for (const f of this.friends) this.friendLayer.addChild(f.view);
     for (const p of this.popups) p.text.destroy();
     this.popups = [];
     this.pending = [];
@@ -218,12 +238,20 @@ export class Game {
     fitWorld(this.app, this.root);
     this.pausedText.visible = this.paused && this.showPausedText && !this.over;
     this.gameOverText.visible = this.over;
+    this.completeText.visible = this.complete;
     if (!this.paused && this.over) {
       this.overT += dtMs;
       this.background.update(dtMs);
+    } else if (!this.paused && this.complete) {
+      // the world stands still; the last friend fades out meanwhile
+      this.completeT += dtMs;
+      for (const f of this.friends) f.step(dtMs);
+      this.background.update(dtMs);
+      this.updatePopups(dtMs);
+      if (this.completeT >= config.levelComplete.nextMs) this.onLevelComplete?.();
     } else if (!this.paused) {
       this.acc += Math.min(dtMs, 100);
-      while (this.acc >= STEP_MS && !this.over) {
+      while (this.acc >= STEP_MS && !this.over && !this.complete) {
         this.step();
         this.acc -= STEP_MS;
       }
@@ -246,6 +274,7 @@ export class Game {
     this.villain.step(STEP_MS, { bird, splatXs, covers: this.covers() });
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
+    for (const f of this.friends) f.step(STEP_MS);
     const birdY = this.bird.body.position.y;
     const pooYs = new Map(this.poos.map((p) => [p, p.body.position.y]));
     Engine.update(this.engine, STEP_MS);
@@ -257,6 +286,7 @@ export class Game {
     const due = this.timers.filter((t) => t.ms <= 0);
     this.timers = this.timers.filter((t) => t.ms > 0);
     for (const t of due) t.fn();
+    this.saveFriends();
     // bird touching a walking villain costs a life
     const b = this.bird.body;
     if (!this.bird.dying && !this.bird.invulnerable && this.villain.touches(b.position.x, b.position.y, config.physics.birdRadius)) {
@@ -297,6 +327,27 @@ export class Game {
       a.view.destroy();
       return false;
     });
+  }
+
+  /** The bird flying into a friend saves it; saving the last one completes the level. */
+  private saveFriends() {
+    if (this.bird.dying) return;
+    const b = this.bird.body.position;
+    for (const f of this.friends) {
+      if (f.state !== 'waiting' || !f.touches(b.x, b.y, config.physics.birdRadius)) continue;
+      f.save();
+      this.front.addChild(f.view);
+      audio.play('friend');
+    }
+    if (this.friends.length && this.friends.every((f) => f.state !== 'waiting')) this.completeLevel();
+  }
+
+  /** All friends saved: everything stops, "Hooray" drops in, and a while later the next level starts (`onLevelComplete`). */
+  private completeLevel() {
+    this.complete = true;
+    this.completeT = 0;
+    this.pooQueued = null;
+    for (const p of this.poos) p.stopSound();
   }
 
   /** A falling poo that crossed a branch's top edge this step splats on the branch. `prevYs`: poo centres before the step. */
@@ -472,10 +523,8 @@ export class Game {
     this.hearts.children.forEach((h, i) => {
       h.visible = i < this.lives || (i === this.lives && deathMs !== null && Math.floor(deathMs / 120) % 2 === 0);
     });
-    // "Game Over" drops in from the top and bounces to a stop in the middle
-    const k = Math.min(1, this.overT / Math.max(1, config.gameOver.dropMs));
-    const top = -this.gameOverText.height / 2;
-    this.gameOverText.y = top + (WORLD.height / 2 - top) * easeOutBounce(k);
+    dropIn(this.gameOverText, this.overT, config.gameOver.dropMs);
+    dropIn(this.completeText, this.completeT, config.levelComplete.dropMs);
     this.levelView?.sync();
     this.bird.sync(this.controls);
     this.villain.sync();
@@ -485,15 +534,23 @@ export class Game {
     else if (!this.villain.falling && v.parent !== this.actors) this.actors.addChildAt(v, 0);
     for (const p of this.poos) p.sync();
     for (const a of this.apples) a.sync();
+    for (const f of this.friends) f.sync();
   }
 }
 
-/** Big sign in the middle of the screen ("Pause", "Game Over"), styled like the title. */
+/** Big sign in the middle of the screen ("Pause", "Game Over", "Hooray"), styled like the title. */
 function bigText(text: string) {
   const t = new Text({ text, style: titleStyle(180) });
   t.anchor.set(0.5);
   t.position.set(WORLD.width / 2, WORLD.height / 2);
   return t;
+}
+
+/** A big sign drops in from the top and bounces to a stop in the middle, `ms` into a drop lasting `dropMs`. */
+function dropIn(sign: Text, ms: number, dropMs: number) {
+  const k = Math.min(1, ms / Math.max(1, dropMs));
+  const top = -sign.height / 2;
+  sign.y = top + (WORLD.height / 2 - top) * easeOutBounce(k);
 }
 
 /** The angle of the surface with contact normal `n`, as a splat lying on it (between -90° and 90°). */
