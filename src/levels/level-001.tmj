@@ -32,7 +32,7 @@
          "name":"terrain",
          "objects":[
                 {
-                 "height":24,
+                 "height":16,
                  "id":2,
                  "name":"shelf",
                  "opacity":1,
@@ -41,7 +41,7 @@
                  "visible":true,
                  "width":320,
                  "x":480,
-                 "y":380
+                 "y":384
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -152,8 +152,8 @@
                  "type":"Villain",
                  "visible":true,
                  "width":0,
-                 "x":800.937931984781,
-                 "y":380.030289729964
+                 "x":800,
+                 "y":384
                 }],
          "opacity":1,
          "type":"objectgroup",

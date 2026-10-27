@@ -32,16 +32,16 @@
          "name":"terrain",
          "objects":[
                 {
-                 "height":24,
+                 "height":16,
                  "id":2,
                  "name":"shelf",
                  "opacity":1,
                  "rotation":0,
                  "type":"Terrain",
                  "visible":true,
-                 "width":396.765771923744,
-                 "x":483.151738996614,
-                 "y":455.865803422642
+                 "width":400,
+                 "x":480,
+                 "y":448
                 }, 
                 {
                  "height":240.277598558158,
@@ -51,21 +51,21 @@
                  "rotation":0,
                  "type":"Terrain",
                  "visible":true,
-                 "width":20.4863034779931,
-                 "x":880.12865497076,
-                 "y":239.686697428325
+                 "width":16,
+                 "x":880,
+                 "y":224
                 }, 
                 {
-                 "height":24,
+                 "height":16,
                  "id":10,
                  "name":"shelf",
                  "opacity":1,
                  "rotation":0,
                  "type":"Terrain",
                  "visible":true,
-                 "width":378.671922732187,
-                 "x":900.809019468333,
-                 "y":239.595155709343
+                 "width":384,
+                 "x":896,
+                 "y":224
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -188,8 +188,8 @@
                  "type":"Villain",
                  "visible":true,
                  "width":0,
-                 "x":864.148460926563,
-                 "y":455.499643782196
+                 "x":864,
+                 "y":448
                 }, 
                 {
                  "height":0,
