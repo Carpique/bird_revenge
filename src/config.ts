@@ -284,7 +284,7 @@ export const config = {
   friend: { savedScale: 4, savedMs: 1000 },
 
   countdownMs: 2000,
-  /** how much the game darkens (0–1) behind the "Pause", "Game Over" and "Hooray" signs and the calibration dialog */
+  /** how much the game darkens (0–1) behind the "Pause", "Game Over" and "Hooray" signs, the calibration dialog and the countdown */
   signDim: 0.4,
   /** the darkening behind the calibration dialog fades in and out in this long (and behind "Pause" out on resume) */
   dimFadeMs: 300,

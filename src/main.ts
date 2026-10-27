@@ -377,7 +377,8 @@ async function main() {
     // during gameOver the game runs only to slide the "Game Over" sign through
     game.paused = manualPause || !(state === 'playing' || state === 'keyboard' || state === 'gameOver');
     game.showPausedText = manualPause;
-    game.dimmed = state === 'calibrating';
+    // the countdown keeps the calibration dialog's dimming, so it doesn't flicker in between
+    game.dimmed = state === 'calibrating' || state === 'countdown';
     splash.visible = state === 'menu';
     // the title screen showing up plays its theme from the start; leaving it fades the theme out
     if (splash.visible && !menuShown) audio.playTheme();

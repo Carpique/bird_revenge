@@ -54,6 +54,8 @@ const GREEN = '#2f9e44';
 const RED = '#e03131';
 const INK = '#2b2b2b';
 const MUTED = '#9aa5a8';
+/** light wash over the (dimmed) game behind the calibration dialog and the countdown; the same for both, so the switch doesn't flicker */
+const WASH = 'rgba(255,255,255,0.35)';
 
 /**
  * Full-screen 2D-canvas overlay: loading screen, the "stand in the outline" calibration dialog,
@@ -93,7 +95,7 @@ export class FrameGuide {
         this.text(s.message ?? t('Loading…'), W / 2, H / 2, 34, INK);
         break;
       case 'countdown':
-        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.fillStyle = WASH;
         ctx.fillRect(0, 0, W, H);
         this.text(String(Math.max(1, Math.ceil(s.countdown ?? 0))), W / 2, H / 2, 180, INK, undefined, true);
         this.text(t('Get ready to flap!'), W / 2, H / 2 + 120, 34, INK, undefined, true);
@@ -125,7 +127,7 @@ export class FrameGuide {
    */
   private drawCalibrateDialog(s: GuideState, W: number, H: number, now: number) {
     const ctx = this.ctx;
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillStyle = WASH;
     ctx.fillRect(0, 0, W, H);
 
     const h = Math.max(360, H * DIALOG_HEIGHT), w = Math.min(W * 0.9, h * DIALOG_ASPECT);
