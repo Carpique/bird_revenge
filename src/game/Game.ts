@@ -456,7 +456,7 @@ export class Game {
       });
     } else if (other.label === 'terrain') {
       // lies along the surface it hit, where it touched (read now: Matter reuses the collision object)
-      const y = pair.collision.supports[0]?.y ?? pooBody.position.y + config.physics.pooRadius;
+      const y = surfaceY(other, pooBody, pair.collision.supports[0], pair.collision.normal);
       const angle = surfaceAngle(pair.collision.normal);
       this.pending.push(() => {
         if (poo.state !== 'falling') return;
@@ -578,6 +578,21 @@ function dropIn(sign: Text, ms: number, dropMs: number) {
   const k = Math.min(1, ms / Math.max(1, dropMs));
   const top = -sign.height / 2;
   sign.y = top + (WORLD.height / 2 - top) * easeOutBounce(k);
+}
+
+/**
+ * y of the surface of `terrain` where the poo hit it. The contact point Matter reports is the deepest point of the overlap,
+ * so a fast poo's can lie well inside the terrain: walk it back out along the normal (towards the poo) to the surface.
+ */
+function surfaceY(terrain: MBody, poo: MBody, support: { x: number; y: number } | undefined, n: { x: number; y: number }): number {
+  if (!support) return poo.position.y + config.physics.pooRadius;
+  const dir = n.x * (poo.position.x - support.x) + n.y * (poo.position.y - support.y) < 0 ? -1 : 1;
+  const p = { x: support.x, y: support.y };
+  for (let i = 0; i < 4 * config.physics.pooRadius && Query.point([terrain], p).length; i++) {
+    p.x += dir * n.x;
+    p.y += dir * n.y;
+  }
+  return p.y;
 }
 
 /** The angle of the surface with contact normal `n`, as a splat lying on it (between -90° and 90°). */
