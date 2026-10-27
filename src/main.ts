@@ -35,7 +35,7 @@ import { wakeLock } from './ui/wakeLock';
  *   the camera runs only in states that use the pose: calibrating, countdown, playing, outOfFrame
  *   and a pose game's gameOver — not in the menu or keyboard play
  *   calibrating shows a dialog over the paused game (also camera loading / camera errors)
- *   outOfFrame keeps the game running with no pose controls, so the bird drops until the player is back
+ *   outOfFrame pauses the game (no "Pause" sign, just the small pose box) until the player is back
  *   keyboard (Esc toggles; pose is ignored)
  *   playing / outOfFrame / keyboard → gameOver (last life lost) → new game: countdown, or keyboard again
  * Pausing (Space / P in game, or the window losing focus during a game) freezes the game and shows "Pause".
@@ -375,7 +375,7 @@ async function main() {
     const poseFresh = state === 'playing' && now - lastPoseT < 300;
     game.controls = keyboard.apply(poseFresh ? poseControls : noControls());
     // during gameOver the game runs only to slide the "Game Over" sign through
-    game.paused = manualPause || !(state === 'playing' || state === 'outOfFrame' || state === 'keyboard' || state === 'gameOver');
+    game.paused = manualPause || !(state === 'playing' || state === 'keyboard' || state === 'gameOver');
     game.showPausedText = manualPause;
     game.dimmed = state === 'calibrating';
     splash.visible = state === 'menu';
