@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { config, type Config } from '../src/config';
 import { FlapDetector } from '../src/gestures/FlapDetector';
-import { fitArmLine, TiltDetector } from '../src/gestures/TiltDetector';
+import { droopHold, fitArmLine, TiltDetector } from '../src/gestures/TiltDetector';
 import { flightStep, sideBoost, sideAmount } from '../src/game/flight';
 import { STEP_MS } from '../src/game/physics';
 import { armElevation, hipAbduction, kneeAngle } from '../src/gestures/geometry';
@@ -325,12 +325,49 @@ describe('TiltDetector', () => {
     expect(sideAmount(tilted.tilt)).toBeLessThan(0); // the left hand lower: flies left
   });
 
-  it('is not spread when the arms are not in a straight line', () => {
-    // arms down, up, drooping into a downward V, one arm out, one arm level and the other well below
-    for (const [l, r] of [[15, 15], [170, 170], [60, 60], [90, 15], [90, 60]]) {
+  it('is not spread when the arms are neither in a straight line nor lowered evenly', () => {
+    // arms down, up, one arm out, one arm level and the other well below
+    for (const [l, r] of [[15, 15], [170, 170], [90, 15], [90, 55]]) {
       const out = run(frames(1000, () => ({ armLeft: l, armRight: r })));
       expect(out.some((o) => o.spread)).toBe(false);
+      expect(last(out).hold).toBe(0);
     }
+  });
+
+  describe('arms lowered evenly', () => {
+    pin('hover', { holdDroop: 10, fallDroop: 60, maxDroopDiff: 25 });
+
+    it('a T holds fully; the lower both arms go, the less it holds, down to nothing', () => {
+      const hold = (l: number, r = l) => last(run(frames(1000, () => ({ armLeft: l, armRight: r })))).hold;
+      expect(hold(90)).toBe(1);
+      expect(hold(82)).toBe(1); // within holdDroop
+      const mid = hold(65);
+      const low = hold(45);
+      expect(mid).toBeGreaterThan(0.3);
+      expect(mid).toBeLessThan(0.8);
+      expect(low).toBeGreaterThan(0);
+      expect(low).toBeLessThan(mid);
+      expect(hold(25)).toBe(0); // past fallDroop
+      // about the same angle is enough; too uneven isn't
+      expect(hold(60, 70)).toBeGreaterThan(0);
+      expect(hold(45, 80)).toBe(0);
+    });
+
+    it('follows the arms down as they are lowered', () => {
+      const out = run(frames(3000, (t) => ({ armLeft: 90 - (t / 3000) * 60, armRight: 90 - (t / 3000) * 60 })));
+      const holds = out.slice(10).map((o) => o.hold);
+      for (let i = 1; i < holds.length; i++) expect(holds[i]).toBeLessThanOrEqual(holds[i - 1] + 1e-9);
+      expect(holds[0]).toBe(1);
+      expect(last(holds)).toBeLessThan(0.1);
+    });
+
+    it('droopHold ramps linearly between holdDroop and fallDroop', () => {
+      expect(droopHold(0)).toBe(1);
+      expect(droopHold(10)).toBe(1);
+      expect(droopHold(35)).toBeCloseTo(0.5);
+      expect(droopHold(60)).toBe(0);
+      expect(droopHold(80)).toBe(0);
+    });
   });
 });
 
@@ -341,7 +378,7 @@ describe('flight physics', () => {
    * (px/step) and `sinceFlap` ms after the last flap; `lift` (px/s²) counts as flapping. Returns the velocity and
    * how far the bird fell (px, + = down).
    */
-  const sim = (tilt: number, hovering: boolean, o: { v0?: { x: number; y: number }; lift?: number; sinceFlap?: number; steps?: number } = {}) => {
+  const sim = (tilt: number, hovering: boolean | number, o: { v0?: { x: number; y: number }; lift?: number; sinceFlap?: number; steps?: number } = {}) => {
     const g = config.physics.gravity * 1e-3 * STEP_MS ** 2;
     const lift = o.lift ?? 0;
     const up = lift * 1e-6 * STEP_MS ** 2;
@@ -350,7 +387,7 @@ describe('flight physics', () => {
     let fell = 0;
     for (let i = 0; i < (o.steps ?? 120); i++) {
       since = lift > 0 ? 0 : since + STEP_MS;
-      const s = flightStep(v, tilt, hovering, since, STEP_MS);
+      const s = flightStep(v, tilt, Number(hovering), since, STEP_MS);
       const k = 1 - config.physics.birdAirFriction;
       v = { x: s.x * k, y: (s.y + (s.holdUp ? 0 : g * (s.gravity ?? 1)) - up) * k };
       fell += v.y;
@@ -376,6 +413,18 @@ describe('flight physics', () => {
     expect(fly(45, false).x).toBeLessThan(-1); // the other way
   });
 
+  it('hovering with the arms lowered: sinks steadily, faster the lower they are', () => {
+    const sink = (hold: number) => sim(0, hold, { steps: 240 }).y;
+    const free = sink(0);
+    const half = sink(0.5);
+    const little = sink(0.8);
+    expect(little).toBeGreaterThan(0.2);
+    expect(half).toBeGreaterThan(little);
+    expect(free).toBeGreaterThan(half);
+    // settled at a sink speed: no longer speeding up
+    expect(sim(0, 0.5, { steps: 480 }).y - half).toBeLessThan(0.3);
+  });
+
   it('tilted: a fall is braked to a stop', () => {
     expect(Math.abs(fly(-30, false, { x: 0, y: 7 }).y)).toBeLessThan(0.1);
   });
@@ -387,7 +436,7 @@ describe('flight physics', () => {
   it('a fresh small tilt stays slow; holding it or tilting more speeds up fast; braking stays crisp', () => {
     const run = (tilt: number, ms: number, x0 = 0) => {
       let x = x0;
-      for (let t = 0; t < ms; t += STEP_MS) x = flightStep({ x, y: 0 }, tilt, false, Infinity, STEP_MS, t).x;
+      for (let t = 0; t < ms; t += STEP_MS) x = flightStep({ x, y: 0 }, tilt, 0, Infinity, STEP_MS, t).x;
       return x;
     };
     const small = config.tilt.fineTilt; // the right hand higher: flies left
@@ -405,7 +454,7 @@ describe('flight physics', () => {
     // turning back from full speed brakes at the full sideAccel, gentle start or not
     const v = config.tilt.sideSpeed;
     const fullDv = config.tilt.sideAccel * (STEP_MS / 1000) ** 2;
-    expect(flightStep({ x: v, y: 0 }, small, false, Infinity, STEP_MS, 0).x).toBeCloseTo(v - fullDv, 5);
+    expect(flightStep({ x: v, y: 0 }, small, 0, Infinity, STEP_MS, 0).x).toBeCloseTo(v - fullDv, 5);
   });
 
   it('arms level, long after flapping: falls as fast as ever', () => {

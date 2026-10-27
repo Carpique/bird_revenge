@@ -22,10 +22,21 @@ export interface TiltOutput {
   right: number | null;
   /** the fitted arm line, or null when an arm isn't visible */
   line: ArmLine | null;
-  /** arms spread out (a T, or raised up to a V) and held still, before debouncing */
+  /** arms spread out (a T, raised up to a V, or lowered evenly) and held still, before debouncing */
   spreadPose: boolean;
   /** debounced spread pose: the bird hovers */
   spread: boolean;
+  /**
+   * how much of the fall the hover holds back, 0..1: 1 in a T or higher, fading to 0 the lower both arms droop
+   * (`hover.holdDroop` → `hover.fallDroop`); 0 while not spread
+   */
+  hold: number;
+}
+
+/** The hover's hold for arms drooping `droop` deg below horizontal on average: 1 down to `holdDroop`, 0 from `fallDroop`. */
+export function droopHold(droop: number): number {
+  const cfg = config.hover;
+  return Math.max(0, Math.min(1, (cfg.fallDroop - droop) / Math.max(1, cfg.fallDroop - cfg.holdDroop)));
 }
 
 const ARM_POINTS = [L.leftWrist, L.leftElbow, L.leftShoulder, L.rightShoulder, L.rightElbow, L.rightWrist];
@@ -66,16 +77,18 @@ export function fitArmLine(f: PoseFrame): ArmLine {
  *   flapping tilted all count). Flapping moves both arms by about the same angle, so the difference, and with
  *   it the tilt, holds steady through the strokes; the smoothing irons out arms flapping slightly out of step.
  * - **spread**: both arms out and held still, either way:
- *   - at or above horizontal on average, up to `maxRaise` (a T, or raised into a V), each arm straight
- *   - below it: only a roughly straight line through both arms (wrists, elbows, shoulders), so arms drooping
- *     into a downward V don't count: lowering the arms lets the bird fall
+ *   - at or above horizontal on average, up to `maxRaise` (a T, or raised into a V), each arm straight: full hold
+ *   - below it: a roughly straight line through both arms (wrists, elbows, shoulders; a tilted T), or both arms
+ *     lowered by about the same angle (within `maxDroopDiff`), each straight. The hold fades with how far they droop
+ *     on average (`droopHold`), so lowering the arms gradually lets the bird sink faster, down to a free fall
  *   Level or tilted (up to `maxTilt`). It must hold for `enterMs` to count (so a flap sweeping through doesn't) and
- *   be gone for `exitMs` to stop (so one noisy frame doesn't drop out of it).
+ *   be gone for `exitMs` to stop (so one noisy frame doesn't drop out of it); meanwhile the last hold stays.
  * What these do to the bird is up to the game (`game/flight.ts`).
  */
 export class TiltDetector {
   private tilt = 0;
   private spread = false;
+  private hold = 0;
   private poseSince: number | null = null;
   private lostSince: number | null = null;
 
@@ -90,24 +103,30 @@ export class TiltDetector {
     const cfg = config.hover;
     const line = both ? fitArmLine(f) : null;
     const still = Math.abs(flap.left.velocity) <= cfg.maxArmSpeed && Math.abs(flap.right.velocity) <= cfg.maxArmSpeed;
-    let spreadPose = false;
+    let poseHold = 0;
     if (line && still && Math.abs(raw) <= cfg.maxTilt) {
       // the arms' average angle above horizontal (0 = a T, tilted or not)
       const raise = (left! + right!) / 2 - 90;
       const straight = elbowAngle(f, 'left') >= cfg.minElbowAngle && elbowAngle(f, 'right') >= cfg.minElbowAngle;
-      spreadPose =
-        raise >= 0 ? raise <= cfg.maxRaise && straight
-        : line.bend <= cfg.maxBend && Math.abs(line.tilt) <= cfg.maxTilt;
+      if (raise >= 0) poseHold = raise <= cfg.maxRaise && straight ? 1 : 0;
+      else {
+        const inLine = line.bend <= cfg.maxBend && Math.abs(line.tilt) <= cfg.maxTilt;
+        const even = Math.abs(left! - right!) <= cfg.maxDroopDiff && straight;
+        poseHold = inLine || even ? droopHold(-raise) : 0;
+      }
     }
+    const spreadPose = poseHold > 0;
     if (spreadPose) {
       this.poseSince ??= f.t;
       this.lostSince = null;
       if (f.t - this.poseSince >= cfg.enterMs) this.spread = true;
+      if (this.spread) this.hold = poseHold;
     } else {
       this.poseSince = null;
       this.lostSince ??= f.t;
       if (f.t - this.lostSince >= cfg.exitMs) this.spread = false;
     }
-    return { tilt: this.tilt, left, right, line, spreadPose, spread: this.spread };
+    if (!this.spread) this.hold = 0;
+    return { tilt: this.tilt, left, right, line, spreadPose, spread: this.spread, hold: this.hold };
   }
 }

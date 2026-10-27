@@ -9,8 +9,11 @@ export interface Controls {
    * sideways towards the lower hand, faster the more they're tilted
    */
   tilt: number;
-  /** arms spread out and held still (or Shift held): in the air the bird hovers, keeping its altitude */
-  hover: boolean;
+  /**
+   * arms spread out and held still (or Shift held): in the air the bird hovers. How much of the fall it holds back,
+   * 0..1: 1 keeps its altitude (a T), less sinks (arms lowered), 0 = no hover
+   */
+  hover: number;
   /** wing frame from the player's arm height (pose mode), or null to animate on its own */
   wingPhase: number | null;
   /** keyboard flap held (bird plays the flap loop) */
@@ -19,4 +22,4 @@ export interface Controls {
   posture: PostureIntent | null;
 }
 
-export const noControls = (): Controls => ({ lift: 0, tilt: 0, hover: false, wingPhase: null, flapping: false, posture: null });
+export const noControls = (): Controls => ({ lift: 0, tilt: 0, hover: 0, wingPhase: null, flapping: false, posture: null });

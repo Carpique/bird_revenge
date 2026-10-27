@@ -127,14 +127,21 @@ export const config = {
 
   /**
    * "hover": both arms spread out and held still: at or above horizontal, a T or raised up to `maxRaise` (a V), each
-   * arm straight; below horizontal, only a roughly straight line through both arms (drooping arms let the bird
-   * fall). Level or tilted. In flapping mode the
-   * bird keeps its altitude (`tilt.holdDrag`); tilted, it also flies sideways. Posture control's T parachute sinks
-   * slowly instead, using `sinkSpeed` and `parachuteDrag`.
+   * arm straight; below horizontal, a roughly straight line through both arms, or both lowered by about the same
+   * angle. Level or tilted. In flapping mode, in a T or higher the bird keeps its altitude (`tilt.holdDrag`); lowered,
+   * it holds back less and less of gravity, so it sinks faster the lower the arms (`holdDroop` → `fallDroop`).
+   * Tilted, it also flies sideways (and keeps its altitude). Posture control's T parachute sinks slowly instead,
+   * using `sinkSpeed` and `parachuteDrag`.
    */
   hover: {
     /** arms below horizontal: how far the arm points may stray from a straight line (perpendicular RMS / along-line RMS) */
     maxBend: 0.2,
+    /** arms below horizontal, not in a straight line: how much the two arms' angles may differ (deg) to count as lowered evenly */
+    maxDroopDiff: 25,
+    /** arms lowered on average up to this (deg below horizontal): still the full hold, the altitude kept */
+    holdDroop: 10,
+    /** ...lower, the hold fades (less of gravity cancelled), gone at this (deg below horizontal): a free fall */
+    fallDroop: 60,
     /** arms tilted more than this (deg) aren't a spread */
     maxTilt: 40,
     /** arms above horizontal: the highest average raise (deg above horizontal) that still counts, a V */

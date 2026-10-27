@@ -205,7 +205,7 @@ export class Bird {
     }
     const g = this.posturing
       ? postureStep(b.velocity, p!, stepMs)
-      : flightStep(b.velocity, c.tilt, c.hover && !this.onGround, this.sinceFlapMs, stepMs, this.tiltHeldMs);
+      : flightStep(b.velocity, c.tilt, this.onGround ? 0 : c.hover, this.sinceFlapMs, stepMs, this.tiltHeldMs);
     // topped out after lifting off: stay at that height
     if (this.liftingOff && g.y > 0) g.y = 0;
     Body.setVelocity(b, { x: g.x, y: g.y });
@@ -255,8 +255,11 @@ export class Bird {
     // posture control: flap while the arms push the bird up or sideways, faster the faster it flies
     if (p?.mode === 'fly' && p.speed > 0) this.sprite.play('flap', config.posture.flapRateMin + (config.posture.flapRateMax - config.posture.flapRateMin) * p.speed);
     else if (this.onGround && c.lift < 50 && !c.flapping) this.sprite.play('idle');
-    // flapping mode, tilted or in a T: holding the altitude, the wings beat fast
-    else if (!this.posturing && !this.onGround && (c.hover || sideAmount(c.tilt) !== 0)) this.sprite.play('flap', config.tilt.holdFlapRate);
+    // flapping mode, tilted or in a T: holding the altitude, the wings beat fast; arms lowered, slower as it sinks
+    else if (!this.posturing && !this.onGround && (c.hover > 0 || sideAmount(c.tilt) !== 0)) {
+      const hold = sideAmount(c.tilt) !== 0 ? 1 : c.hover;
+      this.sprite.play('flap', 1 + (config.tilt.holdFlapRate - 1) * hold);
+    }
     else if (c.wingPhase !== null) this.sprite.showPhase('flap', c.wingPhase);
     else if (c.flapping) this.sprite.play('flap');
     else this.sprite.showPhase('flap', 0.5); // wings out

@@ -36,7 +36,7 @@ export class Keyboard {
       lift: base.lift + (flap ? config.keyboard.lift : 0),
       // flying right = the right hand lower = negative tilt
       tilt: side ? -side * config.keyboard.tilt : base.tilt,
-      hover: hover || base.hover,
+      hover: hover ? 1 : base.hover,
       wingPhase: flap ? null : base.wingPhase,
       flapping: flap || base.flapping,
       // ← → and Shift are the keyboard's own sideways flight and hover, so they take over from the posture

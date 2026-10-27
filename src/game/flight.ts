@@ -40,12 +40,14 @@ export function sideBoost(tilt: number, heldMs: number): number {
  *   gentle start (`sideBoost`): at most `fineSpeed`, at `fineAccel`, easing in to `sideSpeed`, `sideAccel`; already
  *   faster than that it coasts. Slowing down, or stopping to turn back, takes the full `sideAccel`. Level, the
  *   sideways speed is left to air friction.
- * - tilted or `hovering` (arms spread in a T, in the air), it keeps its altitude: a fall is braked (`holdDrag`,
- *   gravity cancelled). Rising is left to gravity, so a flap climbs as usual and then levels off.
- * - otherwise falling: right after a flap only `afterFlapGravity` of gravity acts, easing back to full gravity
- *   over `afterFlapMs`.
+ * - tilted or hovering with a full `hold` (arms spread in a T, in the air), it keeps its altitude: a fall is braked
+ *   (`holdDrag`, gravity cancelled). Rising is left to gravity, so a flap climbs as usual and then levels off.
+ * - hovering with a partial `hold` (arms lowered evenly), that fraction of gravity is cancelled (and of `holdDrag`
+ *   applied), so the fall settles at a sink speed that grows the lower the arms are.
+ * - falling: right after a flap only `afterFlapGravity` of gravity acts, easing back to full gravity over
+ *   `afterFlapMs` (with a partial hold, whichever lets less of it act).
  */
-export function flightStep(v: { x: number; y: number }, tilt: number, hovering: boolean, sinceFlapMs: number, stepMs: number, tiltHeldMs = Infinity): FlightVelocity {
+export function flightStep(v: { x: number; y: number }, tilt: number, hold: number, sinceFlapMs: number, stepMs: number, tiltHeldMs = Infinity): FlightVelocity {
   let { x, y } = v;
   const k = sideAmount(tilt);
   if (k !== 0) {
@@ -66,8 +68,9 @@ export function flightStep(v: { x: number; y: number }, tilt: number, hovering: 
     }
   }
   if (y <= 0) return { x, y, holdUp: false };
-  if (k !== 0 || hovering) return { x, y: y * (1 - config.tilt.holdDrag), holdUp: true };
-  return { x, y, holdUp: false, gravity: afterFlapGravity(sinceFlapMs) };
+  if (k !== 0 || hold >= 1) return { x, y: y * (1 - config.tilt.holdDrag), holdUp: true };
+  const h = Math.max(0, hold);
+  return { x, y: y * (1 - config.tilt.holdDrag * h), holdUp: false, gravity: Math.min(afterFlapGravity(sinceFlapMs), 1 - h) };
 }
 
 /** Fraction of gravity acting on a fall `sinceFlapMs` after the last flap: `afterFlapGravity` easing in to 1. */

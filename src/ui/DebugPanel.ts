@@ -159,7 +159,7 @@ export class DebugPanel {
         : '',
       info.tilt
         ? `spread line ${info.tilt.line ? n(info.tilt.line.tilt) : '    -'}° bend ${info.tilt.line ? info.tilt.line.bend.toFixed(2) : '-'}` +
-          `  ${info.tilt.spread ? 'HOVER' : info.tilt.spreadPose ? 'pose' : 'no'}`
+          `  ${info.tilt.spread ? `HOVER ${info.tilt.hold.toFixed(2)}` : info.tilt.spreadPose ? 'pose' : 'no'}`
         : '',
       info.posture
         ? `posture L ${info.posture.left === null ? '    -' : n(info.posture.left)}° R ${info.posture.right === null ? '    -' : n(info.posture.right)}°` +

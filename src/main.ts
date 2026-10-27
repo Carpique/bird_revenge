@@ -339,7 +339,7 @@ async function main() {
           poseControls = {
             lift: byPosture ? 0 : flapOut.lift,
             tilt: byPosture ? 0 : tiltOut.tilt,
-            hover: !byPosture && tiltOut.spread,
+            hover: byPosture ? 0 : tiltOut.hold,
             wingPhase: flapOut.wingPhase,
             flapping: false,
             posture: byPosture ? postureOut.intent : null,
