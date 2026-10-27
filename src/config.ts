@@ -97,8 +97,18 @@ export const config = {
     fullTilt: 11,
     /** sideways speed at full tilt, px per physics step */
     sideSpeed: 8,
-    /** how quickly the bird picks up (or reverses) its sideways speed, px/s² */
+    /** how quickly the bird picks up (or reverses) its sideways speed, px/s²; braking always uses this */
     sideAccel: 1800,
+    /**
+     * a gentle start for precise positioning: for its first `fineMs` a fresh tilt flies at most `fineSpeed` (px per
+     * step), picked up at `fineAccel` (px/s²); then `sideSpeed` and `sideAccel` take over. A bigger tilt skips it:
+     * from `fineTilt` (deg), all fine, to `boostTilt`, full speed and acceleration straight away
+     */
+    fineSpeed: 2,
+    fineAccel: 600,
+    fineMs: 1500,
+    fineTilt: 20,
+    boostTilt: 35,
     /** how far the bird leans (deg) flying sideways at full speed */
     leanDeg: 20,
     /**

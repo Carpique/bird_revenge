@@ -36,6 +36,9 @@ export class Bird {
   private death: Death | null = null;
   /** ms since the last flap (lift) */
   private sinceFlapMs = Infinity;
+  /** ms the arms have been tilted towards `tiltDir` (-1 / +1; 0 = level) */
+  private tiltHeldMs = 0;
+  private tiltDir = 0;
   /** posture control is steering the bird this step */
   private posturing = false;
   /** current lean, radians (eased towards the direction of sideways flight) */
@@ -149,6 +152,8 @@ export class Bird {
     this.supported = false;
     this.bankAngle = 0;
     this.sinceFlapMs = Infinity;
+    this.tiltHeldMs = 0;
+    this.tiltDir = 0;
     this.invulnT = invulnerable ? config.player.invulnerableMs : 0;
   }
 
@@ -184,9 +189,13 @@ export class Bird {
     // otherwise flapping + tilt + hover: hovering only acts in the air; sideways flight also walks the bird
     // along the ground or a branch
     this.sinceFlapMs = c.lift > 0 ? 0 : this.sinceFlapMs + stepMs;
+    // a fresh tilt (or one turned the other way) starts gently
+    const dir = Math.sign(sideAmount(c.tilt));
+    this.tiltHeldMs = dir !== 0 && dir === this.tiltDir ? this.tiltHeldMs + stepMs : 0;
+    this.tiltDir = dir;
     const g = this.posturing
       ? postureStep(b.velocity, p!, stepMs)
-      : flightStep(b.velocity, c.tilt, c.hover && !this.onGround, this.sinceFlapMs, stepMs);
+      : flightStep(b.velocity, c.tilt, c.hover && !this.onGround, this.sinceFlapMs, stepMs, this.tiltHeldMs);
     Body.setVelocity(b, { x: g.x, y: g.y });
     // Matter applies the full gravity itself; the hover (or flying by posture) holds against it
     const antiGravity = config.physics.gravity * 1000 * (g.holdUp ? 1 : 1 - (g.gravity ?? 1));

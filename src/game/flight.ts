@@ -23,21 +23,47 @@ export function sideAmount(tilt: number): number {
 }
 
 /**
+ * How far past the gentle start a tilt held for `heldMs` in the same direction is: 0 = fine control
+ * (`fineSpeed`, `fineAccel`), 1 = full (`sideSpeed`, `sideAccel`). A tilt up to `fineTilt` stays fine for its first
+ * `fineMs`; a bigger one ramps to full by `boostTilt`.
+ */
+export function sideBoost(tilt: number, heldMs: number): number {
+  const cfg = config.tilt;
+  if (heldMs >= cfg.fineMs) return 1;
+  return Math.max(0, Math.min(1, (Math.abs(tilt) - cfg.fineTilt) / Math.max(1, cfg.boostTilt - cfg.fineTilt)));
+}
+
+/**
  * One physics step of the arm controls (flapping lift is a force, applied by the caller), from the bird's
- * current velocity `v` (px per step, y down) and the ms since the last flap:
- * - sideways: tilted, the bird eases (at most `sideAccel`) towards `sideAmount` × `sideSpeed`; level, the
+ * current velocity `v` (px per step, y down), the ms since the last flap and the ms the tilt has been held:
+ * - sideways: tilted, the bird eases towards `sideAmount` × `sideSpeed`. Speeding up, it's held back by the
+ *   gentle start (`sideBoost`): at most `fineSpeed`, at `fineAccel`, easing in to `sideSpeed`, `sideAccel`; already
+ *   faster than that it coasts. Slowing down, or stopping to turn back, takes the full `sideAccel`. Level, the
  *   sideways speed is left to air friction.
  * - tilted or `hovering` (arms spread in a T, in the air), it keeps its altitude: a fall is braked (`holdDrag`,
  *   gravity cancelled). Rising is left to gravity, so a flap climbs as usual and then levels off.
  * - otherwise falling: right after a flap only `afterFlapGravity` of gravity acts, easing back to full gravity
  *   over `afterFlapMs`.
  */
-export function flightStep(v: { x: number; y: number }, tilt: number, hovering: boolean, sinceFlapMs: number, stepMs: number): FlightVelocity {
+export function flightStep(v: { x: number; y: number }, tilt: number, hovering: boolean, sinceFlapMs: number, stepMs: number, tiltHeldMs = Infinity): FlightVelocity {
   let { x, y } = v;
   const k = sideAmount(tilt);
   if (k !== 0) {
-    const maxDv = config.tilt.sideAccel * (stepMs / 1000) ** 2;
-    x += Math.max(-maxDv, Math.min(maxDv, k * config.tilt.sideSpeed - x));
+    const cfg = config.tilt;
+    const perStep = (accel: number) => accel * (stepMs / 1000) ** 2;
+    const full = k * cfg.sideSpeed;
+    if (x * full < 0) {
+      // turning back: stop first, then start over gently
+      x = x > 0 ? Math.max(0, x - perStep(cfg.sideAccel)) : Math.min(0, x + perStep(cfg.sideAccel));
+    } else if (Math.abs(x) > Math.abs(full)) {
+      x += Math.sign(full - x) * Math.min(perStep(cfg.sideAccel), Math.abs(full - x));
+    } else {
+      const b = sideBoost(tilt, tiltHeldMs);
+      const cap = cfg.fineSpeed + (cfg.sideSpeed - cfg.fineSpeed) * b;
+      const target = Math.sign(k) * Math.min(Math.abs(full), cap);
+      const dv = perStep(cfg.fineAccel + (cfg.sideAccel - cfg.fineAccel) * b);
+      if (Math.abs(x) < Math.abs(target)) x += Math.sign(target) * Math.min(dv, Math.abs(target - x));
+    }
   }
   if (y <= 0) return { x, y, holdUp: false };
   if (k !== 0 || hovering) return { x, y: y * (1 - config.tilt.holdDrag), holdUp: true };

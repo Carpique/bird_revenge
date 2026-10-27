@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { config, type Config } from '../src/config';
 import { FlapDetector } from '../src/gestures/FlapDetector';
 import { fitArmLine, TiltDetector } from '../src/gestures/TiltDetector';
-import { flightStep, sideAmount } from '../src/game/flight';
+import { flightStep, sideBoost, sideAmount } from '../src/game/flight';
 import { STEP_MS } from '../src/game/physics';
 import { armElevation, hipAbduction, kneeAngle } from '../src/gestures/geometry';
 import { ShootDetector } from '../src/gestures/ShootDetector';
@@ -364,6 +364,30 @@ describe('flight physics', () => {
 
   it('turns a sideways flight around when tilted the other way', () => {
     expect(fly(30, true, { x: 6, y: 0 }).x).toBeLessThan(-1);
+  });
+
+  it('a fresh small tilt stays slow; holding it or tilting more speeds up fast; braking stays crisp', () => {
+    const run = (tilt: number, ms: number, x0 = 0) => {
+      let x = x0;
+      for (let t = 0; t < ms; t += STEP_MS) x = flightStep({ x, y: 0 }, tilt, false, Infinity, STEP_MS, t).x;
+      return x;
+    };
+    const small = config.tilt.fineTilt; // the right hand higher: flies left
+    const big = config.tilt.boostTilt + 5;
+    expect(Math.abs(run(small, 250))).toBeLessThan(Math.abs(run(big, 250)) * 0.5);
+    // within fineMs a small tilt stays slow; held longer, it speeds up to its full speed
+    const fullTilt = config.tilt.fullTilt;
+    config.tilt.fullTilt = config.tilt.deadZone + 1; // a small tilt asking for full speed
+    expect(Math.abs(run(small, config.tilt.fineMs - STEP_MS))).toBeCloseTo(config.tilt.fineSpeed, 5);
+    expect(Math.abs(run(small, config.tilt.fineMs + 1000))).toBeGreaterThan(config.tilt.fineSpeed * 2);
+    config.tilt.fullTilt = fullTilt;
+    expect(sideBoost(small, 0)).toBe(0);
+    expect(sideBoost(small, config.tilt.fineMs)).toBe(1);
+    expect(sideBoost(big, 0)).toBe(1);
+    // turning back from full speed brakes at the full sideAccel, gentle start or not
+    const v = config.tilt.sideSpeed;
+    const fullDv = config.tilt.sideAccel * (STEP_MS / 1000) ** 2;
+    expect(flightStep({ x: v, y: 0 }, small, false, Infinity, STEP_MS, 0).x).toBeCloseTo(v - fullDv, 5);
   });
 
   it('arms level, long after flapping: falls as fast as ever', () => {
