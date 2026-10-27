@@ -150,6 +150,24 @@ describe('ShootDetector', () => {
     }
   });
 
+  it('does not fire when leaning the upper body sideways, or switching the lean from side to side', () => {
+    const d = detector();
+    let triggers = 0;
+    const seq = [
+      ...frames(3000, () => ({ lean: 12 })),
+      ...frames(3000, () => ({ lean: -12 }), 3000),
+      ...frames(3000, () => ({ lean: 12 }), 6000),
+    ];
+    for (const f of seq) if (d.update(f, true).triggered) triggers++;
+    expect(triggers).toBe(0);
+  });
+
+  it('fires on a sideways raise while leaning', () => {
+    const d = detector();
+    const hits = frames(3000, (t) => ({ lean: -12, legLeft: t > 2000 ? 40 : 0 })).map((f) => d.update(f, true)).filter((o) => o.triggered);
+    expect(hits.length).toBe(1);
+  });
+
   it('does not fire when stepping closer or further away', () => {
     const d = detector();
     let triggers = 0;

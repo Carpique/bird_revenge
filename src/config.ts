@@ -74,9 +74,9 @@ export const config = {
 
   /** "shoot": a leg raised sideways, read from the hip angles */
   shoot: {
-    /** hip abduction (deg above the standing baseline) of either leg that enters a shoot */
+    /** legs' spread (deg above the standing baseline: both legs' hip abduction added up) that enters a shoot */
     angleEnter: 21,
-    /** ...and both legs back below this to leave it */
+    /** ...and back below this to leave it */
     angleExit: 12,
     cooldownMs: 700,
     /** slowly re-learn the standing hip angles while standing (stance drifts a little) */
