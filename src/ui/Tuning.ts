@@ -14,6 +14,8 @@ const RANGES: Record<string, [number, number, number]> = {
   'flap.maxSideAccel': [0, 6000, 100],
   'flap.asymmetricLift': [0, 1, 0.05],
   'flap.strokeMinAmplitude': [5, 90, 1],
+  'friend.savedScale': [1, 8, 0.1],
+  'friend.savedMs': [100, 4000, 50],
   'shoot.angleEnter': [5, 80, 1],
   'shoot.angleExit': [0, 60, 1],
   'shoot.legRaiseMin': [0, 60, 1],

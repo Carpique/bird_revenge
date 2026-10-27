@@ -3,7 +3,7 @@ import type { CharacterDef } from './types';
 
 /**
  * Friends: little animals guarded by the villain, saved by flying into them. One entry per kind.
- * The anchor is the image's centre (a saved friend grows around it); levels place a friend by its feet.
+ * The anchor is the image's centre (a saved friend grows upwards from its feet); levels place a friend by its feet.
  */
 export const friendDefs = {
   bunny: {

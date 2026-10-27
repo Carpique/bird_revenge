@@ -5,7 +5,7 @@ import { CharacterSprite } from '../render/CharacterSprite';
 
 /**
  * A little animal to save. It sits still (outside the physics world), blinking now and then, until the bird
- * flies into it; saved, it grows and fades away, then it's gone.
+ * flies into it; saved, it grows upwards from its feet and fades away, then it's gone.
  */
 export class Friend {
   readonly view: CharacterSprite<FriendAnim>;
@@ -14,6 +14,8 @@ export class Friend {
   readonly x: number;
   readonly y: number;
   private readonly radius: number;
+  /** half its display height: from its centre down to its feet */
+  private readonly halfHeight: number;
   private savedT = 0;
   private fidget: FriendAnim = 'idle';
   /** ms until the current fidget (or the wait for the next one) ends */
@@ -23,7 +25,8 @@ export class Friend {
     const character = friendDefs[def.kind];
     this.view = new CharacterSprite<FriendAnim>(character);
     this.x = def.x;
-    this.y = def.y - character.displayHeight / 2;
+    this.halfHeight = character.displayHeight / 2;
+    this.y = def.y - this.halfHeight;
     this.radius = friendRadius[def.kind];
   }
 
@@ -59,9 +62,11 @@ export class Friend {
 
   sync() {
     this.view.play(this.fidget);
-    this.view.position.set(this.x, this.y);
     const k = this.state === 'waiting' ? 0 : Math.min(1, this.savedT / Math.max(1, config.friend.savedMs));
-    this.view.scale.set(1 + (config.friend.savedScale - 1) * k);
+    const scale = 1 + (config.friend.savedScale - 1) * k;
+    // the sprite scales about its centre, so lift it as it grows to keep its feet where they were
+    this.view.position.set(this.x, this.y - this.halfHeight * (scale - 1));
+    this.view.scale.set(scale);
     this.view.alpha = 1 - k;
     this.view.visible = this.state !== 'done';
   }

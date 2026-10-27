@@ -269,7 +269,7 @@ export const config = {
   score: { villain: 1, pedestrian: -1 },
 
   /** a saved friend grows to this many times its size while fading out, in this long */
-  friend: { savedScale: 3, savedMs: 2000 },
+  friend: { savedScale: 4, savedMs: 1000 },
 
   countdownMs: 2000,
   gameOver: {
