@@ -154,21 +154,12 @@ describe('ShootDetector', () => {
     expect(fires(10)).toBe(false);
   });
 
-  it('reports which leg is raised', () => {
-    for (const side of ['left', 'right'] as const) {
+  it('fires once whichever leg (or both) goes out', () => {
+    for (const pose of [{ legLeft: 40 }, { legRight: 40 }, { legLeft: 35, legRight: 35 }]) {
       const d = detector();
-      const pose = side === 'left' ? { legLeft: 40 } : { legRight: 40 };
       const hits = frames(1000, () => pose).map((f) => d.update(f, true)).filter((o) => o.triggered);
       expect(hits.length).toBe(1);
-      expect(hits[0].raisedLeg).toBe(side);
     }
-  });
-
-  it('reports no raised leg when both legs go out', () => {
-    const d = detector();
-    const hits = frames(1000, () => ({ legLeft: 35, legRight: 35 })).map((f) => d.update(f, true)).filter((o) => o.triggered);
-    expect(hits.length).toBe(1);
-    expect(hits[0].raisedLeg).toBe(null);
   });
 
   it('does not fire when stepping closer or further away', () => {

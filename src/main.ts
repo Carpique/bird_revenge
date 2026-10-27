@@ -345,8 +345,7 @@ async function main() {
             posture: byPosture ? postureOut.intent : null,
           };
           lastPoseT = now;
-          // mirrored view: the player's left is on the screen's left, so the poo flies towards the raised leg
-          if (shootOut.triggered) game.requestPoo(shootOut.raisedLeg === 'left' ? -1 : shootOut.raisedLeg === 'right' ? 1 : 0);
+          if (shootOut.triggered) game.requestPoo();
         }
         break;
     }

@@ -21,7 +21,7 @@ your arms are visible, raised ones included, down to the elbows plus a bit of th
 | Fly sideways | flap one arm, or one faster than the other | ← → |
 | Glide (parachute) | spread both arms out in a T, held still: the bird sinks slowly, sideways speed fades | Shift |
 | Dive | tilt the spread arms (one hand down, the other up): the bird dives towards the lower hand, faster the more you tilt | Shift + ← → |
-| Poo | shoot: raise a leg sideways (the poo flies towards that side) | ↓ |
+| Poo | shoot: raise either leg sideways (the poo drops straight down) | ↓ |
 
 **Posture control** is the default and replaces flapping and the glide; turn it off with "Posture control" in the tuning panel (**G**) to get the flapping controls in the table above. The arms work like this:
 

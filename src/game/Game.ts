@@ -105,9 +105,8 @@ export class Game {
   private completeT = 0;
   /** ms since the last friend was saved, while play goes on for `config.levelComplete.graceMs`; null before */
   private allSavedT: number | null = null;
-  /** queued poo request: sideways direction (-1 left, 0 straight down, +1 right), or null */
-  private pooQueued: number | null = null;
-  private pooDir = 0;
+  /** a poo was requested and the bird hasn't squatted for it yet */
+  private pooQueued = false;
 
   constructor(
     private app: Application,
@@ -167,12 +166,9 @@ export class Game {
     this.restartLevel();
   }
 
-  /**
-   * Ask the bird to squat and drop a poo (ignored while already squatting).
-   * `dir` gives the poo a little sideways speed on screen: -1 left, 0 straight down, +1 right.
-   */
-  requestPoo(dir = 0) {
-    if (!this.paused && !this.over && !this.complete) this.pooQueued = dir;
+  /** Ask the bird to squat and drop a poo (ignored while already squatting). */
+  requestPoo() {
+    if (!this.paused && !this.over && !this.complete) this.pooQueued = true;
   }
 
   /** Start a new game: score, lives, the level, bird, villain and poos back to the start. */
@@ -194,7 +190,7 @@ export class Game {
 
   /** The level, bird, villain, friends and poos back to the start. */
   private restartLevel() {
-    this.pooQueued = null;
+    this.pooQueued = false;
     this.complete = false;
     this.completeT = 0;
     this.allSavedT = null;
@@ -287,9 +283,9 @@ export class Game {
 
   private step() {
     this.engine.gravity.y = config.physics.gravity;
-    if (this.pooQueued !== null && !this.bird.dying) {
-      if (this.bird.squat()) this.pooDir = this.pooQueued;
-      this.pooQueued = null;
+    if (this.pooQueued && !this.bird.dying) {
+      this.bird.squat();
+      this.pooQueued = false;
     }
     this.bird.step(this.controls, STEP_MS, () => this.dropPoo());
     const bp = this.bird.body.position;
@@ -429,7 +425,7 @@ export class Game {
   private completeLevel() {
     this.complete = true;
     this.completeT = 0;
-    this.pooQueued = null;
+    this.pooQueued = false;
     for (const p of this.poos) p.stopSound();
     audio.play('fanfare');
   }
@@ -504,7 +500,7 @@ export class Game {
   private dropPoo() {
     const b = this.bird.body;
     const r = config.physics.birdRadius;
-    const poo = new Poo(b.position.x, b.position.y + r * 0.6, b.velocity.x * 0.6 + this.pooDir * config.physics.pooSideSpeed, Math.max(1, b.velocity.y));
+    const poo = new Poo(b.position.x, b.position.y + r * 0.6, b.velocity.x * 0.6, Math.max(1, b.velocity.y));
     audio.play('shot');
     poo.stopSound = audio.startFall();
     this.poos.push(poo);

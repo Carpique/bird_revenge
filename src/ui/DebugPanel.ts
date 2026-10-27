@@ -152,7 +152,7 @@ export class DebugPanel {
       fl ? `R   ${n(fl.right.angle)} ${n(fl.right.velocity)} ${n(fl.right.power)} ${n(fl.right.effort)} ${String(fl.right.strokes).padStart(4)} ${fl.right.frequency.toFixed(1).padStart(4)}` : '',
       fl ? `lift ${n(fl.lift)}  side ${n(fl.side)} px/s²  asym ${fl.asymmetry.toFixed(2)}` : '',
       '',
-      sh ? `shoot hips L ${n(sh.left)}  R ${n(sh.right)}  raised ${sh.raisedLeg ?? '-'}` : '',
+      sh ? `shoot hips L ${n(sh.left)}  R ${n(sh.right)}` : '',
       sh ? `shooting ${sh.shooting ? 'YES' : 'no'}` : '',
       info.glide
         ? `glide line tilt ${info.glide.line ? n(info.glide.line.tilt) : '    -'}° bend ${info.glide.line ? info.glide.line.bend.toFixed(2) : '-'}` +

@@ -91,8 +91,6 @@ export const config = {
     angleEnter: 21,
     /** ...and both legs back below this to leave it */
     angleExit: 12,
-    /** left-right hip angle difference (deg) above which one leg counts as the raised one */
-    legRaiseMin: 13,
     cooldownMs: 700,
     /** slowly re-learn the standing hip angles while standing (stance drifts a little) */
     baselineAdaptRate: 0.02,
@@ -181,8 +179,6 @@ export const config = {
     /** px per physics step (60 Hz) */
     maxSpeed: 14,
     pooRadius: 9,
-    /** sideways poo speed (px per physics step) when dropped with one leg raised, towards that leg's side */
-    pooSideSpeed: 3,
     /** fraction of the bird's sideways speed lost per physics step while sitting on a branch */
     branchFriction: 0.15,
   },
