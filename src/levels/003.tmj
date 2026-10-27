@@ -158,7 +158,7 @@
                         {
                          "name":"throwDelay",
                          "type":"float",
-                         "value":10
+                         "value":30
                         }],
                  "rotation":0,
                  "type":"Villain",
@@ -214,7 +214,7 @@
                  "rotation":0,
                  "type":"Terrain",
                  "visible":true,
-                 "width":320,
+                 "width":256,
                  "x":640,
                  "y":448
                 }, 
@@ -229,7 +229,7 @@
                          "y":0
                         }, 
                         {
-                         "x":-304,
+                         "x":-240,
                          "y":0
                         }],
                  "properties":[
@@ -242,7 +242,7 @@
                  "type":"Villain",
                  "visible":true,
                  "width":0,
-                 "x":960,
+                 "x":896,
                  "y":448
                 }, 
                 {
@@ -282,20 +282,20 @@
                          "y":0
                         }, 
                         {
-                         "x":301.852813852814,
+                         "x":221.852813852814,
                          "y":0
                         }],
                  "properties":[
                         {
                          "name":"throwDelay",
                          "type":"float",
-                         "value":8
+                         "value":0
                         }],
                  "rotation":0,
                  "type":"Villain",
                  "visible":true,
                  "width":0,
-                 "x":960,
+                 "x":1040,
                  "y":637.229437229437
                 }, 
                 {
