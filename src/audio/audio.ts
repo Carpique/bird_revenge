@@ -35,6 +35,9 @@ class GameAudio {
   private musicWanted = false;
   /** stopped by `stopMusic` until `nextTrackIfStopped` */
   private musicStopped = false;
+  /** when (performance.now) `stopMusic` started fading the music out; null when not fading */
+  private fadeStart: number | null = null;
+  private fadeMs = 0;
   /** the music element has played once inside a click / key press, so it may play later */
   private musicUnlocked = false;
   private suspended = false;
@@ -165,12 +168,24 @@ class GameAudio {
   update() {
     const v = this.muted ? 0 : this.volume;
     const effects = v * config.audio.effects;
-    const music = v * config.audio.music;
+    const music = v * config.audio.music * this.musicFade();
     const fall = v * config.audio.fall;
     if (effects !== this.applied.effects) sound.volumeAll = effects;
     if (music !== this.applied.music) this.music.volume = Math.min(1, Math.max(0, music));
     if (fall !== this.applied.fall && this.fallBus) this.fallBus.gain.value = fall;
     this.applied = { effects, music, fall };
+  }
+
+  /** 1 → 0 while the music fades out after `stopMusic`; it's paused at 0. */
+  private musicFade(): number {
+    if (this.fadeStart === null) return 1;
+    const k = Math.min(1, (performance.now() - this.fadeStart) / this.fadeMs);
+    if (k >= 1) {
+      this.fadeStart = null;
+      this.music.pause();
+      return 1; // volume back for the next song; it stays paused until then
+    }
+    return 1 - k;
   }
 
   private bus(ctx: AudioContext): GainNode {
@@ -190,12 +205,14 @@ class GameAudio {
     if (!this.suspended) this.playMusic();
   }
 
-  /** Stop the music (a level is won) until `nextTrackIfStopped`. */
-  stopMusic() {
+  /** Fade the music out over `fadeMs` (a level is won); it stays stopped until `nextTrackIfStopped`. */
+  stopMusic(fadeMs: number) {
     if (!this.musicWanted) return;
     this.musicWanted = false;
     this.musicStopped = true;
-    this.music.pause();
+    if (this.music.paused) return;
+    this.fadeStart = performance.now();
+    this.fadeMs = Math.max(1, fadeMs);
   }
 
   /** After `stopMusic`: the next song, from its start (a new level). Otherwise nothing changes. */
@@ -203,6 +220,11 @@ class GameAudio {
     if (!this.musicStopped) return;
     this.musicStopped = false;
     this.musicWanted = true;
+    if (this.fadeStart !== null) {
+      // still fading out: cut it short
+      this.fadeStart = null;
+      this.music.pause();
+    }
     if (!this.tracks.length) return;
     this.setTrack(this.tracks[(this.tracks.indexOf(this.track) + 1) % this.tracks.length]);
     if (!this.suspended) this.playMusic();
@@ -242,6 +264,7 @@ class GameAudio {
 
   /** Several songs: the next one in order, back to the first after the last. */
   private nextTrack() {
+    if (this.musicStopped) return; // the next level picks the next song
     this.setTrack(this.tracks[(this.tracks.indexOf(this.track) + 1) % this.tracks.length]);
     if (!this.suspended) void this.music.play().catch(() => {});
   }

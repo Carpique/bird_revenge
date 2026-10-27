@@ -355,7 +355,7 @@ export class Game {
       this.allSavedT = 0;
       this.bird.makeInvulnerable(config.levelComplete.graceMs);
       for (const v of this.villains) v.frozen = true;
-      audio.stopMusic();
+      audio.stopMusic(config.levelComplete.graceMs);
     }
   }
 
