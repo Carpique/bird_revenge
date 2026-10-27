@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { config } from '../src/config';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { config, type Config } from '../src/config';
 import { FlapDetector } from '../src/gestures/FlapDetector';
 import { fitArmLine, TiltDetector } from '../src/gestures/TiltDetector';
 import { flightStep, sideAmount } from '../src/game/flight';
@@ -12,6 +12,13 @@ import { i18n } from '../src/ui/i18n';
 import { frames, synthPose } from './synthetic';
 
 i18n.set('en'); // hints are matched in English
+
+/** Within a describe block: run its tests with these config values, so they test the mechanism, not the current tuning. */
+const pin = <S extends keyof Config>(section: S, values: Partial<Config[S]>) => {
+  const saved = { ...(config[section] as object) };
+  beforeEach(() => Object.assign(config[section] as object, values));
+  afterEach(() => Object.assign(config[section] as object, saved));
+};
 
 const flapAngle = (t: number, hz: number, lo = 20, hi = 150) =>
   lo + ((hi - lo) * (1 - Math.cos(2 * Math.PI * hz * (t / 1000)))) / 2;
@@ -230,6 +237,8 @@ describe('VisibilityMonitor', () => {
 });
 
 describe('TiltDetector', () => {
+  pin('tilt', { fullTilt: 35 });
+  pin('hover', { maxBend: 0.12 });
   const run = (fs: ReturnType<typeof frames>) => {
     const flap = new FlapDetector();
     const tilt = new TiltDetector();
@@ -308,6 +317,7 @@ describe('TiltDetector', () => {
 });
 
 describe('flight physics', () => {
+  pin('tilt', { fullTilt: 35, holdDrag: 0.2 });
   /**
    * `steps` physics steps (default 2 s) at a fixed tilt with Matter's gravity and air friction, from velocity v0
    * (px/step) and `sinceFlap` ms after the last flap; `lift` (px/s²) counts as flapping. Returns the velocity and

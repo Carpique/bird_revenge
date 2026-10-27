@@ -66,8 +66,8 @@ export const config = {
      * Right after the last flap the bird falls gently: only this fraction of gravity acts, rising smoothly (ease-in)
      * back to full gravity over `afterFlapMs`, so a few flaps keep the altitude. Only while falling, in flapping mode.
      */
-    afterFlapGravity: 0.2,
-    afterFlapMs: 1000,
+    afterFlapGravity: 0.4,
+    afterFlapMs: 500,
     /** minimum peak-to-trough arm swing (deg) to count as a stroke (stats only) */
     strokeMinAmplitude: 38,
   },
@@ -94,9 +94,9 @@ export const config = {
     /** tilts within ±this (deg) count as level: no sideways flight */
     deadZone: 10,
     /** tilt (deg) at which the bird flies sideways at full `sideSpeed` */
-    fullTilt: 35,
+    fullTilt: 11,
     /** sideways speed at full tilt, px per physics step */
-    sideSpeed: 7,
+    sideSpeed: 8,
     /** how quickly the bird picks up (or reverses) its sideways speed, px/s² */
     sideAccel: 1800,
     /** how far the bird leans (deg) flying sideways at full speed */
@@ -105,7 +105,7 @@ export const config = {
      * tilted or hovering (a T), a fall is braked by this fraction per physics step (gravity cancelled), so the bird
      * keeps its altitude
      */
-    holdDrag: 0.2,
+    holdDrag: 0,
     /** tilted or hovering in the air, the wings beat this many times faster than the flap animation's normal fps */
     holdFlapRate: 2,
   },
@@ -119,13 +119,13 @@ export const config = {
    */
   hover: {
     /** arms below horizontal: how far the arm points may stray from a straight line (perpendicular RMS / along-line RMS) */
-    maxBend: 0.12,
+    maxBend: 0.2,
     /** arms tilted more than this (deg) aren't a spread */
-    maxTilt: 60,
+    maxTilt: 40,
     /** arms above horizontal: the highest average raise (deg above horizontal) that still counts, a V */
     maxRaise: 50,
     /** arms above horizontal: each elbow at least this straight (deg, 180 = straight) */
-    minElbowAngle: 150,
+    minElbowAngle: 120,
     /** arms moving faster than this (deg/s) are flapping, not spread */
     maxArmSpeed: 120,
     /** the pose must hold this long to start hovering... */
@@ -295,6 +295,27 @@ export const config = {
 };
 
 export type Config = typeof config;
+
+/** The built-in values, before any saved tuning is applied. */
+const defaults: Config = structuredClone(config);
+
+/** Only the values in `current` that differ from `base`, keeping the nesting; undefined if none do. */
+function diffDeep(current: unknown, base: unknown): unknown {
+  if (current && typeof current === 'object' && base && typeof base === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(current)) {
+      const d = diffDeep(v, (base as Record<string, unknown>)[k]);
+      if (d !== undefined) out[k] = d;
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+  return current === base ? undefined : current;
+}
+
+/** The tuned values that differ from the defaults. */
+export function changedConfig(): Record<string, unknown> {
+  return (diffDeep(config, defaults) as Record<string, unknown>) ?? {};
+}
 
 const STORAGE_KEY = 'pooping-birds-config';
 

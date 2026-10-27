@@ -39,8 +39,8 @@ Hotkeys: **D** debug panel · **G** tuning panel · **Esc** keyboard-only mode �
 ## Tuning
 
 Press **G** for live sliders over everything in `src/config.ts` (flap gains, tilt and hover feel, shoot thresholds,
-visibility timing, physics). "save" stores your values in this browser; "copy as JSON" lets you
-paste them into `src/config.ts` to make them the defaults.
+visibility timing, physics). "save" stores your values in this browser; "copy changes as JSON" copies only the values that differ from the defaults, to
+paste into `src/config.ts` to make them the defaults.
 
 Press **D** to see the camera skeleton, a 5-second plot of arm angles / lift / shoot hip angle, and
 the raw numbers the detectors use.

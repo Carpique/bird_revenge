@@ -1,5 +1,5 @@
 import GUI from 'lil-gui';
-import { clearSavedConfig, config, saveConfig } from '../config';
+import { changedConfig, clearSavedConfig, config, saveConfig } from '../config';
 
 /** Slider ranges for the tuning panel; anything not listed gets a plain number box. */
 const RANGES: Record<string, [number, number, number]> = {
@@ -114,7 +114,7 @@ export class Tuning {
       if (section !== 'posture' && section !== 'flap' && section !== 'tilt' && section !== 'hover' && section !== 'shoot') folder.close();
     }
     this.gui.add({ save: () => saveConfig() }, 'save').name('💾 save to this browser');
-    this.gui.add({ copy: () => navigator.clipboard?.writeText(JSON.stringify(config, null, 2)) }, 'copy').name('📋 copy as JSON');
+    this.gui.add({ copy: () => navigator.clipboard?.writeText(JSON.stringify(changedConfig(), null, 2)) }, 'copy').name('📋 copy changes as JSON');
     this.gui.add({ reset: () => (clearSavedConfig(), location.reload()) }, 'reset').name('↺ reset to defaults');
     this.gui.hide();
   }
