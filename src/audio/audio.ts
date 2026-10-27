@@ -8,13 +8,14 @@ export type SfxGroup = 'shot' | 'splat' | 'bad-guy-dies' | 'score' | 'player-hit
 const DIR = 'assets/audio/';
 const STORAGE_KEY = 'pooping-birds-volume';
 
-/** "splat-2.mp3" → "splat"; every "music-*" file is in the "music" group */
-const groupOf = (file: string) => (file.startsWith('music-') ? 'music' : file.replace(/\.[^.]+$/, '').replace(/-\d+$/, ''));
+/** "splat-2.mp3" → "splat"; every "music-*" file is in the "music" group, every "main-theme-*" in "main-theme" */
+const groupOf = (file: string) => file.replace(/\.[^.]+$/, '').replace(/-\d+$/, '');
 const url = (file: string) => import.meta.env.BASE_URL + DIR + file;
 
 /**
  * All game audio. Effects are decoded into memory by @pixi/sound so they play instantly; music is
- * streamed through an <audio> element (a whole song decoded would take ~60 MB). The falling-poo
+ * streamed through an <audio> element (a whole song decoded would take ~60 MB), and so is the title
+ * screen's theme (`playTheme`), on an element of its own. The falling-poo
  * tone is synthesised on @pixi/sound's AudioContext.
  *
  * Browsers only allow sound after a click or key press. Music starts with the first countdown
@@ -40,12 +41,19 @@ class GameAudio {
   private fadeMs = 0;
   /** the music element has played once inside a click / key press, so it may play later */
   private musicUnlocked = false;
+  private themes: string[] = [];
+  private theme = new Audio();
+  /** the title screen wants its theme played (it's waiting for a click / key press, or playing) */
+  private themeWanted = false;
+  /** when `stopTheme` started fading the theme out; null when not fading */
+  private themeFadeStart: number | null = null;
+  private themeFadeMs = 0;
   private suspended = false;
   private warned = new Set<string>();
   /** the falling-poo tones go through this, so volume changes reach tones already playing */
   private fallBus: GainNode | null = null;
   /** last levels applied (only push changes) */
-  private applied = { effects: -1, music: -1, fall: -1 };
+  private applied = { effects: -1, music: -1, theme: -1, fall: -1 };
 
   constructor() {
     try {
@@ -60,8 +68,8 @@ class GameAudio {
     sound.disableAutoPause = true;
     for (const f of files) {
       const g = groupOf(f);
-      if (g === 'music') {
-        this.tracks.push(f);
+      if (g === 'music' || g === 'main-theme') {
+        (g === 'music' ? this.tracks : this.themes).push(f);
         continue;
       }
       sound.add(f, { url: url(f), preload: true });
@@ -73,13 +81,18 @@ class GameAudio {
     this.music.preload = 'none';
     this.music.loop = this.tracks.length === 1;
     this.music.addEventListener('ended', () => this.nextTrack());
+    this.theme.preload = 'auto';
+    if (this.themes.length) this.theme.src = url(this.themes[0]);
+    // played once to its end, not looped
+    this.theme.addEventListener('ended', () => (this.themeWanted = false));
 
     const unlock = () => {
       if (this.suspended) return;
       void sound.context.audioContext.resume();
       if (this.musicWanted) this.playMusic();
       else this.unlockMusic();
-      if (this.musicUnlocked || !this.tracks.length) {
+      if (this.themeWanted) this.resumeTheme();
+      if ((this.musicUnlocked || !this.tracks.length) && !(this.themeWanted && this.theme.paused)) {
         window.removeEventListener('pointerdown', unlock, true);
         window.removeEventListener('keydown', unlock, true);
       }
@@ -158,9 +171,11 @@ class GameAudio {
     if (suspended) {
       sound.pauseAll();
       this.music.pause();
+      this.theme.pause();
     } else {
       sound.resumeAll();
       if (this.musicWanted) this.playMusic();
+      if (this.themeWanted) this.resumeTheme();
     }
   }
 
@@ -169,11 +184,13 @@ class GameAudio {
     const v = this.muted ? 0 : this.volume;
     const effects = v * config.audio.effects;
     const music = v * config.audio.music * this.musicFade();
+    const theme = v * config.audio.music * this.themeFade();
     const fall = v * config.audio.fall;
     if (effects !== this.applied.effects) sound.volumeAll = effects;
     if (music !== this.applied.music) this.music.volume = Math.min(1, Math.max(0, music));
+    if (theme !== this.applied.theme) this.theme.volume = Math.min(1, Math.max(0, theme));
     if (fall !== this.applied.fall && this.fallBus) this.fallBus.gain.value = fall;
-    this.applied = { effects, music, fall };
+    this.applied = { effects, music, theme, fall };
   }
 
   /** 1 → 0 while the music fades out after `stopMusic`; it's paused at 0. */
@@ -186,6 +203,49 @@ class GameAudio {
       return 1; // volume back for the next song; it stays paused until then
     }
     return 1 - k;
+  }
+
+  /** 1 → 0 while the theme fades out after `stopTheme`; it's paused at 0. */
+  private themeFade(): number {
+    if (this.themeFadeStart === null) return 1;
+    const k = Math.min(1, (performance.now() - this.themeFadeStart) / this.themeFadeMs);
+    if (k >= 1) {
+      this.themeFadeStart = null;
+      this.theme.pause();
+      return 1;
+    }
+    return 1 - k;
+  }
+
+  /**
+   * The title screen showed up: its theme from the start, played through once. Before the first
+   * click / key press the browser doesn't allow it, so it starts then.
+   */
+  playTheme() {
+    if (!this.themes.length) return;
+    this.themeWanted = true;
+    this.themeFadeStart = null;
+    this.theme.currentTime = 0;
+    if (!this.suspended) this.resumeTheme();
+  }
+
+  /** Fade the theme out over `fadeMs` (the title screen is left). */
+  stopTheme(fadeMs: number) {
+    if (!this.themeWanted) return;
+    this.themeWanted = false;
+    if (this.theme.paused) return;
+    this.themeFadeStart = performance.now();
+    this.themeFadeMs = Math.max(1, fadeMs);
+  }
+
+  private resumeTheme() {
+    if (!this.theme.paused) return;
+    this.theme
+      .play()
+      .then(() => {
+        if (this.suspended || !this.themeWanted) this.theme.pause();
+      })
+      .catch(() => {}); // not allowed yet: the next click / key press tries again
   }
 
   private bus(ctx: AudioContext): GainNode {

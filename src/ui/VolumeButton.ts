@@ -23,7 +23,10 @@ export class VolumeButton {
     b.tabIndex = -1;
     b.className = 'corner-button';
     b.addEventListener('mousedown', (e) => e.preventDefault());
-    b.addEventListener('click', () => (this.popup.hidden = !this.popup.hidden));
+    b.addEventListener('click', () => {
+      audio.play('button');
+      this.popup.hidden = !this.popup.hidden;
+    });
 
     const s = this.slider;
     s.type = 'range';

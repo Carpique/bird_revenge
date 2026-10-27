@@ -1,3 +1,4 @@
+import { audio } from '../audio/audio';
 import { i18n, t } from './i18n';
 
 const ENTER_ICON =
@@ -28,6 +29,7 @@ export class FullscreenButton {
   }
 
   private toggle() {
+    audio.play('button');
     if (document.fullscreenElement) void document.exitFullscreen();
     else void document.documentElement.requestFullscreen().catch(() => {});
   }

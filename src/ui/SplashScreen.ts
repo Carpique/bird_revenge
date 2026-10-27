@@ -1,4 +1,5 @@
 import { Container, Text, type Application } from 'pixi.js';
+import { audio } from '../audio/audio';
 import { birdDef } from '../characters/bird';
 import { WORLD } from '../config';
 import { Ground } from '../game/Ground';
@@ -135,7 +136,15 @@ export class SplashScreen extends Container {
     });
   }
 
+  /** Arrow keys: the next / previous item, with a click when the highlight moves. */
+  private move(step: number) {
+    const from = this.selected;
+    this.select(this.selected + step);
+    if (this.selected !== from) audio.play('button');
+  }
+
   private activate(i: number) {
+    audio.play('button');
     this.select(i);
     this.items[i].action();
   }
@@ -143,10 +152,13 @@ export class SplashScreen extends Container {
   private onKey(e: KeyboardEvent) {
     if (!this.visible || e.repeat) return;
     const k = e.key;
-    if (k === 'ArrowUp' || k === 'w') this.select(this.selected - 1);
-    else if (k === 'ArrowDown' || k === 's') this.select(this.selected + 1);
+    if (k === 'ArrowUp' || k === 'w') this.move(-1);
+    else if (k === 'ArrowDown' || k === 's') this.move(1);
     else if (k === 'Enter' || k === ' ') this.activate(this.selected);
-    else if (k === 'Escape' && this.page !== 'main') this.showPage('main');
+    else if (k === 'Escape' && this.page !== 'main') {
+      audio.play('button');
+      this.showPage('main');
+    }
     else return;
     e.preventDefault();
   }

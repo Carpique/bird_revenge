@@ -1,3 +1,4 @@
+import { audio } from '../audio/audio';
 import { i18n, type Lang } from './i18n';
 
 const FLAGS: Record<Lang, string> = {
@@ -28,7 +29,10 @@ export class LanguageButton {
     b.tabIndex = -1;
     b.hidden = true; // until the title screen shows
     b.addEventListener('mousedown', (e) => e.preventDefault());
-    b.addEventListener('click', () => i18n.set(this.other()));
+    b.addEventListener('click', () => {
+      audio.play('button');
+      i18n.set(this.other());
+    });
     i18n.onChange(() => this.update());
     this.update();
     document.body.appendChild(b);

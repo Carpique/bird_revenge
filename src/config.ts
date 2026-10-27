@@ -256,6 +256,8 @@ export const config = {
   /** Mix levels (multiplied by the speaker button's volume) and the falling-poo sound. */
   audio: {
     music: 0.5,
+    /** the title screen's theme fades out over this when the game starts */
+    themeFadeMs: 1500,
     effects: 0.75,
     /** the falling-poo tone; keep it low, it's on for the whole fall */
     fall: 0.06,

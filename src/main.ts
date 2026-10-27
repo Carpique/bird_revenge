@@ -169,6 +169,7 @@ async function main() {
   };
 
   /** states where the game is on screen and can be paused */
+  let menuShown = false;
   const inGame = () => state === 'countdown' || state === 'playing' || state === 'outOfFrame' || state === 'keyboard' || state === 'gameOver';
   let focused = document.hasFocus();
   const windowActive = () => focused && !document.hidden;
@@ -378,6 +379,10 @@ async function main() {
     game.paused = manualPause || !(state === 'playing' || state === 'outOfFrame' || state === 'keyboard' || state === 'gameOver');
     game.showPausedText = manualPause;
     splash.visible = state === 'menu';
+    // the title screen showing up plays its theme from the start; leaving it fades the theme out
+    if (splash.visible && !menuShown) audio.playTheme();
+    if (!splash.visible && menuShown) audio.stopTheme(config.audio.themeFadeMs);
+    menuShown = splash.visible;
     language.visible = splash.visible;
     game.root.visible = !splash.visible;
 
