@@ -101,6 +101,40 @@ describe('FlapDetector', () => {
   });
 });
 
+describe('FlapDetector priming', () => {
+  pin('flap', { velocityDeadzone: 40, primeRise: 25, primeVelocity: 40, primeHoldMs: 350 });
+
+  /** max lift over a piecewise-linear arm path: [ms, angle] points, both arms alike */
+  const maxLiftAlong = (path: [number, number][]) => {
+    const d = new FlapDetector();
+    const at = (t: number) => {
+      const i = path.findIndex(([pt]) => pt >= t);
+      if (i <= 0) return path[Math.max(0, i)][1];
+      const [t0, a0] = path[i - 1], [t1, a1] = path[i];
+      return a0 + ((a1 - a0) * (t - t0)) / (t1 - t0);
+    };
+    let max = 0;
+    for (const f of frames(path[path.length - 1][0], (t) => ({ armLeft: at(t), armRight: at(t) }))) max = Math.max(max, d.update(f, true, true).lift);
+    return max;
+  };
+
+  it('lowering the arms from a held T does not flap', () => {
+    expect(maxLiftAlong([[0, 90], [1000, 90], [1300, 20], [1600, 20]])).toBe(0);
+  });
+
+  it('raising the arms, holding them, then lowering does not flap', () => {
+    expect(maxLiftAlong([[0, 20], [300, 120], [1200, 120], [1500, 20], [1800, 20]])).toBe(0);
+  });
+
+  it('raising then flapping straight down lifts', () => {
+    expect(maxLiftAlong([[0, 20], [300, 120], [400, 120], [600, 20], [800, 20]])).toBeGreaterThan(config.physics.gravity * 1000);
+  });
+
+  it('a small twitch up does not prime', () => {
+    expect(maxLiftAlong([[0, 90], [500, 90], [600, 100], [800, 20], [1000, 20]])).toBe(0);
+  });
+});
+
 describe('ShootDetector', () => {
   const baseline = () => {
     const f = synthPose({ t: 0 });

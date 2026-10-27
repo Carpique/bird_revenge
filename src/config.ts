@@ -56,7 +56,16 @@ export const config = {
 
   flap: {
     /** downward arm angular speed (deg/s) below which nothing happens */
-    velocityDeadzone: 60,
+    velocityDeadzone: 40,
+    /**
+     * a downstroke only lifts after the arm was raised (primed): by at least this much (deg) from its lowest point,
+     * so lowering the arms from a held pose (to sink) doesn't flap
+     */
+    primeRise: 25,
+    /** ...rising faster than this (deg/s) */
+    primeVelocity: 40,
+    /** ...and a primed arm held still (neither rising nor flapping down) this long (ms) disarms */
+    primeHoldMs: 350,
     /** EMA factor for angular velocity per pose frame (higher = more responsive, noisier) */
     velocitySmoothing: 0.5,
     /** upward acceleration (px/s²) per deg/s of downstroke speed, averaged over both arms */

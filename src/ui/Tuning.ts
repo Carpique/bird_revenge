@@ -9,6 +9,9 @@ const DOCS = parseConfigDocs(configSource);
 /** Slider ranges for the tuning panel; anything not listed gets a plain number box. */
 const RANGES: Record<string, [number, number, number]> = {
   'flap.velocityDeadzone': [0, 300, 5],
+  'flap.primeRise': [0, 90, 1],
+  'flap.primeVelocity': [0, 300, 5],
+  'flap.primeHoldMs': [0, 2000, 25],
   'flap.velocitySmoothing': [0.05, 1, 0.05],
   'flap.liftGain': [0, 40, 0.5],
   'flap.maxLiftAccel': [500, 8000, 100],
