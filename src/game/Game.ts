@@ -44,7 +44,7 @@ export class Game {
   over = false;
   /** called once when the bird has fallen off the screen for the last time */
   onGameOver: (() => void) | null = null;
-  /** all friends saved; frozen behind "Hooray" until the next level loads */
+  /** all friends saved and the grace time over; frozen behind "Hooray" until the next level loads */
   complete = false;
   /** called once, a while after the last friend is saved: time to load the next level */
   onLevelComplete: (() => void) | null = null;
@@ -94,8 +94,10 @@ export class Game {
   /** ms since game over (drives the falling sign) */
   private overT = 0;
   private completeText: Text;
-  /** ms since the last friend was saved (drives the falling sign and the next level) */
+  /** ms since the level completed (drives the falling sign and the next level) */
   private completeT = 0;
+  /** ms since the last friend was saved, while play goes on for `config.levelComplete.graceMs`; null before */
+  private allSavedT: number | null = null;
   /** queued poo request: sideways direction (-1 left, 0 straight down, +1 right), or null */
   private pooQueued: number | null = null;
   private pooDir = 0;
@@ -185,6 +187,8 @@ export class Game {
     this.pooQueued = null;
     this.complete = false;
     this.completeT = 0;
+    this.allSavedT = null;
+    audio.nextTrackIfStopped();
     this.buildLevel();
     const start = this.birdStart();
     this.bird.respawn(start.x, start.y, false);
@@ -293,6 +297,7 @@ export class Game {
     this.timers = this.timers.filter((t) => t.ms > 0);
     for (const t of due) t.fn();
     this.saveFriends();
+    if (this.allSavedT !== null && (this.allSavedT += STEP_MS) >= config.levelComplete.graceMs) this.completeLevel();
     // bird touching a walking villain costs a life
     const b = this.bird.body;
     if (!this.bird.dying && !this.bird.invulnerable && this.villains.some((v) => v.touches(b.position.x, b.position.y, config.physics.birdRadius))) {
@@ -335,7 +340,7 @@ export class Game {
     });
   }
 
-  /** The bird flying into a friend saves it; saving the last one completes the level. */
+  /** The bird flying into a friend saves it; saving the last one completes the level after a grace time. */
   private saveFriends() {
     if (this.bird.dying) return;
     const b = this.bird.body.position;
@@ -345,7 +350,13 @@ export class Game {
       this.front.addChild(f.view);
       audio.play('friend');
     }
-    if (this.friends.length && this.friends.every((f) => f.state !== 'waiting')) this.completeLevel();
+    if (this.allSavedT === null && this.friends.length && this.friends.every((f) => f.state !== 'waiting')) {
+      // play goes on a little longer, without music; villains stand still and the bird blinks, so nothing can spoil it
+      this.allSavedT = 0;
+      this.bird.makeInvulnerable(config.levelComplete.graceMs);
+      for (const v of this.villains) v.frozen = true;
+      audio.stopMusic();
+    }
   }
 
   /** A button is pressed by the bird's feet on it, a poo falling into it or a splat lying on it; the doors follow. */
@@ -400,12 +411,13 @@ export class Game {
     }
   }
 
-  /** All friends saved: everything stops, "Hooray" drops in, and a while later the next level starts (`onLevelComplete`). */
+  /** The grace time after saving all friends is over: everything stops, "Hooray" drops in with a fanfare, and a while later the next level starts (`onLevelComplete`). */
   private completeLevel() {
     this.complete = true;
     this.completeT = 0;
     this.pooQueued = null;
     for (const p of this.poos) p.stopSound();
+    audio.play('fanfare');
   }
 
   /** A falling poo that crossed a branch's top edge this step splats on the branch. `prevYs`: poo centres before the step. */

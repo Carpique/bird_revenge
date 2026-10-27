@@ -3,7 +3,7 @@ import files from 'virtual:audio-files';
 import { config } from '../config';
 
 /** Sound effect groups; each plays a random file of public/assets/audio/<group>-N.mp3 */
-export type SfxGroup = 'shot' | 'splat' | 'bad-guy-dies' | 'score' | 'player-hit' | 'boing' | 'sad-audience' | 'friend' | 'button';
+export type SfxGroup = 'shot' | 'splat' | 'bad-guy-dies' | 'score' | 'player-hit' | 'boing' | 'sad-audience' | 'friend' | 'button' | 'fanfare';
 
 const DIR = 'assets/audio/';
 const STORAGE_KEY = 'pooping-birds-volume';
@@ -33,6 +33,8 @@ class GameAudio {
   private track = '';
   /** the game wants music (from the first countdown on) */
   private musicWanted = false;
+  /** stopped by `stopMusic` until `nextTrackIfStopped` */
+  private musicStopped = false;
   /** the music element has played once inside a click / key press, so it may play later */
   private musicUnlocked = false;
   private suspended = false;
@@ -185,6 +187,24 @@ class GameAudio {
   startMusic() {
     if (this.musicWanted) return;
     this.musicWanted = true;
+    if (!this.suspended) this.playMusic();
+  }
+
+  /** Stop the music (a level is won) until `nextTrackIfStopped`. */
+  stopMusic() {
+    if (!this.musicWanted) return;
+    this.musicWanted = false;
+    this.musicStopped = true;
+    this.music.pause();
+  }
+
+  /** After `stopMusic`: the next song, from its start (a new level). Otherwise nothing changes. */
+  nextTrackIfStopped() {
+    if (!this.musicStopped) return;
+    this.musicStopped = false;
+    this.musicWanted = true;
+    if (!this.tracks.length) return;
+    this.setTrack(this.tracks[(this.tracks.indexOf(this.track) + 1) % this.tracks.length]);
     if (!this.suspended) this.playMusic();
   }
 

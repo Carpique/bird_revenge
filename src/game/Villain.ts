@@ -48,6 +48,8 @@ const nextPauseTime = () => randomBetween(config.villain.minPauseMs, config.vill
 export class Villain {
   readonly body: MBody;
   readonly view = new CharacterSprite<VillainAnim>(villainDef);
+  /** stands still where he is, mid-stride (the level is won); one already knocked off still flies away */
+  frozen = false;
   private state: State = 'walking';
   private x = 0;
   /** y of his feet: what he walks on */
@@ -111,6 +113,7 @@ export class Villain {
   }
 
   step(stepMs: number, { bird, obstacles }: Surroundings) {
+    if (this.frozen && this.state === 'walking') return;
     const speed = config.villain.speed;
     this.timer += stepMs;
     switch (this.state) {
@@ -183,8 +186,9 @@ export class Villain {
     this.view.scale.set(this.scale);
     this.view.position.set(this.x, this.y + (HEIGHT * this.scale) / 2);
     this.view.setFacing(this.dir > 0 ? 'right' : 'left');
+    if (this.frozen && this.state === 'walking') this.view.anim.stop();
     // standing still: in the windup of a throw, or stopped for a moment
-    if (this.aimT !== null || this.pauseLeft !== null) this.view.showPhase('walk', 0);
+    else if (this.aimT !== null || this.pauseLeft !== null) this.view.showPhase('walk', 0);
     else this.view.play(this.state === 'walking' ? 'walk' : 'hit');
   }
 

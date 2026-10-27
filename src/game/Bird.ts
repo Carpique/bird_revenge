@@ -151,6 +151,11 @@ export class Bird {
     this.invulnT = invulnerable ? config.player.invulnerableMs : 0;
   }
 
+  /** Blink and be unhurtable for (at least) `ms`. */
+  makeInvulnerable(ms: number) {
+    this.invulnT = Math.max(this.invulnT, ms);
+  }
+
   /** Start the squat-then-poo animation; `drop` is called at the deepest point. */
   squat(): boolean {
     if (this.squashT !== null) return false;

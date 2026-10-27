@@ -279,9 +279,11 @@ export const config = {
     showMs: 4000,
   },
   levelComplete: {
-    /** the "Hooray" sign drops from the top to the middle in this long */
+    /** play goes on this long after the last friend is saved (the bird blinking, unhurtable); then everything stops */
+    graceMs: 2000,
+    /** the "Hooray" sign drops from the top to the middle in this long, with a fanfare */
     dropMs: 1000,
-    /** ...and the next level starts this long after the last friend is saved */
+    /** ...and the next level starts this long after everything stopped (the fanfare's length) */
     nextMs: 3000,
   },
 };
