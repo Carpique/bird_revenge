@@ -60,14 +60,14 @@ export const config = {
     /** EMA factor for angular velocity per pose frame (higher = more responsive, noisier) */
     velocitySmoothing: 0.5,
     /** upward acceleration (px/s²) per deg/s of downstroke speed, averaged over both arms */
-    liftGain: 21,
-    maxLiftAccel: 6000,
+    liftGain: 30,
+    maxLiftAccel: 3000,
     /**
      * Right after the last flap the bird falls gently: only this fraction of gravity acts, rising smoothly (ease-in)
      * back to full gravity over `afterFlapMs`, so a few flaps keep the altitude. Only while falling, in flapping mode.
      */
     afterFlapGravity: 0.4,
-    afterFlapMs: 500,
+    afterFlapMs: 300,
     /** minimum peak-to-trough arm swing (deg) to count as a stroke (stats only) */
     strokeMinAmplitude: 38,
   },
@@ -105,9 +105,9 @@ export const config = {
      * from `fineTilt` (deg), all fine, to `boostTilt`, full speed and acceleration straight away
      */
     fineSpeed: 2,
-    fineAccel: 600,
-    fineMs: 1500,
-    fineTilt: 20,
+    fineAccel: 300,
+    fineMs: 1000,
+    fineTilt: 25,
     boostTilt: 35,
     /** how far the bird leans (deg) flying sideways at full speed */
     leanDeg: 20,
