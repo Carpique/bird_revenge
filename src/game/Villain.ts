@@ -10,7 +10,7 @@ type VillainAnim = keyof typeof villainDef.animations;
 /** his centre stays this far inside the screen edges, whatever his path */
 const MIN_X = 60, MAX_X = WORLD.width - 60;
 const HEIGHT = villainDef.displayHeight;
-/** where the apple leaves his hand: in front of him (along his facing), above the feet */
+/** where the apple leaves his hand: in front of him (the way he walks), above the feet */
 const HAND_DX = 22, HAND_DY = 95;
 
 /** A stretch of ground, `x0` < `x1` (world px). */
@@ -39,7 +39,9 @@ const nextPauseTime = () => randomBetween(config.villain.minPauseMs, config.vill
  * He starts off a random way, and his stops and throws are random too, so villains don't move in step.
  * He turns only at the ends of the path, or at an obstacle (a poo splat, a crate, the edge of his shelf): about to walk into one,
  * he stops as if for one of his usual stops, then turns back.
- * Every `throwDelay` seconds or so he stops, turns to the bird and throws an apple at it, then walks on the way he was going.
+ * Every `throwDelay` seconds or so he stops and throws an apple at the bird, then walks on the way he was going.
+ * He never turns to throw: only at a bird in front of him (the half of the world the way he walks); with the bird behind him
+ * the throw waits until it's in front.
  * When hit, he is knocked off the screen arcade style: a little hop, then a parabolic fall past the bottom edge,
  * growing as if flying towards the camera. He's gone for good then.
  */
@@ -55,10 +57,8 @@ export class Villain {
   private vx = 0;
   private vy = 0;
   private scale = 1;
-  /** the way he walks */
+  /** the way he walks, and looks */
   private dir: 1 | -1 = 1;
-  /** the way he looks: the way he walks, except while aiming at the bird */
-  private facing: 1 | -1 = 1;
   /** his path: the stretch his centre stays within */
   private lo = MIN_X;
   private hi = MAX_X;
@@ -71,10 +71,10 @@ export class Villain {
   private walkIn = nextWalkTime();
   /** ms left of a stop, or null when walking */
   private pauseLeft: number | null = null;
-  /** ms into the windup of a throw (standing still, facing the bird), or null when not throwing */
+  /** ms into the windup of a throw (standing still), or null when not throwing */
   private aimT: number | null = null;
-  /** called when an apple leaves his hand, with the hand position */
-  onThrow: ((x: number, y: number) => void) | null = null;
+  /** called when an apple leaves his hand, with the hand position and the way he faces (the apple must fly that way, or straight up/down) */
+  onThrow: ((x: number, y: number, dir: 1 | -1) => void) | null = null;
 
   constructor(def: VillainDef) {
     this.place(def);
@@ -118,24 +118,21 @@ export class Villain {
         if (this.aimT !== null) {
           if (!bird) {
             this.aimT = null;
-            this.facing = this.dir;
             this.throwIn = this.nextThrowDelay();
             break;
           }
-          this.facing = bird.x < this.x ? -1 : 1;
           this.aimT += stepMs;
           if (this.aimT >= config.apple.windupMs) {
             this.aimT = null;
             this.throwIn = this.nextThrowDelay();
-            this.onThrow?.(this.x + this.facing * HAND_DX, this.feetY - HAND_DY);
-            this.facing = this.dir;
+            this.onThrow?.(this.x + this.dir * HAND_DX, this.feetY - HAND_DY, this.dir);
           }
           break;
         }
-        // throws (also in the middle of a stop) while there's a bird to throw at
+        // throws (also in the middle of a stop) while there's a bird in front of him to throw at
         if (bird) {
           this.throwIn -= stepMs;
-          if (this.throwIn <= 0) {
+          if (this.throwIn <= 0 && (bird.x - this.x) * this.dir >= 0) {
             this.aimT = 0;
             break;
           }
@@ -161,7 +158,7 @@ export class Villain {
       case 'hit':
         if (this.timer >= config.villain.hitShowMs) {
           this.enter('falling');
-          this.vx = -this.facing * config.villain.fallSideSpeed;
+          this.vx = -this.dir * config.villain.fallSideSpeed;
           this.vy = -config.villain.fallJumpSpeed;
         }
         break;
@@ -185,14 +182,14 @@ export class Villain {
     // the sprite's anchor is at the feet; keep the body centre in place while scaling
     this.view.scale.set(this.scale);
     this.view.position.set(this.x, this.y + (HEIGHT * this.scale) / 2);
-    this.view.setFacing(this.facing > 0 ? 'right' : 'left');
+    this.view.setFacing(this.dir > 0 ? 'right' : 'left');
     // standing still: in the windup of a throw, or stopped for a moment
     if (this.aimT !== null || this.pauseLeft !== null) this.view.showPhase('walk', 0);
     else this.view.play(this.state === 'walking' ? 'walk' : 'hit');
   }
 
   private turn() {
-    this.dir = this.facing = this.dir > 0 ? -1 : 1;
+    this.dir = this.dir > 0 ? -1 : 1;
   }
 
   /** Would the next step (of `speed` px) take his feet into an obstacle in front of him? */
@@ -223,7 +220,7 @@ export class Villain {
     this.hi = Math.min(path.x1, MAX_X);
     if (this.lo > this.hi) this.lo = this.hi = (this.lo + this.hi) / 2;
     this.x = Math.max(this.lo, Math.min(x, this.hi));
-    this.dir = this.facing = Math.random() < 0.5 ? -1 : 1;
+    this.dir = Math.random() < 0.5 ? -1 : 1;
     this.enter('walking');
   }
 

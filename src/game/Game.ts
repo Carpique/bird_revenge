@@ -192,7 +192,7 @@ export class Game {
     }
     this.villains = this.level.villains.map((def) => {
       const v = new Villain(def);
-      v.onThrow = (x, y) => this.throwApple(x, y);
+      v.onThrow = (x, y, dir) => this.throwApple(x, y, dir);
       Composite.add(this.engine.world, v.body);
       this.actors.addChildAt(v.view, 0);
       return v;
@@ -401,13 +401,15 @@ export class Game {
 
   /**
    * Throw an apple from (x, y) in a straight line at where the bird is now (no leading, so moving dodges it).
-   * It keeps going until it leaves the screen.
+   * It flies only the way the villain faces (`dir`): aimed behind him (the aim error, or the bird crossing over him
+   * during the windup), it goes straight up or down instead. It keeps going until it leaves the screen.
    */
-  private throwApple(x: number, y: number) {
+  private throwApple(x: number, y: number, dir: 1 | -1) {
     const target = this.bird.body.position;
     const v = this.appleSpeed();
     let angle = Math.atan2(target.y - y, target.x - x);
     angle += ((Math.random() * 2 - 1) * config.apple.aimSpread * Math.PI) / 180;
+    if (Math.cos(angle) * dir < 0) angle = Math.sin(angle) < 0 ? -Math.PI / 2 : Math.PI / 2;
     const apple = new Apple(x, y, v * Math.cos(angle), v * Math.sin(angle));
     this.apples.push(apple);
     this.fx.addChild(apple.view);
