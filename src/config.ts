@@ -63,24 +63,11 @@ export const config = {
     liftGain: 21,
     maxLiftAccel: 6000,
     /**
-     * Each arm's recent flapping effort (its downstroke power averaged over the last this-many ms) decides how the
-     * stroke force is split: equal effort lifts, lopsided effort (one arm, or one arm flapping faster) pushes sideways.
+     * Right after the last flap the bird falls gently: only this fraction of gravity acts, rising smoothly (ease-in)
+     * back to full gravity over `afterFlapMs`, so a few flaps keep the altitude. Only while falling, in flapping mode.
      */
-    effortWindowMs: 600,
-    /**
-     * how far apart (ms) the two arms' strokes may start or end and still count as the same flap when comparing
-     * their effort; the sideways push from one arm alone kicks in this much later
-     */
-    phaseGraceMs: 100,
-    /** effort ratio (weaker / stronger arm) at or above which flapping counts as fully symmetric: no sideways push */
-    symmetricRatio: 0.75,
-    /** sideways acceleration (px/s²) per deg/s of downstroke speed, at full asymmetry (one arm alone) */
-    sideGain: 22,
-    maxSideAccel: 3800,
-    /** fraction of the lift that remains at full asymmetry, so one-arm flapping can hold some height */
-    asymmetricLift: 0.75,
-    /** on: the bird moves towards the stronger (or only) flapping arm. off: away from it, like rowing */
-    invertSideFlap: true,
+    afterFlapGravity: 0.2,
+    afterFlapMs: 1000,
     /** minimum peak-to-trough arm swing (deg) to count as a stroke (stats only) */
     strokeMinAmplitude: 38,
   },
@@ -97,55 +84,72 @@ export const config = {
   },
 
   /**
-   * "glide": both arms spread out in a T, in a roughly straight line and held still. Level arms work as a
-   * parachute: the fall slows to `sinkSpeed` and the sideways speed slowly decays. Tilting the arm line
-   * (one hand down, the other up) dives along it towards the lower hand, faster the more it's tilted.
+   * Tilting the arms (one hand lower than the other: a tilted T, flapping tilted, or leaning the whole body) flies
+   * the bird sideways towards the lower hand, faster the more they're tilted, keeping its altitude: it doesn't fall,
+   * and flapping tilted climbs just as fast as flapping level.
    */
-  glide: {
-    /** how far the arm points may stray from a straight line: perpendicular RMS / along-line RMS */
-    maxBend: 0.12,
-    /** arm lines steeper than this (deg) aren't a glide */
-    maxTilt: 45,
-    /** arms moving faster than this (deg/s) are flapping, not gliding */
-    maxArmSpeed: 120,
-    /** the pose must hold this long to start gliding... */
-    enterMs: 150,
-    /** ...and be gone this long to stop */
-    exitMs: 150,
-    /** EMA factor for the tilt per pose frame (lower = steadier, laggier) */
-    tiltSmoothing: 0.3,
-    /** parachute: fall speed with the arms level (px per physics step; normal free fall tops out around 7) */
-    sinkSpeed: 1.5,
-    /** parachute: fraction of the fall speed above `sinkSpeed` braked away per physics step */
-    parachuteDrag: 0.24,
-    /** fraction of the sideways speed lost per physics step while gliding level (on top of `airFriction`) */
-    horizontalDrag: 0.01,
-    /** Matter.js frictionAir while gliding (normal flight: physics.birdAirFriction) */
-    airFriction: 0.01,
-    /** tilts within ±this (deg) count as level: parachute only, no dive */
-    deadZone: 8,
-    /** tilt (deg) at which the dive reaches full `diveSpeed`; steeper tilts only dive more steeply */
-    fullTilt: 45,
-    /** dive speed along the arm line at full tilt, px per physics step (on top of `sinkSpeed`; capped by physics.maxSpeed) */
-    diveSpeed: 8,
-    /** how quickly the bird picks up the dive speed, px/s² */
-    diveAccel: 2400,
-    /** how much the bird leans with the arm line while gliding (1 = exactly like the arms, 0 = upright) */
-    bank: 0.8,
+  tilt: {
+    /** EMA factor for the tilt per pose frame (lower = steadier through out-of-step flaps, laggier) */
+    smoothing: 0.2,
+    /** tilts within ±this (deg) count as level: no sideways flight */
+    deadZone: 10,
+    /** tilt (deg) at which the bird flies sideways at full `sideSpeed` */
+    fullTilt: 35,
+    /** sideways speed at full tilt, px per physics step */
+    sideSpeed: 7,
+    /** how quickly the bird picks up (or reverses) its sideways speed, px/s² */
+    sideAccel: 1800,
+    /** how far the bird leans (deg) flying sideways at full speed */
+    leanDeg: 20,
+    /**
+     * tilted or hovering (a T), a fall is braked by this fraction per physics step (gravity cancelled), so the bird
+     * keeps its altitude
+     */
+    holdDrag: 0.2,
+    /** tilted or hovering in the air, the wings beat this many times faster than the flap animation's normal fps */
+    holdFlapRate: 2,
   },
 
   /**
-   * "posture" control, an alternative to flapping + glide (`enabled` switches between them). Each arm's angle
+   * "hover": both arms spread out and held still: at or above horizontal, a T or raised up to `maxRaise` (a V), each
+   * arm straight; below horizontal, only a roughly straight line through both arms (drooping arms let the bird
+   * fall). Level or tilted. In flapping mode the
+   * bird keeps its altitude (`tilt.holdDrag`); tilted, it also flies sideways. Posture control's T parachute sinks
+   * slowly instead, using `sinkSpeed` and `parachuteDrag`.
+   */
+  hover: {
+    /** arms below horizontal: how far the arm points may stray from a straight line (perpendicular RMS / along-line RMS) */
+    maxBend: 0.12,
+    /** arms tilted more than this (deg) aren't a spread */
+    maxTilt: 60,
+    /** arms above horizontal: the highest average raise (deg above horizontal) that still counts, a V */
+    maxRaise: 50,
+    /** arms above horizontal: each elbow at least this straight (deg, 180 = straight) */
+    minElbowAngle: 150,
+    /** arms moving faster than this (deg/s) are flapping, not spread */
+    maxArmSpeed: 120,
+    /** the pose must hold this long to start hovering... */
+    enterMs: 150,
+    /** ...and be gone this long to stop */
+    exitMs: 150,
+    /** posture control's T parachute: fall speed (px per physics step; normal free fall tops out around 7) */
+    sinkSpeed: 1.5,
+    /** posture control's T parachute: fraction of the fall speed above `sinkSpeed` braked away per physics step */
+    parachuteDrag: 0.24,
+  },
+
+  /**
+   * "posture" control, the alternative to the default flapping + tilt + hover (`flapping` off). Each arm's angle
    * above or below horizontal steers the bird directly:
    * - the higher arm, raised above horizontal, sets the speed (straight up = full speed)
    * - the other arm sets the direction: level → sideways towards it, as high as the speed arm → straight up,
    *   in between → diagonally; below horizontal → the lift is lost and the bird dives towards it, steeper the lower it is
-   * - both arms level (a T) → parachute (as the glide: `glide.sinkSpeed`, `glide.parachuteDrag`)
+   * - both arms level (a T) → parachute (as the hover: `hover.sinkSpeed`, `hover.parachuteDrag`)
    * - no arm above horizontal, one below → free fall, the momentum fades
    */
   posture: {
-    /** on: posture control. off: flapping + glide */
-    enabled: true,
+    /** on (default): flapping + tilt + hover. off: posture control */
+    flapping: true,
     /** EMA factor for the arm angles per pose frame (lower = steadier, laggier) */
     smoothing: 0.4,
     /** arm angles within ±this (deg) of horizontal count as level */
@@ -160,6 +164,8 @@ export const config = {
     accel: 1800,
     /** free fall: fraction of the sideways and upward speed lost per physics step */
     fallDrag: 0.08,
+    /** parachute: fraction of the sideways speed lost per physics step (on top of `airFriction`) */
+    parachuteSideDrag: 0.01,
     /** Matter.js frictionAir while flying, diving or in the parachute (free fall: physics.birdAirFriction) */
     airFriction: 0.01,
     /** how far the bird leans (deg) flying flat out sideways; up to twice that in a straight-down dive */
@@ -186,10 +192,8 @@ export const config = {
   keyboard: {
     /** lift (px/s²) while flap key held */
     lift: 1600,
-    /** sideways accel (px/s²) while arrow held */
-    steer: 1400,
-    /** arm tilt (deg) that Shift + ← / → stands for: Shift alone glides level, with an arrow it dives that way */
-    diveTilt: 30,
+    /** arm tilt (deg) that ← / → stand for: flying sideways that way */
+    tilt: 35,
   },
 
   villain: {

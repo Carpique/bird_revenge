@@ -17,13 +17,12 @@ your arms are visible, raised ones included, down to the elbows plus a bit of th
 
 | Action | Body | Keyboard |
 |---|---|---|
-| Flap / fly up | flap both arms (faster, bigger = more lift) | ↑ |
-| Fly sideways | flap one arm, or one faster than the other | ← → |
-| Glide (parachute) | spread both arms out in a T, held still: the bird sinks slowly, sideways speed fades | Shift |
-| Dive | tilt the spread arms (one hand down, the other up): the bird dives towards the lower hand, faster the more you tilt | Shift + ← → |
+| Flap / fly up | flap both arms (faster, bigger = more lift); right after the last flap the bird falls gently at first | ↑ |
+| Hover | spread both arms out in a T, or raised into a V (up to ~45°), held still: the bird keeps its altitude; lowering them below horizontal lets it fall | Shift |
+| Fly sideways | tilt the arms (one hand lower than the other): the bird flies horizontally towards the lower hand, faster the more you tilt, keeping its altitude; flapping tilted climbs as fast as flapping level | ← → |
 | Poo | shoot: raise either leg sideways (the poo drops straight down) | ↓ |
 
-**Posture control** is the default and replaces flapping and the glide; turn it off with "Posture control" in the tuning panel (**G**) to get the flapping controls in the table above. The arms work like this:
+The controls above are the default (flapping mode). **Posture control** is the alternative: untick "Posture: Flapping" in the tuning panel (**G**). It replaces flapping, tilt and hover, and the arms work like this:
 
 | Arms | Bird |
 |---|---|
@@ -39,7 +38,7 @@ Hotkeys: **D** debug panel · **G** tuning panel · **Esc** keyboard-only mode �
 
 ## Tuning
 
-Press **G** for live sliders over everything in `src/config.ts` (flap gains, glide/dive feel, shoot thresholds,
+Press **G** for live sliders over everything in `src/config.ts` (flap gains, tilt and hover feel, shoot thresholds,
 visibility timing, physics). "save" stores your values in this browser; "copy as JSON" lets you
 paste them into `src/config.ts` to make them the defaults.
 

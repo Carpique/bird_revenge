@@ -93,7 +93,7 @@ describe('posture physics', () => {
   it('T: slow parachute sink', () => {
     const v = fly(postureIntent(0, 0), { x: 0, y: 7 });
     expect(v.y).toBeGreaterThan(0);
-    expect(v.y).toBeLessThan(config.glide.sinkSpeed + 0.5);
+    expect(v.y).toBeLessThan(config.hover.sinkSpeed + 0.5);
   });
 });
 

@@ -9,8 +9,6 @@ export interface ArmState {
   velocity: number;
   /** downstroke "power": downward speed above the dead zone, deg/s (0 when not moving down) */
   power: number;
-  /** recent flapping effort: power averaged over the last `effortWindowMs`, deg/s */
-  effort: number;
   visible: boolean;
   /** completed strokes since start */
   strokes: number;
@@ -25,27 +23,17 @@ export interface FlapOutput {
   right: ArmState;
   /** upward acceleration, px/s² */
   lift: number;
-  /** sideways acceleration, px/s² (+ = right on screen) */
-  side: number;
-  /** 0 = both arms flap equally hard … 1 = only one arm flaps */
-  asymmetry: number;
   /** 0 = arms down … 1 = arms up, for picking the bird's wing frame */
   wingPhase: number;
 }
 
 class ArmTracker {
-  state: ArmState = { angle: 0, velocity: 0, power: 0, effort: 0, visible: false, strokes: 0, lastAmplitude: 0, frequency: 0 };
+  state: ArmState = { angle: 0, velocity: 0, power: 0, visible: false, strokes: 0, lastAmplitude: 0, frequency: 0 };
   private prevAngle: number | null = null;
   private prevT = 0;
   private dir: 1 | -1 | 0 = 0;
   private lastPeak: number | null = null;
   private lastStrokeT = 0;
-  /**
-   * Power samples (power × ms) within the effort window plus `phaseGraceMs`, oldest first. A plain sliding
-   * window, not an exponential average, so an arm that stops flapping reaches zero effort once the window has passed.
-   */
-  private effortSamples: { t: number; work: number }[] = [];
-  private effortSum = 0;
 
   constructor(private side: Side) {}
 
@@ -57,9 +45,6 @@ class ArmTracker {
       this.prevAngle = null;
       s.velocity = 0;
       s.power = 0;
-      s.effort = 0;
-      this.effortSamples = [];
-      this.effortSum = 0;
       this.decayFrequency(f.t);
       return;
     }
@@ -71,7 +56,6 @@ class ArmTracker {
       this.prevT = f.t;
       s.velocity = 0;
       s.power = 0;
-      this.updateEffort(f.t, 0);
       return;
     }
     const dt = Math.max(1, f.t - this.prevT) / 1000;
@@ -79,7 +63,6 @@ class ArmTracker {
     const a = cfg.velocitySmoothing;
     s.velocity = a * rawVel + (1 - a) * s.velocity;
     s.power = Math.max(0, -s.velocity - cfg.velocityDeadzone);
-    this.updateEffort(f.t, s.power * dt * 1000);
 
     // stroke bookkeeping: a stroke = a peak followed by a trough at least strokeMinAmplitude lower
     const newDir: 1 | -1 | 0 = s.velocity > 20 ? 1 : s.velocity < -20 ? -1 : this.dir;
@@ -103,38 +86,15 @@ class ArmTracker {
     this.decayFrequency(f.t);
   }
 
-  /** Add `work` (power × ms) at time t, drop samples older than the window, and refresh `effort`. */
-  private updateEffort(t: number, work: number) {
-    const win = Math.max(1, config.flap.effortWindowMs);
-    const q = this.effortSamples;
-    if (work > 0) {
-      q.push({ t, work });
-      this.effortSum += work;
-    }
-    // keep a little extra history for `workIn`'s phase grace
-    while (q.length && q[0].t <= t - win - config.flap.phaseGraceMs) this.effortSum -= q.shift()!.work;
-    if (!q.length) this.effortSum = 0; // no float drift once empty
-    this.state.effort = this.workIn(t - win, t) / win;
-  }
-
-  /** total power × ms of the samples in (t0, t1] */
-  workIn(t0: number, t1: number): number {
-    let w = 0;
-    for (const s of this.effortSamples) if (s.t > t0 && s.t <= t1) w += s.work;
-    return w;
-  }
-
   private decayFrequency(t: number) {
     if (t - this.lastStrokeT > 1500) this.state.frequency = 0;
   }
 }
 
 /**
- * Heuristic flap detector: the stroke force comes from the *speed of downstrokes*, so it reacts mid-stroke
- * (no waiting for a full gesture). Faster / bigger flaps → more force. The arms are read independently:
- * how the force splits into lift and sideways push depends on each arm's recent effort. Both arms flapping
- * about equally hard → straight up; one arm alone, or one flapping much faster than the other → sideways,
- * towards the stronger arm (or away from it with `invertSideFlap` off), with only part of the lift.
+ * Heuristic flap detector: the lift comes from the *speed of downstrokes*, so it reacts mid-stroke
+ * (no waiting for a full gesture). Faster / bigger flaps → more lift, from the average of both arms.
+ * It only lifts; sideways flight comes from tilting the arms (`TiltDetector`).
  */
 export class FlapDetector {
   private left = new ArmTracker('left');
@@ -146,24 +106,10 @@ export class FlapDetector {
     const l = this.left.state;
     const r = this.right.state;
     const cfg = config.flap;
-    const power = (l.power + r.power) / 2;
-    // Each arm, as the possibly weaker one, is compared against the other with `phaseGraceMs` of slack on
-    // both ends of the window: an arm starting or finishing its stroke a moment later than the other isn't
-    // weaker. Without this, quick flaps spaced further apart than the window push sideways at every onset.
-    const win = Math.max(1, cfg.effortWindowMs);
-    const g = Math.min(cfg.phaseGraceMs, win / 2);
-    const weakerVs = (weak: ArmTracker, strong: ArmTracker) => {
-      const strict = strong.workIn(f.t - win, f.t - g);
-      return strict > win ? weak.workIn(f.t - win - g, f.t) / strict : 1;
-    };
-    const ratio = Math.min(1, weakerVs(this.left, this.right), weakerVs(this.right, this.left));
-    const asymmetry = Math.max(0, Math.min(1, (cfg.symmetricRatio - ratio) / Math.max(0.01, cfg.symmetricRatio)));
-    const lift = Math.min(cfg.maxLiftAccel, cfg.liftGain * power * (1 - asymmetry * (1 - cfg.asymmetricLift)));
-    const dir = l.effort > r.effort ? 1 : -1;
-    const side = (cfg.invertSideFlap ? -1 : 1) * dir * Math.min(cfg.maxSideAccel, cfg.sideGain * power * asymmetry);
+    const lift = Math.min(cfg.maxLiftAccel, (cfg.liftGain * (l.power + r.power)) / 2);
     const visAngles = [l, r].filter((a) => a.visible).map((a) => a.angle);
     const avg = visAngles.length ? visAngles.reduce((x, y) => x + y, 0) / visAngles.length : 60;
     const wingPhase = Math.max(0, Math.min(1, (avg - 20) / 140));
-    return { left: { ...l }, right: { ...r }, lift, side, asymmetry, wingPhase };
+    return { left: { ...l }, right: { ...r }, lift, wingPhase };
   }
 }

@@ -7,12 +7,8 @@ const RANGES: Record<string, [number, number, number]> = {
   'flap.velocitySmoothing': [0.05, 1, 0.05],
   'flap.liftGain': [0, 40, 0.5],
   'flap.maxLiftAccel': [500, 8000, 100],
-  'flap.effortWindowMs': [100, 2000, 50],
-  'flap.phaseGraceMs': [0, 300, 10],
-  'flap.symmetricRatio': [0.05, 1, 0.05],
-  'flap.sideGain': [0, 40, 0.5],
-  'flap.maxSideAccel': [0, 6000, 100],
-  'flap.asymmetricLift': [0, 1, 0.05],
+  'flap.afterFlapGravity': [0, 1, 0.05],
+  'flap.afterFlapMs': [0, 3000, 50],
   'flap.strokeMinAmplitude': [5, 90, 1],
   'friend.savedScale': [1, 8, 0.1],
   'friend.savedMs': [100, 4000, 50],
@@ -20,21 +16,23 @@ const RANGES: Record<string, [number, number, number]> = {
   'shoot.angleExit': [0, 60, 1],
   'shoot.cooldownMs': [0, 3000, 50],
   'shoot.baselineAdaptRate': [0, 0.2, 0.005],
-  'glide.maxBend': [0, 0.5, 0.01],
-  'glide.maxTilt': [10, 90, 1],
-  'glide.maxArmSpeed': [0, 600, 10],
-  'glide.enterMs': [0, 1000, 10],
-  'glide.exitMs': [0, 1000, 10],
-  'glide.tiltSmoothing': [0.05, 1, 0.05],
-  'glide.sinkSpeed': [0, 8, 0.1],
-  'glide.parachuteDrag': [0, 1, 0.01],
-  'glide.horizontalDrag': [0, 0.2, 0.005],
-  'glide.airFriction': [0, 0.2, 0.005],
-  'glide.deadZone': [0, 30, 1],
-  'glide.fullTilt': [5, 90, 1],
-  'glide.diveSpeed': [0, 30, 0.5],
-  'glide.diveAccel': [0, 8000, 100],
-  'glide.bank': [0, 1.5, 0.05],
+  'tilt.smoothing': [0.05, 1, 0.05],
+  'tilt.deadZone': [0, 30, 1],
+  'tilt.fullTilt': [5, 90, 1],
+  'tilt.sideSpeed': [0, 14, 0.5],
+  'tilt.sideAccel': [100, 6000, 100],
+  'tilt.leanDeg': [0, 60, 1],
+  'tilt.holdDrag': [0, 1, 0.01],
+  'tilt.holdFlapRate': [0.25, 4, 0.05],
+  'hover.maxBend': [0, 0.5, 0.01],
+  'hover.maxTilt': [10, 90, 1],
+  'hover.maxRaise': [0, 90, 1],
+  'hover.minElbowAngle': [90, 180, 1],
+  'hover.maxArmSpeed': [0, 600, 10],
+  'hover.enterMs': [0, 1000, 10],
+  'hover.exitMs': [0, 1000, 10],
+  'hover.sinkSpeed': [0, 8, 0.1],
+  'hover.parachuteDrag': [0, 1, 0.01],
   'posture.smoothing': [0.05, 1, 0.05],
   'posture.deadZone': [0, 30, 1],
   'posture.fullRaise': [20, 90, 1],
@@ -42,6 +40,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'posture.diveSpeed': [0, 20, 0.5],
   'posture.accel': [100, 6000, 100],
   'posture.fallDrag': [0, 0.5, 0.01],
+  'posture.parachuteSideDrag': [0, 0.2, 0.005],
   'posture.airFriction': [0, 0.2, 0.005],
   'posture.leanDeg': [0, 60, 1],
   'posture.flapRateMin': [0.1, 3, 0.05],
@@ -58,8 +57,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'physics.maxSpeed': [2, 40, 1],
   'physics.branchFriction': [0, 1, 0.05],
   'keyboard.lift': [0, 5000, 50],
-  'keyboard.steer': [0, 5000, 50],
-  'keyboard.diveTilt': [0, 90, 1],
+  'keyboard.tilt': [0, 90, 1],
   'villain.speed': [0, 8, 0.1],
   'villain.minWalkMs': [0, 10000, 100],
   'villain.maxWalkMs': [0, 10000, 100],
@@ -92,7 +90,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'audio.fallMs': [100, 5000, 50],
 };
 
-const SECTIONS = ['posture', 'flap', 'glide', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'friend', 'player', 'audio'] as const;
+const SECTIONS = ['posture', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'friend', 'player', 'audio'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {
@@ -105,17 +103,15 @@ export class Tuning {
       const folder = this.gui.addFolder(section);
       for (const key of Object.keys(obj)) {
         const r = RANGES[`${section}.${key}`];
-        if (section === 'flap' && key === 'invertSideFlap') {
-          folder.add(obj, key).name('Invert side-flap');
-        } else if (section === 'posture' && key === 'enabled') {
-          folder.add(obj, key).name('Posture control (off = flapping)');
+        if (section === 'posture' && key === 'flapping') {
+          folder.add(obj, key).name('Posture: Flapping');
         } else if (r) {
           folder.add(obj, key, r[0], r[1], r[2]);
         } else {
           folder.add(obj, key);
         }
       }
-      if (section !== 'posture' && section !== 'flap' && section !== 'glide' && section !== 'shoot') folder.close();
+      if (section !== 'posture' && section !== 'flap' && section !== 'tilt' && section !== 'hover' && section !== 'shoot') folder.close();
     }
     this.gui.add({ save: () => saveConfig() }, 'save').name('💾 save to this browser');
     this.gui.add({ copy: () => navigator.clipboard?.writeText(JSON.stringify(config, null, 2)) }, 'copy').name('📋 copy as JSON');

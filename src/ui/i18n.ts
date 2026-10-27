@@ -12,17 +12,17 @@ const PL = {
   Instructions: 'Instrukcja Obsługi',
   Back: 'Wróć',
   'Flap both arms to fly up.': 'Machaj obiema rękami, żeby lecieć w górę.',
-  'Flap one arm (or one faster than the other) to fly sideways.': 'Machaj jedną ręką (albo jedną szybciej niż drugą), żeby lecieć w bok.',
-  'Spread your arms in a T to glide down slowly — tilt them to dive that way.':
-    'Rozłóż ręce w literę T, żeby powoli szybować w dół — przechyl je, żeby zanurkować w tę stronę.',
+  'Tilt your arms to fly sideways — flap them tilted to climb that way.':
+    'Przechyl ręce, żeby lecieć w bok — machaj nimi przechylonymi, żeby wznosić się w tę stronę.',
+  'Spread your arms in a T to float down slowly.': 'Rozłóż ręce w literę T, żeby powoli opadać.',
   'Shoot: raise a leg sideways to drop a poo.': 'Strzał: unieś nogę w bok, żeby zrzucić kupę.',
   'Fly into the little animals to save them — save them all to finish the level!':
     'Wleć w zwierzątka, żeby je uratować — uratuj wszystkie, żeby przejść poziom!',
   'Hit the villain to score!': 'Traf złoczyńcę, żeby zdobyć punkt!',
   "Don't touch him — it costs you one of your 3 lives.": 'Nie dotykaj go — stracisz jedno z 3 żyć.',
   'Stand back so your arms and hips are in view.': 'Stań dalej, żeby kamera widziała twoje ręce i biodra.',
-  'Keyboard: ↑ flap · ← → steer · Shift glide (+ ← → dive) · ↓ poo · Space pause':
-    'Klawiatura: ↑ machanie · ← → skręt · Shift szybowanie (+ ← → nurkowanie) · ↓ kupa · Spacja pauza',
+  'Keyboard: ↑ flap · ← → fly sideways · Shift float · ↓ poo · Space pause':
+    'Klawiatura: ↑ machanie · ← → lot w bok · Shift opadanie · ↓ kupa · Spacja pauza',
 
   // game
   'Score: {score}': 'Trafieni: {score}',

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { config } from '../src/config';
 import { FlapDetector } from '../src/gestures/FlapDetector';
-import { fitArmLine, GlideDetector } from '../src/gestures/GlideDetector';
-import { diveAmount, glideStep } from '../src/game/glide';
+import { fitArmLine, TiltDetector } from '../src/gestures/TiltDetector';
+import { flightStep, sideAmount } from '../src/game/flight';
 import { STEP_MS } from '../src/game/physics';
 import { armElevation, hipAbduction, kneeAngle } from '../src/gestures/geometry';
 import { ShootDetector } from '../src/gestures/ShootDetector';
@@ -55,40 +55,21 @@ describe('FlapDetector', () => {
     expect(out!.left.frequency).toBeLessThan(1.8);
   });
 
-  /** average lift and sideways acceleration over the last 3 s of a 4 s run */
-  const average = (pose: (t: number) => { armLeft: number; armRight: number }) => {
-    const d = new FlapDetector();
-    let lift = 0, side = 0, n = 0;
-    for (const f of frames(4000, pose)) {
-      const o = d.update(f, true, true);
-      if (f.t < 1000) continue;
-      lift += o.lift;
-      side += o.side;
-      n++;
-    }
-    return { lift: lift / n, side: side / n };
-  };
-
-  it('symmetric flapping goes straight up', () => {
-    const { lift, side } = average((t) => ({ armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) }));
-    expect(side).toBe(0);
-    expect(lift).toBeGreaterThan(0);
-  });
-
-  it('flapping one arm pushes sideways, direction per arm and invertSideFlap', () => {
-    const left = average((t) => ({ armLeft: flapAngle(t, 1.5), armRight: 15 }));
-    const right = average((t) => ({ armLeft: 15, armRight: flapAngle(t, 1.5) }));
-    expect(left.side * (config.flap.invertSideFlap ? -1 : 1)).toBeGreaterThan(200);
-    expect(right.side * (config.flap.invertSideFlap ? -1 : 1)).toBeLessThan(-200);
-    const both = average((t) => ({ armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) }));
-    // one arm: half the power, scaled by asymmetricLift (two arms hit maxLiftAccel at their peaks, so the ratio sits above that)
-    expect(left.lift).toBeLessThan(both.lift * config.flap.asymmetricLift);
-  });
-
-  it('one arm flapping twice as fast pushes sideways, while still lifting', () => {
-    const o = average((t) => ({ armLeft: flapAngle(t, 0.8), armRight: flapAngle(t, 1.6) }));
-    expect(o.side * (config.flap.invertSideFlap ? -1 : 1)).toBeLessThan(-100);
-    expect(o.lift).toBeGreaterThan(0);
+  it('lifts as much flapping tilted as flapping level', () => {
+    const avgLift = (offset: number) => {
+      const d = new FlapDetector();
+      let s = 0, n = 0;
+      for (const f of frames(4000, (t) => ({ armLeft: flapAngle(t, 1.5) - offset, armRight: flapAngle(t, 1.5) + offset }))) {
+        const o = d.update(f, true, true);
+        if (f.t < 1000) continue;
+        s += o.lift;
+        n++;
+      }
+      return s / n;
+    };
+    const level = avgLift(0);
+    expect(level).toBeGreaterThan(0);
+    expect(Math.abs(avgLift(25) - level)).toBeLessThan(level * 0.1);
   });
 
   it('lift is produced only during downstrokes', () => {
@@ -248,11 +229,11 @@ describe('VisibilityMonitor', () => {
   });
 });
 
-describe('GlideDetector', () => {
+describe('TiltDetector', () => {
   const run = (fs: ReturnType<typeof frames>) => {
     const flap = new FlapDetector();
-    const glide = new GlideDetector();
-    return fs.map((f) => glide.update(f, true, true, flap.update(f, true, true)));
+    const tilt = new TiltDetector();
+    return fs.map((f) => tilt.update(f, true, true, flap.update(f, true, true)));
   };
   const last = <T,>(xs: T[]) => xs[xs.length - 1];
 
@@ -262,80 +243,140 @@ describe('GlideDetector', () => {
     expect(line.bend).toBeLessThan(0.01);
   });
 
-  it('glides with arms held out in a T, after a short hold, about level', () => {
+  it('T held still: spread after a short hold, level', () => {
     const out = run(frames(1000, () => ({ armLeft: 90, armRight: 85 })));
-    expect(out[0].gliding).toBe(false);
-    expect(last(out).gliding).toBe(true);
-    expect(diveAmount(last(out).tilt)).toBe(0);
+    expect(out[0].spread).toBe(false);
+    expect(last(out).spread).toBe(true);
+    expect(sideAmount(last(out).tilt)).toBe(0);
   });
 
-  it('stops gliding once the arms are lowered', () => {
+  it('stops being spread once the arms are lowered', () => {
     const out = run([
       ...frames(1000, () => ({ armLeft: 90, armRight: 90 })),
       ...frames(1000, () => ({ armLeft: 15, armRight: 15 }), 1000),
     ]);
-    expect(out[29].gliding).toBe(true);
-    expect(last(out).gliding).toBe(false);
+    expect(out[29].spread).toBe(true);
+    expect(last(out).spread).toBe(false);
   });
 
-  it('dives towards the lower hand (as seen on screen), harder when tilted more', () => {
-    // the player's left hand down: it's on the screen's left (mirrored view), so the bird dives left
+  it('tilted T: still spread, sideways towards the lower hand (as seen on screen), faster when tilted more', () => {
+    // the player's left hand down: it's on the screen's left (mirrored view), so the bird flies left
     const left = last(run(frames(1000, () => ({ armLeft: 70, armRight: 110 }))));
-    expect(left.gliding).toBe(true);
-    expect(diveAmount(left.tilt)).toBeLessThan(0);
+    expect(left.spread).toBe(true);
+    expect(sideAmount(left.tilt)).toBeLessThan(0);
     const right = last(run(frames(1000, () => ({ armLeft: 110, armRight: 70 }))));
-    expect(diveAmount(right.tilt)).toBeGreaterThan(0);
-    const steeper = last(run(frames(1000, () => ({ armLeft: 135, armRight: 45 }))));
-    expect(steeper.gliding).toBe(true);
-    expect(diveAmount(steeper.tilt)).toBeGreaterThan(diveAmount(right.tilt));
+    expect(sideAmount(right.tilt)).toBeGreaterThan(0);
+    const steeper = last(run(frames(1000, () => ({ armLeft: 125, armRight: 55 }))));
+    expect(steeper.spread).toBe(true);
+    expect(sideAmount(steeper.tilt)).toBeGreaterThan(sideAmount(right.tilt));
   });
 
-  it('does not glide when the arms are not in a straight line', () => {
-    // arms down, up, a V, one arm out, one arm level and the other well below
-    for (const [l, r] of [[15, 15], [170, 170], [130, 130], [90, 15], [90, 60]]) {
-      const out = run(frames(1000, () => ({ armLeft: l, armRight: r })));
-      expect(out.some((o) => o.gliding)).toBe(false);
-    }
-  });
-
-  it('does not glide while flapping through horizontal', () => {
+  it('flapping level: not spread, no sideways flight', () => {
     const out = run(frames(3000, (t) => ({ armLeft: flapAngle(t, 1.5), armRight: flapAngle(t, 1.5) })));
-    expect(out.some((o) => o.gliding)).toBe(false);
+    expect(out.some((o) => o.spread)).toBe(false);
+    expect(out.every((o) => sideAmount(o.tilt) === 0)).toBe(true);
+  });
+
+  it('flapping slightly out of step stays (nearly) level', () => {
+    // the right arm 40 ms behind the left
+    const out = run(frames(3000, (t) => ({ armLeft: flapAngle(t, 1.5), armRight: flapAngle(t - 40, 1.5) })));
+    expect(Math.max(...out.map((o) => Math.abs(sideAmount(o.tilt))))).toBeLessThan(0.25);
+  });
+
+  it('flapping tilted: steadily sideways towards the lower hand', () => {
+    const out = run(frames(3000, (t) => ({ armLeft: flapAngle(t, 1.5) - 25, armRight: flapAngle(t, 1.5) + 25 })));
+    // after settling, every frame flies left (the player's left hand is the lower one)
+    expect(out.slice(15).every((o) => sideAmount(o.tilt) < -0.3)).toBe(true);
+  });
+
+  it('raised into a V (up to maxRaise): spread too, tilted or not', () => {
+    const v = last(run(frames(1000, () => ({ armLeft: 135, armRight: 135 }))));
+    expect(v.spread).toBe(true);
+    expect(sideAmount(v.tilt)).toBe(0);
+    const tilted = last(run(frames(1000, () => ({ armLeft: 110, armRight: 160 }))));
+    expect(tilted.spread).toBe(true);
+    expect(sideAmount(tilted.tilt)).toBeLessThan(0); // the left hand lower: flies left
+  });
+
+  it('is not spread when the arms are not in a straight line', () => {
+    // arms down, up, drooping into a downward V, one arm out, one arm level and the other well below
+    for (const [l, r] of [[15, 15], [170, 170], [60, 60], [90, 15], [90, 60]]) {
+      const out = run(frames(1000, () => ({ armLeft: l, armRight: r })));
+      expect(out.some((o) => o.spread)).toBe(false);
+    }
   });
 });
 
-describe('glide physics', () => {
-  /** 2 s of airborne gliding at a fixed tilt with Matter's gravity and air friction, from velocity v0 (px/step) */
-  const fly = (tilt: number, v0 = { x: 0, y: 0 }) => {
+describe('flight physics', () => {
+  /**
+   * `steps` physics steps (default 2 s) at a fixed tilt with Matter's gravity and air friction, from velocity v0
+   * (px/step) and `sinceFlap` ms after the last flap; `lift` (px/s²) counts as flapping. Returns the velocity and
+   * how far the bird fell (px, + = down).
+   */
+  const sim = (tilt: number, hovering: boolean, o: { v0?: { x: number; y: number }; lift?: number; sinceFlap?: number; steps?: number } = {}) => {
     const g = config.physics.gravity * 1e-3 * STEP_MS ** 2;
-    let v = { ...v0 };
-    for (let i = 0; i < 120; i++) {
-      const s = glideStep(v, tilt, STEP_MS);
-      const k = 1 - config.glide.airFriction;
-      v = { x: s.x * k, y: (s.y + (s.holdUp ? 0 : g)) * k };
+    const lift = o.lift ?? 0;
+    const up = lift * 1e-6 * STEP_MS ** 2;
+    let v = { ...(o.v0 ?? { x: 0, y: 0 }) };
+    let since = o.sinceFlap ?? Infinity;
+    let fell = 0;
+    for (let i = 0; i < (o.steps ?? 120); i++) {
+      since = lift > 0 ? 0 : since + STEP_MS;
+      const s = flightStep(v, tilt, hovering, since, STEP_MS);
+      const k = 1 - config.physics.birdAirFriction;
+      v = { x: s.x * k, y: (s.y + (s.holdUp ? 0 : g * (s.gravity ?? 1)) - up) * k };
+      fell += v.y;
     }
-    return v;
+    return { ...v, fell };
   };
+  const fly = (tilt: number, hovering: boolean, v0?: { x: number; y: number }) => sim(tilt, hovering, { v0 });
 
-  it('level arms: sinks slowly like a parachute, and the sideways speed decays', () => {
-    const v = fly(0, { x: 8, y: 7 });
-    expect(v.y).toBeGreaterThan(0);
-    expect(v.y).toBeLessThan(config.glide.sinkSpeed + 0.5);
-    expect(Math.abs(v.x)).toBeLessThan(4);
-    expect(v.x).toBeGreaterThan(0); // slowly, not braked to a stop
+  it('hovering level: keeps its altitude, no sideways push', () => {
+    expect(Math.abs(fly(0, true).fell)).toBeLessThan(3);
+    const braked = fly(0, true, { x: 0, y: 7 });
+    expect(Math.abs(braked.y)).toBeLessThan(0.1);
+    expect(braked.x).toBe(0);
   });
 
-  it('tilted arms: dives sideways and down, faster with more tilt', () => {
-    const shallow = fly(-20); // falls to the right
-    const steep = fly(-45);
+  it('tilted: flies sideways, faster with more tilt, keeping its altitude', () => {
+    const shallow = fly(-20, false); // the right hand lower: flies right
+    const steep = fly(-45, true);
     expect(shallow.x).toBeGreaterThan(1);
     expect(steep.x).toBeGreaterThan(shallow.x);
-    expect(steep.y).toBeGreaterThan(shallow.y);
-    expect(Math.hypot(steep.x, steep.y)).toBeGreaterThan(2 * Math.hypot(shallow.x, shallow.y) - 1);
-    expect(fly(45).x).toBeLessThan(-1); // the other way
+    expect(Math.abs(shallow.fell)).toBeLessThan(3);
+    expect(Math.abs(steep.fell)).toBeLessThan(3);
+    expect(fly(45, false).x).toBeLessThan(-1); // the other way
   });
 
-  it('turns a sideways flight around when diving the other way', () => {
-    expect(fly(30, { x: 8, y: 0 }).x).toBeLessThan(-1);
+  it('tilted: a fall is braked to a stop', () => {
+    expect(Math.abs(fly(-30, false, { x: 0, y: 7 }).y)).toBeLessThan(0.1);
+  });
+
+  it('turns a sideways flight around when tilted the other way', () => {
+    expect(fly(30, true, { x: 6, y: 0 }).x).toBeLessThan(-1);
+  });
+
+  it('arms level, long after flapping: falls as fast as ever', () => {
+    const g = config.physics.gravity * 1e-3 * STEP_MS ** 2;
+    const free = sim(0, false, { steps: 30 });
+    // full gravity, only air friction against it
+    expect(free.y).toBeGreaterThan(30 * g * 0.6);
+  });
+
+  it('right after a flap the fall starts gently, then speeds up to normal', () => {
+    const justFlapped = sim(0, false, { sinceFlap: 0, steps: 30 });
+    const long = sim(0, false, { steps: 30 });
+    expect(justFlapped.fell).toBeLessThan(long.fell * 0.6);
+    // after afterFlapMs it's back to full gravity: the speed grows as fast as in a plain fall
+    const later = sim(0, false, { sinceFlap: config.flap.afterFlapMs, steps: 30 });
+    expect(later.y).toBeCloseTo(long.y, 5);
+  });
+
+  it('flapping tilted climbs as fast as flapping level', () => {
+    const level = sim(0, false, { lift: 1500 });
+    const tilted = sim(-30, false, { lift: 1500 });
+    expect(level.y).toBeLessThan(-1);
+    expect(tilted.y).toBeCloseTo(level.y, 5);
+    expect(tilted.x).toBeGreaterThan(1);
   });
 });

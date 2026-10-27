@@ -2,7 +2,7 @@ import { config } from '../config';
 import type { Controls } from './controls';
 
 /**
- * Keyboard fallback: ↑ flap, ← → steer, ↓ poo, Shift glide (Shift + ← → dive). Space toggles pause (`onPause`).
+ * Keyboard fallback: ↑ flap, ← → fly sideways, ↓ poo, Shift hover. Space toggles pause (`onPause`).
  * Single-letter hotkeys (and Esc, as 'escape') are dispatched to `onHotkey`.
  */
 export class Keyboard {
@@ -29,21 +29,18 @@ export class Keyboard {
   /** Adds keyboard input on top of `base` (pose) controls. */
   apply(base: Controls): Controls {
     const flap = this.held.has('ArrowUp');
-    const left = this.held.has('ArrowLeft');
-    const right = this.held.has('ArrowRight');
-    const steer = (right ? 1 : 0) - (left ? 1 : 0);
-    const glide = this.held.has('Shift');
-    if (!flap && !steer && !glide) return base;
+    const side = (this.held.has('ArrowRight') ? 1 : 0) - (this.held.has('ArrowLeft') ? 1 : 0);
+    const hover = this.held.has('Shift');
+    if (!flap && !side && !hover) return base;
     return {
       lift: base.lift + (flap ? config.keyboard.lift : 0),
-      // with Shift the arrows dive instead of steering
-      steer: base.steer + (glide ? 0 : steer * config.keyboard.steer),
+      // flying right = the right hand lower = negative tilt
+      tilt: side ? -side * config.keyboard.tilt : base.tilt,
+      hover: hover || base.hover,
       wingPhase: flap ? null : base.wingPhase,
       flapping: flap || base.flapping,
-      // diving right = the arm line falling to the right = negative tilt
-      glideTilt: glide ? -steer * config.keyboard.diveTilt : base.glideTilt,
-      // Shift is the keyboard's own glide, so it takes over from the posture
-      posture: glide ? null : base.posture,
+      // ← → and Shift are the keyboard's own sideways flight and hover, so they take over from the posture
+      posture: side || hover ? null : base.posture,
     };
   }
 }

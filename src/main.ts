@@ -5,8 +5,8 @@ import { Game } from './game/Game';
 import { firstLevel, levels, nextLevel, onLevelEdited, testLevelName } from './levels';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
 import { FlapDetector, type FlapOutput } from './gestures/FlapDetector';
-import { GlideDetector, type GlideOutput } from './gestures/GlideDetector';
 import { PostureDetector, type PostureOutput } from './gestures/PostureDetector';
+import { TiltDetector, type TiltOutput } from './gestures/TiltDetector';
 import { ShootDetector, type ShootOutput } from './gestures/ShootDetector';
 import { VisibilityMonitor, type VisibilityOutput } from './gestures/VisibilityMonitor';
 import { noControls, type Controls } from './input/controls';
@@ -76,7 +76,7 @@ async function main() {
   let vis: VisibilityOutput | null = null;
   let flapOut: FlapOutput | null = null;
   let shootOut: ShootOutput | null = null;
-  let glideOut: GlideOutput | null = null;
+  let tiltOut: TiltOutput | null = null;
   let postureOut: PostureOutput | null = null;
   let calibStatus: CalibrationStatus | null = null;
   let poseControls: Controls = noControls();
@@ -145,7 +145,7 @@ async function main() {
   const visibility = new VisibilityMonitor();
   const flap = new FlapDetector();
   const shoot = new ShootDetector();
-  const glide = new GlideDetector();
+  const tilt = new TiltDetector();
   const posture = new PostureDetector();
   const calibration = new Calibration();
 
@@ -309,7 +309,7 @@ async function main() {
     if (f) {
       flapOut = flap.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible);
       shootOut = shoot.update(f, vis.parts.torso.visible);
-      glideOut = glide.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible, flapOut);
+      tiltOut = tilt.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible, flapOut);
       postureOut = posture.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible);
       debug.record(now, flapOut, shootOut);
     }
@@ -333,15 +333,15 @@ async function main() {
           state = 'outOfFrame';
           break;
         }
-        if (f && flapOut && shootOut && glideOut && postureOut) {
-          // posture control replaces flapping and the glide; the wings still follow the arms
-          const byPosture = config.posture.enabled;
+        if (f && flapOut && shootOut && tiltOut && postureOut) {
+          // posture control replaces flapping, tilt and hover; the wings still follow the arms
+          const byPosture = !config.posture.flapping;
           poseControls = {
             lift: byPosture ? 0 : flapOut.lift,
-            steer: byPosture ? 0 : flapOut.side,
+            tilt: byPosture ? 0 : tiltOut.tilt,
+            hover: !byPosture && tiltOut.spread,
             wingPhase: flapOut.wingPhase,
             flapping: false,
-            glideTilt: !byPosture && glideOut.gliding ? glideOut.tilt : null,
             posture: byPosture ? postureOut.intent : null,
           };
           lastPoseT = now;
@@ -398,7 +398,7 @@ async function main() {
       vis,
       flap: flapOut,
       shoot: shootOut,
-      glide: glideOut,
+      tilt: tiltOut,
       posture: postureOut,
       fps: tracker?.fps ?? 0,
       inferenceMs: tracker?.inferenceMs ?? 0,

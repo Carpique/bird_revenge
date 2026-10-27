@@ -1,10 +1,10 @@
 import { config } from '../config';
-import { glideStep, type GlideVelocity } from './glide';
+import type { FlightVelocity } from './flight';
 
 /**
  * What the arm posture asks of the bird (posture control, `config.posture`):
  * - `fall`: no arm above horizontal and at least one clearly below: free fall, momentum fades
- * - `parachute`: both arms about horizontal (a T): slow sink, like the glide
+ * - `parachute`: both arms about horizontal (a T): slow sink, like the hover
  * - `fly`: the higher arm above horizontal sets the speed, the other arm (also not below horizontal) the direction
  * - `dive`: the higher arm above horizontal sets the speed, the other arm below horizontal the dive angle; no lift
  */
@@ -61,13 +61,17 @@ function approach(v: { x: number; y: number }, t: { x: number; y: number }, maxD
  * One physics step under posture control, from the bird's current velocity `v` (px per step, y down).
  * `holdUp` asks the caller to cancel gravity this step (flying holds the bird up; diving and falling don't).
  */
-export function postureStep(v: { x: number; y: number }, p: PostureIntent, stepMs: number): GlideVelocity {
+export function postureStep(v: { x: number; y: number }, p: PostureIntent, stepMs: number): FlightVelocity {
   const cfg = config.posture;
   const maxDv = cfg.accel * (stepMs / 1000) ** 2;
   const a = (p.angle * Math.PI) / 180;
   switch (p.mode) {
-    case 'parachute':
-      return glideStep(v, 0, stepMs);
+    case 'parachute': {
+      // the hover's slow sink (`hover.sinkSpeed`, `hover.parachuteDrag`); the sideways speed decays slowly
+      const sink = config.hover.sinkSpeed;
+      const holdUp = v.y > sink;
+      return { x: v.x * (1 - cfg.parachuteSideDrag), y: holdUp ? v.y + (sink - v.y) * config.hover.parachuteDrag : v.y, holdUp };
+    }
     case 'fall': {
       // lift gone: sideways and upward momentum fade, gravity takes over
       const k = 1 - cfg.fallDrag;
@@ -76,7 +80,7 @@ export function postureStep(v: { x: number; y: number }, p: PostureIntent, stepM
     case 'fly': {
       const s = p.speed * cfg.flySpeed;
       // a slow fly still sinks a bit, blending into the parachute as the speed arm comes down to level
-      const t = { x: p.dir * s * Math.cos(a), y: -s * Math.sin(a) + (1 - p.speed) * config.glide.sinkSpeed };
+      const t = { x: p.dir * s * Math.cos(a), y: -s * Math.sin(a) + (1 - p.speed) * config.hover.sinkSpeed };
       return { ...approach(v, t, maxDv), holdUp: true };
     }
     case 'dive': {

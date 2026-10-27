@@ -5,7 +5,7 @@ import type { Controls } from '../input/controls';
 import type { Branch } from '../level/types';
 import { landingBranch } from './branches';
 import { CharacterSprite } from '../render/CharacterSprite';
-import { glideStep } from './glide';
+import { flightStep, leanFor, sideAmount } from './flight';
 import { postureLean, postureStep } from './posture';
 import { BIRD_GROUP, Bodies, Body, forceFor, Query, type MBody } from './physics';
 
@@ -34,11 +34,11 @@ export class Bird {
   /** ms of invulnerability left after coming back from losing a life */
   private invulnT = 0;
   private death: Death | null = null;
-  /** gliding in the air this step (it does nothing on the ground or a branch) */
-  private gliding = false;
+  /** ms since the last flap (lift) */
+  private sinceFlapMs = Infinity;
   /** posture control is steering the bird this step */
   private posturing = false;
-  /** current lean while gliding, radians (eased towards the arm line) */
+  /** current lean, radians (eased towards the direction of sideways flight) */
   private bankAngle = 0;
   /** sitting on a branch (set by `perchOn` after each physics step) */
   perched = false;
@@ -148,6 +148,7 @@ export class Bird {
     this.perched = false;
     this.supported = false;
     this.bankAngle = 0;
+    this.sinceFlapMs = Infinity;
     this.invulnT = invulnerable ? config.player.invulnerableMs : 0;
   }
 
@@ -164,7 +165,7 @@ export class Bird {
     return true;
   }
 
-  /** Physics step: apply flap forces and the glide, clamp speed, advance squash. */
+  /** Physics step: flap lift, sideways flight and the hover; clamp speed, advance squash. */
   step(c: Controls, stepMs: number, drop: () => void) {
     const d = this.death;
     if (d) {
@@ -177,25 +178,19 @@ export class Bird {
     const b = this.body;
     this.invulnT = Math.max(0, this.invulnT - stepMs);
     const p = c.posture;
-    // flying can take off from the ground or a branch; the rest only acts in the air
+    // posture: flying can take off from the ground or a branch; the rest only acts in the air
     this.posturing = p !== null && (p.mode === 'fly' || !this.onGround);
-    this.gliding = !this.posturing && c.glideTilt !== null && !this.onGround;
-    b.frictionAir =
-      this.posturing && p!.mode !== 'fall' ? config.posture.airFriction
-      : this.gliding ? config.glide.airFriction
-      : config.physics.birdAirFriction;
-    let antiGravity = 0;
-    if (this.posturing) {
-      const g = postureStep(b.velocity, p!, stepMs);
-      Body.setVelocity(b, { x: g.x, y: g.y });
-      if (g.holdUp) antiGravity = config.physics.gravity * 1000;
-    } else if (this.gliding) {
-      const g = glideStep(b.velocity, c.glideTilt!, stepMs);
-      Body.setVelocity(b, { x: g.x, y: g.y });
-      // Matter applies the full gravity itself; the parachute holds against it
-      if (g.holdUp) antiGravity = config.physics.gravity * 1000;
-    }
-    Body.applyForce(b, b.position, { x: forceFor(b, c.steer), y: -forceFor(b, c.lift + antiGravity) });
+    b.frictionAir = this.posturing && p!.mode !== 'fall' ? config.posture.airFriction : config.physics.birdAirFriction;
+    // otherwise flapping + tilt + hover: hovering only acts in the air; sideways flight also walks the bird
+    // along the ground or a branch
+    this.sinceFlapMs = c.lift > 0 ? 0 : this.sinceFlapMs + stepMs;
+    const g = this.posturing
+      ? postureStep(b.velocity, p!, stepMs)
+      : flightStep(b.velocity, c.tilt, c.hover && !this.onGround, this.sinceFlapMs, stepMs);
+    Body.setVelocity(b, { x: g.x, y: g.y });
+    // Matter applies the full gravity itself; the hover (or flying by posture) holds against it
+    const antiGravity = config.physics.gravity * 1000 * (g.holdUp ? 1 : 1 - (g.gravity ?? 1));
+    Body.applyForce(b, b.position, { x: 0, y: -forceFor(b, c.lift + antiGravity) });
     const v = b.velocity;
     const speed = Math.hypot(v.x, v.y);
     const max = config.physics.maxSpeed;
@@ -223,11 +218,11 @@ export class Bird {
       this.view.rotation = d.turn * (Math.PI / 2) * Math.min(1, d.t / Math.max(1, config.player.dieTurnMs));
       return;
     }
-    // lean with the player's arm line while gliding (screen rotation is clockwise, the tilt is anticlockwise)
+    // lean into sideways flight (in the air)
     const bankTo =
       this.posturing && c.posture ? (postureLean(c.posture) * Math.PI) / 180
-      : this.gliding && c.glideTilt !== null ? (-c.glideTilt * config.glide.bank * Math.PI) / 180
-      : 0;
+      : this.onGround ? 0
+      : (leanFor(c.tilt) * Math.PI) / 180;
     this.bankAngle += 0.2 * (bankTo - this.bankAngle);
     this.view.rotation = this.bankAngle;
     const b = this.body;
@@ -239,9 +234,11 @@ export class Bird {
     // posture control: flap while the arms push the bird up or sideways, faster the faster it flies
     if (p?.mode === 'fly' && p.speed > 0) this.sprite.play('flap', config.posture.flapRateMin + (config.posture.flapRateMax - config.posture.flapRateMin) * p.speed);
     else if (this.onGround && c.lift < 50 && !c.flapping) this.sprite.play('idle');
+    // flapping mode, tilted or in a T: holding the altitude, the wings beat fast
+    else if (!this.posturing && !this.onGround && (c.hover || sideAmount(c.tilt) !== 0)) this.sprite.play('flap', config.tilt.holdFlapRate);
     else if (c.wingPhase !== null) this.sprite.showPhase('flap', c.wingPhase);
     else if (c.flapping) this.sprite.play('flap');
-    else this.sprite.showPhase('flap', 0.5); // gliding
+    else this.sprite.showPhase('flap', 0.5); // wings out
 
     const [sx, sy] = this.squashScale();
     this.view.scale.set(sx, sy);
