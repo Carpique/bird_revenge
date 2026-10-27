@@ -118,6 +118,11 @@ export const config = {
     holdDrag: 0,
     /** tilted or hovering in the air, the wings beat this many times faster than the flap animation's normal fps */
     holdFlapRate: 2,
+    /**
+     * tilted while standing (ground, branch, shelf), the bird doesn't slide: it rises this many px and holds there,
+     * flying sideways just above the floor
+     */
+    liftOffHeight: 12,
   },
 
   /**

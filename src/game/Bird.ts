@@ -39,6 +39,8 @@ export class Bird {
   /** ms the arms have been tilted towards `tiltDir` (-1 / +1; 0 = level) */
   private tiltHeldMs = 0;
   private tiltDir = 0;
+  /** rose off the floor by tilting: holds its altitude once the rise tops out, until the tilt ends or a flap */
+  private liftingOff = false;
   /** posture control is steering the bird this step */
   private posturing = false;
   /** current lean, radians (eased towards the direction of sideways flight) */
@@ -154,6 +156,7 @@ export class Bird {
     this.sinceFlapMs = Infinity;
     this.tiltHeldMs = 0;
     this.tiltDir = 0;
+    this.liftingOff = false;
     this.invulnT = invulnerable ? config.player.invulnerableMs : 0;
   }
 
@@ -186,16 +189,25 @@ export class Bird {
     // posture: flying can take off from the ground or a branch; the rest only acts in the air
     this.posturing = p !== null && (p.mode === 'fly' || !this.onGround);
     b.frictionAir = this.posturing && p!.mode !== 'fall' ? config.posture.airFriction : config.physics.birdAirFriction;
-    // otherwise flapping + tilt + hover: hovering only acts in the air; sideways flight also walks the bird
-    // along the ground or a branch
+    // otherwise flapping + tilt + hover: hovering only acts in the air; tilted on the floor, the bird rises a
+    // little instead of sliding, then flies sideways just above it
     this.sinceFlapMs = c.lift > 0 ? 0 : this.sinceFlapMs + stepMs;
     // a fresh tilt (or one turned the other way) starts gently
     const dir = Math.sign(sideAmount(c.tilt));
     this.tiltHeldMs = dir !== 0 && dir === this.tiltDir ? this.tiltHeldMs + stepMs : 0;
     this.tiltDir = dir;
+    if (this.posturing || dir === 0 || c.lift > 0) this.liftingOff = false;
+    else if (this.onGround) {
+      // v² = 2·g·h, gravity in px per step²
+      const gStep = config.physics.gravity * 1000 * (stepMs / 1000) ** 2;
+      Body.setVelocity(b, { x: 0, y: -Math.sqrt(2 * gStep * config.tilt.liftOffHeight) });
+      this.liftingOff = true;
+    }
     const g = this.posturing
       ? postureStep(b.velocity, p!, stepMs)
       : flightStep(b.velocity, c.tilt, c.hover && !this.onGround, this.sinceFlapMs, stepMs, this.tiltHeldMs);
+    // topped out after lifting off: stay at that height
+    if (this.liftingOff && g.y > 0) g.y = 0;
     Body.setVelocity(b, { x: g.x, y: g.y });
     // Matter applies the full gravity itself; the hover (or flying by posture) holds against it
     const antiGravity = config.physics.gravity * 1000 * (g.holdUp ? 1 : 1 - (g.gravity ?? 1));
