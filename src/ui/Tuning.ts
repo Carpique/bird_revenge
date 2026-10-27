@@ -1,5 +1,10 @@
 import GUI from 'lil-gui';
 import { changedConfig, clearSavedConfig, config, saveConfig } from '../config';
+import configSource from '../config.ts?raw';
+import { parseConfigDocs } from './configDocs';
+
+/** Tooltips for sections and options: the doc comments in config.ts. */
+const DOCS = parseConfigDocs(configSource);
 
 /** Slider ranges for the tuning panel; anything not listed gets a plain number box. */
 const RANGES: Record<string, [number, number, number]> = {
@@ -109,15 +114,17 @@ export class Tuning {
     for (const section of SECTIONS) {
       const obj = config[section] as Record<string, unknown>;
       const folder = this.gui.addFolder(section);
+      if (DOCS[section]) folder.$title.title = DOCS[section];
       for (const key of Object.keys(obj)) {
         const r = RANGES[`${section}.${key}`];
-        if (section === 'posture' && key === 'flapping') {
-          folder.add(obj, key).name('Posture: Flapping');
-        } else if (r) {
-          folder.add(obj, key, r[0], r[1], r[2]);
-        } else {
-          folder.add(obj, key);
-        }
+        const controller =
+          section === 'posture' && key === 'flapping'
+            ? folder.add(obj, key).name('Posture: Flapping')
+            : r
+              ? folder.add(obj, key, r[0], r[1], r[2])
+              : folder.add(obj, key);
+        const doc = DOCS[`${section}.${key}`];
+        if (doc) controller.domElement.title = doc;
       }
       if (section !== 'posture' && section !== 'flap' && section !== 'tilt' && section !== 'hover' && section !== 'shoot') folder.close();
     }
