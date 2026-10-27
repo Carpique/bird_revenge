@@ -188,6 +188,13 @@ export class Game {
     this.restartLevel();
   }
 
+  /** Move on to the next level: from its start, keeping score but with lives back to full. */
+  startNextLevel(level: LevelDef) {
+    this.lives = config.player.lives;
+    this.buildHearts();
+    this.loadLevel(level);
+  }
+
   /** The level, bird, villain, friends and poos back to the start. */
   private restartLevel() {
     this.pooQueued = false;

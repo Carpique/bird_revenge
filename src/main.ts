@@ -122,8 +122,8 @@ async function main() {
 
   const game = new Game(app, firstLevel());
   let allLevels = levels;
-  // all friends saved: on to the next level, keeping score and lives (testing a level from the URL: that level again)
-  game.onLevelComplete = () => game.loadLevel(testLevelName ? game.level : nextLevel(allLevels, game.level.name));
+  // all friends saved: on to the next level, keeping score, lives back to full (testing a level from the URL: that level again)
+  game.onLevelComplete = () => game.startNextLevel(testLevelName ? game.level : nextLevel(allLevels, game.level.name));
   // saving the level being played in Tiled while the dev server runs swaps it in, without reloading the page
   onLevelEdited((next) => {
     allLevels = next;
