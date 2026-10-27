@@ -12,6 +12,7 @@
                  "height":80,
                  "id":1,
                  "name":"ground (drawn by the game)",
+                 "opacity":1,
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -24,7 +25,7 @@
          "visible":true,
          "x":0,
          "y":0
-        },
+        }, 
         {
          "draworder":"topdown",
          "id":2,
@@ -34,6 +35,7 @@
                  "height":24,
                  "id":2,
                  "name":"shelf",
+                 "opacity":1,
                  "rotation":0,
                  "type":"Terrain",
                  "visible":true,
@@ -46,7 +48,7 @@
          "visible":true,
          "x":0,
          "y":0
-        },
+        }, 
         {
          "draworder":"topdown",
          "id":3,
@@ -57,7 +59,7 @@
          "visible":true,
          "x":0,
          "y":0
-        },
+        }, 
         {
          "draworder":"topdown",
          "id":4,
@@ -68,7 +70,7 @@
          "visible":true,
          "x":0,
          "y":0
-        },
+        }, 
         {
          "draworder":"topdown",
          "id":5,
@@ -79,7 +81,7 @@
          "visible":true,
          "x":0,
          "y":0
-        },
+        }, 
         {
          "draworder":"topdown",
          "id":6,
@@ -89,6 +91,7 @@
                  "height":0,
                  "id":3,
                  "name":"bird",
+                 "opacity":1,
                  "point":true,
                  "rotation":0,
                  "type":"BirdStart",
@@ -96,16 +99,17 @@
                  "width":0,
                  "x":1100,
                  "y":606
-                },
+                }, 
                 {
                  "height":0,
                  "id":4,
                  "name":"villain",
+                 "opacity":1,
                  "polyline":[
                         {
                          "x":0,
                          "y":0
-                        },
+                        }, 
                         {
                          "x":448,
                          "y":0
@@ -116,11 +120,12 @@
                  "width":0,
                  "x":416,
                  "y":640
-                },
+                }, 
                 {
                  "height":0,
                  "id":6,
                  "name":"bunny under the shelf",
+                 "opacity":1,
                  "point":true,
                  "rotation":0,
                  "type":"Friend",
@@ -128,26 +133,27 @@
                  "width":0,
                  "x":640,
                  "y":640
-                },
+                }, 
                 {
                  "height":0,
                  "id":7,
                  "name":"villain on the shelf",
+                 "opacity":1,
                  "polyline":[
                         {
                          "x":0,
                          "y":0
-                        },
+                        }, 
                         {
-                         "x":320,
+                         "x":-320,
                          "y":0
                         }],
                  "rotation":0,
                  "type":"Villain",
                  "visible":true,
                  "width":0,
-                 "x":480,
-                 "y":380
+                 "x":800.937931984781,
+                 "y":380.030289729964
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -159,11 +165,11 @@
  "nextobjectid":8,
  "orientation":"orthogonal",
  "renderorder":"right-down",
- "tiledversion":"1.11.2",
+ "tiledversion":"1.12.2",
  "tileheight":16,
  "tilesets":[],
  "tilewidth":16,
  "type":"map",
- "version":"1.10",
+ "version":"1.11",
  "width":80
 }
