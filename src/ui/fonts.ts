@@ -27,6 +27,7 @@ export function titleStyle(fontSize: number): TextStyleOptions {
     fontFamily: TITLE_FONT,
     fontSize,
     fill: INK,
+    align: 'center',
     stroke: { color: '#ffffff', width: fontSize / 15, join: 'round' },
     dropShadow: { color: ACCENT, alpha: 1, angle: Math.PI / 4, distance: fontSize / 18.75, blur: 0 },
     padding: Math.ceil(fontSize / 9.4),

@@ -375,9 +375,10 @@ async function main() {
 
     const poseFresh = state === 'playing' && now - lastPoseT < 300;
     game.controls = keyboard.apply(poseFresh ? poseControls : noControls());
-    // during gameOver the game runs only to drop the "Game Over" sign in
+    // during gameOver the game runs only to slide the "Game Over" sign through
     game.paused = manualPause || !(state === 'playing' || state === 'outOfFrame' || state === 'keyboard' || state === 'gameOver');
     game.showPausedText = manualPause;
+    game.dimmed = state === 'calibrating';
     splash.visible = state === 'menu';
     // the title screen showing up plays its theme from the start; leaving it fades the theme out
     if (splash.visible && !menuShown) audio.playTheme();

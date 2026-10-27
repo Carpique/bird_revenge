@@ -25,10 +25,10 @@ const PL = {
     'Klawiatura: ↑ machanie · ← → skręt · Shift szybowanie (+ ← → nurkowanie) · ↓ kupa · Spacja pauza',
 
   // game
-  'Score: {score}': 'Trafienia: {score}',
-  Pause: 'Pauza',
-  'Game Over': 'Koniec Gry',
-  'Hooray!': 'Hurra!',
+  'Score: {score}': 'Trafieni: {score}',
+  Pause: 'Zaraz\nWracam',
+  'Game Over': 'Klops!',
+  'Hooray!': 'Wypas!',
 
   // overlays and the calibration dialog
   'Loading…': 'Ładowanie…',

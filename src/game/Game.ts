@@ -1,4 +1,4 @@
-import { Application, Container, Text } from 'pixi.js';
+import { Application, Container, Graphics, Text } from 'pixi.js';
 import { audio } from '../audio/audio';
 import { splatHalfWidth } from '../characters/poo';
 import { villainHitbox } from '../characters/villain';
@@ -36,6 +36,8 @@ interface Popup {
 export class Game {
   readonly root = new Container();
   paused = true;
+  /** darken the game (behind a dialog, like the calibration's) */
+  dimmed = false;
   /** show the big "Paused" label while paused (only for a manual pause, not behind dialogs) */
   showPausedText = false;
   score = 0;
@@ -90,11 +92,15 @@ export class Game {
   private scoreText: Text;
   private pausedText: Text;
   private hearts = new Container();
+  /** darkens the game behind the "Pause", "Game Over" and "Hooray" signs */
+  private dim = new Graphics();
+  /** how far the dimming behind "Pause" or a dialog (`dimmed`) has faded in (0–1) */
+  private overlayShade = 0;
   private gameOverText: Text;
-  /** ms since game over (drives the falling sign) */
+  /** ms since game over (drives the sliding sign) */
   private overT = 0;
   private completeText: Text;
-  /** ms since the level completed (drives the falling sign and the next level) */
+  /** ms since the level completed (drives the sliding sign and the next level) */
   private completeT = 0;
   /** ms since the last friend was saved, while play goes on for `config.levelComplete.graceMs`; null before */
   private allSavedT: number | null = null;
@@ -150,7 +156,10 @@ export class Game {
     relabel();
     this.gameOverText.visible = false;
     this.completeText.visible = false;
-    this.hud.addChild(this.scoreText, this.hearts, this.pausedText, this.gameOverText, this.completeText);
+    // far bigger than the world, so it covers the letterbox bands too
+    this.dim.rect(-WORLD.width * 5, -WORLD.height * 5, WORLD.width * 11, WORLD.height * 11).fill('#000');
+    this.dim.alpha = 0;
+    this.hud.addChild(this.scoreText, this.hearts, this.dim, this.pausedText, this.gameOverText, this.completeText);
 
     app.stage.addChild(this.root);
     app.ticker.add((ticker) => this.update(ticker.deltaMS));
@@ -247,6 +256,10 @@ export class Game {
   private update(dtMs: number) {
     fitWorld(this.app, this.root);
     this.pausedText.visible = this.paused && this.showPausedText && !this.over;
+    // pausing stops the render loop right after this frame, so "Pause" darkens at once; a dialog fades it in
+    const fade = dtMs / Math.max(1, config.dimFadeMs);
+    if (this.pausedText.visible) this.overlayShade = 1;
+    else this.overlayShade = Math.min(1, Math.max(0, this.overlayShade + (this.dimmed ? fade : -fade)));
     this.gameOverText.visible = this.over;
     this.completeText.visible = this.complete;
     if (!this.paused && this.over) {
@@ -411,7 +424,7 @@ export class Game {
     }
   }
 
-  /** The grace time after saving all friends is over: everything stops, "Hooray" drops in with a fanfare, and a while later the next level starts (`onLevelComplete`). */
+  /** The grace time after saving all friends is over: everything stops, "Hooray" slides in with a fanfare, and a while later the next level starts (`onLevelComplete`). */
   private completeLevel() {
     this.complete = true;
     this.completeT = 0;
@@ -623,8 +636,15 @@ export class Game {
     this.hearts.children.forEach((h, i) => {
       h.visible = i < this.lives || (i === this.lives && deathMs !== null && Math.floor(deathMs / 120) % 2 === 0);
     });
-    dropIn(this.gameOverText, this.overT, config.gameOver.dropMs);
-    dropIn(this.completeText, this.completeT, config.levelComplete.dropMs);
+    // the screen's left and right edges in world coordinates (wider than the world when letterboxed)
+    const left = -this.root.x / this.root.scale.x;
+    const right = (this.app.screen.width - this.root.x) / this.root.scale.x;
+    const { slideMs, showMs } = config.gameOver;
+    const { slideMs: completeSlideMs, nextMs } = config.levelComplete;
+    let shade = 0;
+    if (this.over) shade = slideThrough(this.gameOverText, this.overT, slideMs, showMs, left, right);
+    if (this.complete) shade = slideThrough(this.completeText, this.completeT, completeSlideMs, nextMs, left, right);
+    this.dim.alpha = config.signDim * Math.max(shade, this.overlayShade);
     this.levelView?.sync();
     this.bird.sync(this.controls);
     for (const villain of this.villains) {
@@ -648,11 +668,20 @@ function bigText(text: string) {
   return t;
 }
 
-/** A big sign drops in from the top and bounces to a stop in the middle, `ms` into a drop lasting `dropMs`. */
-function dropIn(sign: Text, ms: number, dropMs: number) {
-  const k = Math.min(1, ms / Math.max(1, dropMs));
-  const top = -sign.height / 2;
-  sign.y = top + (WORLD.height / 2 - top) * easeOutBounce(k);
+/**
+ * A big sign slides in from the left to the middle, stays, and slides on out to the right, ending `totalMs` in;
+ * `ms` into that. `left`/`right`: the screen's edges. Returns how far in the sign is (0 off screen, 1 in the middle),
+ * for dimming the game behind it.
+ */
+function slideThrough(sign: Text, ms: number, slideMs: number, totalMs: number, left: number, right: number): number {
+  const slide = Math.max(1, slideMs);
+  const kIn = Math.min(1, ms / slide);
+  const kOut = Math.min(1, Math.max(0, (ms - (totalMs - slide)) / slide));
+  const mid = WORLD.width / 2;
+  const from = left - sign.width / 2, to = right + sign.width / 2;
+  sign.y = WORLD.height / 2;
+  sign.x = kOut > 0 ? mid + (to - mid) * easeInBack(kOut) : from + (mid - from) * easeOutBack(kIn);
+  return kOut > 0 ? 1 - Math.min(1, kOut * 2) : Math.min(1, kIn * 2);
 }
 
 /**
@@ -678,10 +707,8 @@ function surfaceAngle(n: { x: number; y: number }): number {
   return a;
 }
 
-const easeOutBounce = (x: number) => {
-  const n1 = 7.5625, d1 = 2.75;
-  if (x < 1 / d1) return n1 * x * x;
-  if (x < 2 / d1) return n1 * (x -= 1.5 / d1) * x + 0.75;
-  if (x < 2.5 / d1) return n1 * (x -= 2.25 / d1) * x + 0.9375;
-  return n1 * (x -= 2.625 / d1) * x + 0.984375;
-};
+const BACK = 1.4;
+/** overshoots the end a little, then settles */
+const easeOutBack = (x: number) => 1 + (BACK + 1) * (x - 1) ** 3 + BACK * (x - 1) ** 2;
+/** pulls back a little, then speeds away */
+const easeInBack = (x: number) => (BACK + 1) * x ** 3 - BACK * x ** 2;

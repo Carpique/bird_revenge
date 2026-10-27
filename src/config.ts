@@ -274,17 +274,21 @@ export const config = {
   friend: { savedScale: 4, savedMs: 1000 },
 
   countdownMs: 2000,
+  /** how much the game darkens (0–1) behind the "Pause", "Game Over" and "Hooray" signs and the calibration dialog */
+  signDim: 0.4,
+  /** the darkening behind the calibration dialog fades in and out in this long (and behind "Pause" out on resume) */
+  dimFadeMs: 300,
   gameOver: {
-    /** the "Game Over" sign drops from the top to the middle in this long */
-    dropMs: 1000,
+    /** the "Game Over" sign slides in from the left to the middle in this long (and out to the right at the end) */
+    slideMs: 700,
     /** ...and the screen is shown this long (from the start of the drop) before a new game starts */
     showMs: 4000,
   },
   levelComplete: {
     /** play goes on this long after the last friend is saved (the bird blinking, unhurtable); then everything stops */
     graceMs: 2000,
-    /** the "Hooray" sign drops from the top to the middle in this long, with a fanfare */
-    dropMs: 1000,
+    /** the "Hooray" sign slides in from the left to the middle in this long, with a fanfare (and out to the right at the end) */
+    slideMs: 700,
     /** ...and the next level starts this long after everything stopped (the fanfare's length) */
     nextMs: 3000,
   },
