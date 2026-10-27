@@ -492,10 +492,11 @@ export class Game {
     this.timers.push({ ms, fn });
   }
 
-  /** The dead bird has left the screen: drop in a new one from the top, or it's game over. */
+  /** The dead bird has left the screen: a new one appears at the level's start, or it's game over. */
   private afterDeath() {
     if (this.lives > 0) {
-      this.bird.respawn(this.birdStart().x, 120, true);
+      const start = this.birdStart();
+      this.bird.respawn(start.x, start.y, true);
       Composite.add(this.engine.world, this.bird.body);
       return;
     }
