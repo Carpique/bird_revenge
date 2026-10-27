@@ -40,7 +40,9 @@ export function sideBoost(tilt: number, heldMs: number): number {
  *   gentle start (`sideBoost`): at most `fineSpeed`, at `fineAccel`, easing in to `sideSpeed`, `sideAccel`; already
  *   faster than that it coasts. Slowing down, or stopping to turn back, takes the full `sideAccel`. Level, the
  *   sideways speed is left to air friction.
- * - tilted or hovering with a full `hold` (arms spread in a T, in the air), it keeps its altitude: a fall is braked
+ * - tilted (in the air), gravity is cancelled: a fall is braked (`holdDrag`) and flapping climbs on `climbLift`, the
+ *   wingbeats' lift smoothed out, so the bird flies a straight line up.
+ * - hovering with a full `hold` (arms spread in a T, in the air), it keeps its altitude: a fall is braked
  *   (`holdDrag`, gravity cancelled). Rising is left to gravity, so a flap climbs as usual and then levels off.
  * - hovering with a partial `hold` (arms lowered evenly), that fraction of gravity is cancelled (and of `holdDrag`
  *   applied), so the fall settles at a sink speed that grows the lower the arms are.
@@ -67,10 +69,32 @@ export function flightStep(v: { x: number; y: number }, tilt: number, hold: numb
       if (Math.abs(x) < Math.abs(target)) x += Math.sign(target) * Math.min(dv, Math.abs(target - x));
     }
   }
+  if (k !== 0) return { x, y: y > 0 ? y * (1 - config.tilt.holdDrag) : y, holdUp: true };
   if (y <= 0) return { x, y, holdUp: false };
-  if (k !== 0 || hold >= 1) return { x, y: y * (1 - config.tilt.holdDrag), holdUp: true };
+  if (hold >= 1) return { x, y: y * (1 - config.tilt.holdDrag), holdUp: true };
   const h = Math.max(0, hold);
   return { x, y: y * (1 - config.tilt.holdDrag * h), holdUp: false, gravity: Math.min(afterFlapGravity(sinceFlapMs), 1 - h) };
+}
+
+/**
+ * Flying tilted, the wingbeats' lift (px/s²) is smoothed over `climbSmoothMs`, so the climb doesn't come in steps:
+ * returns the new smoothed lift from the previous one and this step's.
+ */
+export function smoothClimbLift(prev: number, lift: number, stepMs: number): number {
+  return prev + (1 - Math.exp(-stepMs / Math.max(1, config.tilt.climbSmoothMs))) * (lift - prev);
+}
+
+/** Upward acceleration (px/s²) of a tilted climb on `smoothLift`, gravity (cancelled) partly taken off: `climbGravity`. */
+export const climbAccel = (smoothLift: number) => Math.max(0, smoothLift - config.physics.gravity * 1000 * config.tilt.climbGravity);
+
+/**
+ * How far the bird pitches its beak up (deg, 0..`climbPitchDeg`) climbing at velocity `v` (px per step, y down):
+ * along its flight path, scaled by its sideways speed (none when slow, all of it at `sideSpeed`).
+ */
+export function climbPitch(v: { x: number; y: number }): number {
+  if (v.y >= 0) return 0;
+  const along = Math.min(config.tilt.climbPitchDeg, (Math.atan2(-v.y, Math.abs(v.x)) * 180) / Math.PI);
+  return along * Math.min(1, Math.abs(v.x) / Math.max(0.1, config.tilt.sideSpeed));
 }
 
 /** Fraction of gravity acting on a fall `sinceFlapMs` after the last flap: `afterFlapGravity` easing in to 1. */

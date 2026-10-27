@@ -86,7 +86,7 @@ export const config = {
   /**
    * Tilting the arms (one hand lower than the other: a tilted T, flapping tilted, or leaning the whole body) flies
    * the bird sideways towards the lower hand, faster the more they're tilted, keeping its altitude: it doesn't fall,
-   * and flapping tilted climbs just as fast as flapping level.
+   * and flapping tilted climbs in a straight line, beak up (`climbSmoothMs`).
    */
   tilt: {
     /** EMA factor for the tilt per pose frame (lower = steadier through out-of-step flaps, laggier) */
@@ -111,6 +111,18 @@ export const config = {
     boostTilt: 35,
     /** how far the bird leans (deg) flying sideways at full speed */
     leanDeg: 20,
+    /**
+     * flapping tilted climbs in a straight line, not in steps: the wingbeats' lift is smoothed over this many ms
+     * (higher = straighter, laggier) and gravity is cancelled
+     */
+    climbSmoothMs: 350,
+    /** ...but this fraction of gravity is taken off the smoothed lift, so weak flaps don't climb (1 = as when level) */
+    climbGravity: 0.6,
+    /**
+     * climbing tilted, the bird pitches its beak up along its flight path, at most this far (deg), scaled by its
+     * sideways speed: none when slow, all of it at `sideSpeed`
+     */
+    climbPitchDeg: 50,
     /**
      * tilted or hovering (a T), a fall is braked by this fraction per physics step (gravity cancelled), so the bird
      * keeps its altitude

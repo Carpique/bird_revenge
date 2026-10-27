@@ -5,7 +5,7 @@ import type { Controls } from '../input/controls';
 import type { Branch } from '../level/types';
 import { landingBranch } from './branches';
 import { CharacterSprite } from '../render/CharacterSprite';
-import { flightStep, leanFor, sideAmount } from './flight';
+import { climbAccel, climbPitch, flightStep, leanFor, sideAmount, smoothClimbLift } from './flight';
 import { postureLean, postureStep } from './posture';
 import { BIRD_GROUP, Bodies, Body, forceFor, Query, type MBody } from './physics';
 
@@ -41,6 +41,8 @@ export class Bird {
   private tiltDir = 0;
   /** rose off the floor by tilting: holds its altitude once the rise tops out, until the tilt ends or a flap */
   private liftingOff = false;
+  /** flying tilted: the wingbeats' lift, smoothed (px/s²) */
+  private climbLift = 0;
   /** posture control is steering the bird this step */
   private posturing = false;
   /** current lean, radians (eased towards the direction of sideways flight) */
@@ -156,6 +158,7 @@ export class Bird {
     this.sinceFlapMs = Infinity;
     this.tiltHeldMs = 0;
     this.tiltDir = 0;
+    this.climbLift = 0;
     this.liftingOff = false;
     this.invulnT = invulnerable ? config.player.invulnerableMs : 0;
   }
@@ -206,12 +209,17 @@ export class Bird {
     const g = this.posturing
       ? postureStep(b.velocity, p!, stepMs)
       : flightStep(b.velocity, c.tilt, this.onGround ? 0 : c.hover, this.sinceFlapMs, stepMs, this.tiltHeldMs);
-    // topped out after lifting off: stay at that height
+    // topped out after lifting off: stay at that height (on the way up, gravity tops it out)
     if (this.liftingOff && g.y > 0) g.y = 0;
+    const holdUp = g.holdUp && !(this.liftingOff && g.y < 0);
     Body.setVelocity(b, { x: g.x, y: g.y });
+    // tilted in the air, flapping climbs on the smoothed lift (gravity cancelled): a straight line, not steps
+    const tilted = !this.posturing && dir !== 0;
+    this.climbLift = tilted ? smoothClimbLift(this.climbLift, c.lift, stepMs) : 0;
+    const lift = tilted && !this.onGround ? climbAccel(this.climbLift) : c.lift;
     // Matter applies the full gravity itself; the hover (or flying by posture) holds against it
-    const antiGravity = config.physics.gravity * 1000 * (g.holdUp ? 1 : 1 - (g.gravity ?? 1));
-    Body.applyForce(b, b.position, { x: 0, y: -forceFor(b, c.lift + antiGravity) });
+    const antiGravity = config.physics.gravity * 1000 * (holdUp ? 1 : 1 - (g.gravity ?? 1));
+    Body.applyForce(b, b.position, { x: 0, y: -forceFor(b, lift + antiGravity) });
     const v = b.velocity;
     const speed = Math.hypot(v.x, v.y);
     const max = config.physics.maxSpeed;
@@ -239,16 +247,18 @@ export class Bird {
       this.view.rotation = d.turn * (Math.PI / 2) * Math.min(1, d.t / Math.max(1, config.player.dieTurnMs));
       return;
     }
-    // lean into sideways flight (in the air)
-    const bankTo =
-      this.posturing && c.posture ? (postureLean(c.posture) * Math.PI) / 180
-      : this.onGround ? 0
-      : (leanFor(c.tilt) * Math.PI) / 180;
-    this.bankAngle += 0.2 * (bankTo - this.bankAngle);
-    this.view.rotation = this.bankAngle;
     const b = this.body;
     const r = config.physics.birdRadius;
     if (Math.abs(b.velocity.x) > 0.4) this.facing = b.velocity.x > 0 ? 'right' : 'left';
+    // lean into sideways flight (in the air); climbing tilted, the beak points up along the flight path instead
+    const pitch = !this.posturing && !this.onGround && sideAmount(c.tilt) !== 0 ? climbPitch(b.velocity) : 0;
+    const climbing = Math.min(1, pitch / Math.max(1, config.tilt.leanDeg));
+    const bankTo =
+      this.posturing && c.posture ? (postureLean(c.posture) * Math.PI) / 180
+      : this.onGround ? 0
+      : ((leanFor(c.tilt) * (1 - climbing) - (this.facing === 'right' ? 1 : -1) * pitch) * Math.PI) / 180;
+    this.bankAngle += 0.2 * (bankTo - this.bankAngle);
+    this.view.rotation = this.bankAngle;
     this.sprite.setFacing(this.facing);
 
     const p = this.posturing ? c.posture : null;

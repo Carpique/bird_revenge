@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { config, type Config } from '../src/config';
 import { FlapDetector } from '../src/gestures/FlapDetector';
 import { droopHold, fitArmLine, TiltDetector } from '../src/gestures/TiltDetector';
-import { flightStep, sideBoost, sideAmount } from '../src/game/flight';
+import { climbAccel, flightStep, sideBoost, sideAmount, smoothClimbLift } from '../src/game/flight';
 import { STEP_MS } from '../src/game/physics';
 import { armElevation, hipAbduction, kneeAngle } from '../src/gestures/geometry';
 import { ShootDetector } from '../src/gestures/ShootDetector';
@@ -473,11 +473,24 @@ describe('flight physics', () => {
     expect(later.y).toBeCloseTo(long.y, 5);
   });
 
-  it('flapping tilted climbs as fast as flapping level', () => {
-    const level = sim(0, false, { lift: 1500 });
-    const tilted = sim(-30, false, { lift: 1500 });
-    expect(level.y).toBeLessThan(-1);
-    expect(tilted.y).toBeCloseTo(level.y, 5);
-    expect(tilted.x).toBeGreaterThan(1);
+  it('flapping tilted climbs in a straight line, not in steps', () => {
+    // wingbeats: 150 ms of lift, then 250 ms of none
+    const beat = (i: number) => ((i * STEP_MS) % 400 < 150 ? 3000 : 0);
+    const k = 1 - config.physics.birdAirFriction;
+    let v = { x: 0, y: 0 };
+    let smooth = 0;
+    const vys: number[] = [];
+    for (let i = 0; i < 240; i++) {
+      const lift = beat(i);
+      smooth = smoothClimbLift(smooth, lift, STEP_MS);
+      const s = flightStep(v, -30, 0, lift > 0 ? 0 : STEP_MS, STEP_MS);
+      expect(s.holdUp).toBe(true);
+      v = { x: s.x * k, y: (s.y - climbAccel(smooth) * 1e-6 * STEP_MS ** 2) * k };
+      if (i >= 120) vys.push(v.y);
+    }
+    expect(v.x).toBeGreaterThan(1);
+    // climbing steadily: never stalls between wingbeats
+    expect(Math.max(...vys)).toBeLessThan(-1);
+    expect(Math.max(...vys) - Math.min(...vys)).toBeLessThan(0.5 * -Math.max(...vys));
   });
 });

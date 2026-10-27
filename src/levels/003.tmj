@@ -118,7 +118,7 @@
                         {
                          "name":"throwDelay",
                          "type":"float",
-                         "value":10
+                         "value":15
                         }],
                  "rotation":0,
                  "type":"Villain",
@@ -151,20 +151,20 @@
                          "y":0
                         }, 
                         {
-                         "x":-320,
+                         "x":-288,
                          "y":0
                         }],
                  "properties":[
                         {
                          "name":"throwDelay",
                          "type":"float",
-                         "value":30
+                         "value":0
                         }],
                  "rotation":0,
                  "type":"Villain",
                  "visible":true,
                  "width":0,
-                 "x":320,
+                 "x":288,
                  "y":128
                 }, 
                 {
@@ -197,7 +197,7 @@
                         {
                          "name":"throwDelay",
                          "type":"float",
-                         "value":10
+                         "value":20
                         }],
                  "rotation":0,
                  "type":"Villain",
@@ -229,20 +229,20 @@
                          "y":0
                         }, 
                         {
-                         "x":-240,
+                         "x":-192,
                          "y":0
                         }],
                  "properties":[
                         {
                          "name":"throwDelay",
                          "type":"float",
-                         "value":10
+                         "value":20
                         }],
                  "rotation":0,
                  "type":"Villain",
                  "visible":true,
                  "width":0,
-                 "x":896,
+                 "x":848,
                  "y":448
                 }, 
                 {
@@ -268,8 +268,8 @@
                  "type":"Friend",
                  "visible":true,
                  "width":0,
-                 "x":159.307359307359,
-                 "y":128.138528138528
+                 "x":272,
+                 "y":128
                 }, 
                 {
                  "height":0,
