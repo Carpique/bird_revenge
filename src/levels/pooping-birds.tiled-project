@@ -194,6 +194,45 @@
             "useAs": [
                 "object"
             ]
+        },
+        {
+            "id": 11,
+            "name": "ButtonAction",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "open",
+                "close"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "color": "#ffd9534f",
+            "drawFill": true,
+            "id": 12,
+            "members": [
+                {
+                    "name": "action",
+                    "propertyType": "ButtonAction",
+                    "type": "string",
+                    "value": "open"
+                },
+                {
+                    "name": "duration",
+                    "type": "float",
+                    "value": 3
+                },
+                {
+                    "name": "target",
+                    "type": "object",
+                    "value": 0
+                }
+            ],
+            "name": "Button",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
         }
     ]
 }
