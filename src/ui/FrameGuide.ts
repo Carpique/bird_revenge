@@ -3,7 +3,7 @@ import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { PART_NAMES, REQUIRED_PARTS, SKELETON, type PartName } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
 import { scenery } from '../scenery/scenery';
-import { HAND_FONT as FONT } from './fonts';
+import { HAND_FONT as FONT, GLOW } from './fonts';
 import { t } from './i18n';
 
 export type GuideMode = 'hidden' | 'loading' | 'calibrate' | 'outOfFrame' | 'countdown';
@@ -95,8 +95,8 @@ export class FrameGuide {
       case 'countdown':
         ctx.fillStyle = 'rgba(255,255,255,0.45)';
         ctx.fillRect(0, 0, W, H);
-        this.text(String(Math.max(1, Math.ceil(s.countdown ?? 0))), W / 2, H / 2, 180, INK);
-        this.text(t('Get ready to flap!'), W / 2, H / 2 + 120, 34, INK);
+        this.text(String(Math.max(1, Math.ceil(s.countdown ?? 0))), W / 2, H / 2, 180, INK, undefined, true);
+        this.text(t('Get ready to flap!'), W / 2, H / 2 + 120, 34, INK, undefined, true);
         break;
       case 'calibrate':
         this.drawCalibrateDialog(s, W, H, now);
@@ -267,13 +267,23 @@ export class FrameGuide {
     }
   }
 
-  private text(t: string, x: number, y: number, size: number, color: string, maxWidth?: number) {
+  /** `glow`: a soft light halo around it, like the big signs over the dimmed game */
+  private text(t: string, x: number, y: number, size: number, color: string, maxWidth?: number, glow = false) {
     const ctx = this.ctx;
     ctx.font = `${size}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineWidth = Math.max(3, size / 9);
     ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    if (glow) {
+      ctx.save();
+      ctx.shadowColor = GLOW;
+      ctx.shadowBlur = size / 4;
+      ctx.strokeStyle = GLOW;
+      ctx.lineWidth = size / 6;
+      ctx.strokeText(t, x, y, maxWidth);
+      ctx.restore();
+    }
     ctx.strokeText(t, x, y, maxWidth);
     ctx.fillStyle = color;
     ctx.fillText(t, x, y, maxWidth);

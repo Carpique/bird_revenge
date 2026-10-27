@@ -10,6 +10,7 @@ import type { Branch, LevelDef } from '../level/types';
 import { fitWorld } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
 import { HAND_FONT as FONT, titleStyle } from '../ui/fonts';
+import { GlowText } from '../ui/GlowText';
 import { i18n, t } from '../ui/i18n';
 import { Apple } from './Apple';
 import { Background } from './Background';
@@ -90,16 +91,16 @@ export class Game {
   private timers: { ms: number; fn: () => void }[] = [];
   private acc = 0;
   private scoreText: Text;
-  private pausedText: Text;
+  private pausedText: GlowText;
   private hearts = new Container();
   /** darkens the game behind the "Pause", "Game Over" and "Hooray" signs */
   private dim = new Graphics();
   /** how far the dimming behind "Pause" or a dialog (`dimmed`) has faded in (0–1) */
   private overlayShade = 0;
-  private gameOverText: Text;
+  private gameOverText: GlowText;
   /** ms since game over (drives the sliding sign) */
   private overT = 0;
-  private completeText: Text;
+  private completeText: GlowText;
   /** ms since the level completed (drives the sliding sign and the next level) */
   private completeT = 0;
   /** ms since the last friend was saved, while play goes on for `config.levelComplete.graceMs`; null before */
@@ -660,10 +661,9 @@ export class Game {
   }
 }
 
-/** Big sign in the middle of the screen ("Pause", "Game Over", "Hooray"), styled like the title. */
+/** Big glowing sign in the middle of the screen ("Pause", "Game Over", "Hooray"), styled like the title. */
 function bigText(text: string) {
-  const t = new Text({ text, style: titleStyle(180) });
-  t.anchor.set(0.5);
+  const t = new GlowText(text, titleStyle(180));
   t.position.set(WORLD.width / 2, WORLD.height / 2);
   return t;
 }
@@ -673,7 +673,7 @@ function bigText(text: string) {
  * `ms` into that. `left`/`right`: the screen's edges. Returns how far in the sign is (0 off screen, 1 in the middle),
  * for dimming the game behind it.
  */
-function slideThrough(sign: Text, ms: number, slideMs: number, totalMs: number, left: number, right: number): number {
+function slideThrough(sign: GlowText, ms: number, slideMs: number, totalMs: number, left: number, right: number): number {
   const slide = Math.max(1, slideMs);
   const kIn = Math.min(1, ms / slide);
   const kOut = Math.min(1, Math.max(0, (ms - (totalMs - slide)) / slide));

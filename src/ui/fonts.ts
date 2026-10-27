@@ -20,6 +20,8 @@ export async function loadFonts() {
 /** Ink and accent colours of the titles and menus. */
 export const INK = '#2b2b2b';
 export const ACCENT = '#c0392b';
+/** Halo around text shown over the dimmed game. */
+export const GLOW = '#fff6d8';
 
 /** Big poster-style sign: the game title, "Pause", "Game Over". Outline and shadow scale with the size. */
 export function titleStyle(fontSize: number): TextStyleOptions {
