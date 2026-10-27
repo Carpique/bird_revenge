@@ -2,7 +2,7 @@ import { Application } from 'pixi.js';
 import { audio } from './audio/audio';
 import { config, loadSavedConfig } from './config';
 import { Game } from './game/Game';
-import { firstLevel, levels, nextLevel, onLevelEdited } from './levels';
+import { firstLevel, levels, nextLevel, onLevelEdited, testLevelName } from './levels';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
 import { FlapDetector, type FlapOutput } from './gestures/FlapDetector';
 import { GlideDetector, type GlideOutput } from './gestures/GlideDetector';
@@ -122,8 +122,8 @@ async function main() {
 
   const game = new Game(app, firstLevel());
   let allLevels = levels;
-  // all friends saved: on to the next level, keeping score and lives
-  game.onLevelComplete = () => game.loadLevel(nextLevel(allLevels, game.level.name));
+  // all friends saved: on to the next level, keeping score and lives (testing a level from the URL: that level again)
+  game.onLevelComplete = () => game.loadLevel(testLevelName ? game.level : nextLevel(allLevels, game.level.name));
   // saving the level being played in Tiled while the dev server runs swaps it in, without reloading the page
   onLevelEdited((next) => {
     allLevels = next;
@@ -401,8 +401,10 @@ async function main() {
     });
   });
 
-  // splash screen first; the pose model loads in the background, the camera starts with the game
-  state = 'menu';
+  // splash screen first (testing a level from the URL: straight to calibration); the pose model loads in the background,
+  // the camera starts with the game
+  if (testLevelName) recalibrate();
+  else state = 'menu';
   try {
     const t = await PoseTracker.create(video);
     t.onFrame = onPose;

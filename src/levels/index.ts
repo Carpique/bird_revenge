@@ -28,9 +28,12 @@ export const levels = parseAll();
 /** An empty screen, played when no level loads. */
 const EMPTY: LevelDef = { name: 'empty', width: 1280, height: 720, birdStart: null, villains: [], friends: [], bodies: [], branches: [], joints: [] };
 
-/** The level to start with: the one the URL asks for (`?level=<name>`), else the first; an empty screen when none loads (the console says why). */
+/** The level the URL asks for (`?level=<name>`), for testing it: the game skips the menu and plays just this level. */
+export const testLevelName = new URLSearchParams(location.search).get('level');
+
+/** The level to start with: the one the URL asks for, else the first; an empty screen when none loads (the console says why). */
 export function firstLevel(): LevelDef {
-  const name = new URLSearchParams(location.search).get('level');
+  const name = testLevelName;
   const level = name ? levels.get(name) : undefined;
   if (name && !level && !(`./${name}.tmj` in files)) console.error(`No level "${name}"; there are: ${[...levels.keys()].join(', ')}`);
   return level ?? levels.values().next().value ?? EMPTY;

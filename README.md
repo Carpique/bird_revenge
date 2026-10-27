@@ -62,8 +62,8 @@ To use real drawings, replace those files (SVG or PNG) and/or edit the paths in:
 Levels are [Tiled](https://www.mapeditor.org/) maps in `src/levels/` (`*.tmj`). Open `src/levels/pooping-birds.tiled-project`
 in Tiled first: it defines the object classes the game understands (Terrain, Body, Branch, Rope, Hinge, Villain, Friend, BirdStart —
 see `src/level/tiled.ts`). Saving all the Friends (points, standing on the ground or a shelf) completes a level; the
-levels are played in file name order, round and round. Start at another level with `?level=<file name>` (default: the
-first). With `npm run dev` running, saving a map swaps it into the running game.
+levels are played in file name order, round and round. To test a level, open `?level=<file name>` (without `.tmj`): it
+skips the start screen and plays only that level, again each time it's completed. With `npm run dev` running, saving a map swaps it into the running game.
 
 ## Tests
 
