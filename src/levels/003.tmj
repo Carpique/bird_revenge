@@ -111,7 +111,7 @@
                          "y":0
                         }, 
                         {
-                         "x":311.203463203463,
+                         "x":475.493506493506,
                          "y":0
                         }],
                  "properties":[
@@ -197,7 +197,7 @@
                         {
                          "name":"throwDelay",
                          "type":"float",
-                         "value":8
+                         "value":10
                         }],
                  "rotation":0,
                  "type":"Villain",
@@ -236,7 +236,7 @@
                         {
                          "name":"throwDelay",
                          "type":"float",
-                         "value":6
+                         "value":10
                         }],
                  "rotation":0,
                  "type":"Villain",
@@ -282,7 +282,7 @@
                          "y":0
                         }, 
                         {
-                         "x":448,
+                         "x":301.852813852814,
                          "y":0
                         }],
                  "properties":[
@@ -295,7 +295,7 @@
                  "type":"Villain",
                  "visible":true,
                  "width":0,
-                 "x":813.852813852814,
+                 "x":960,
                  "y":637.229437229437
                 }, 
                 {

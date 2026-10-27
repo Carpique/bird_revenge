@@ -40,11 +40,11 @@
                  "type":"Terrain",
                  "visible":true,
                  "width":400,
-                 "x":480,
-                 "y":448
+                 "x":496,
+                 "y":432
                 }, 
                 {
-                 "height":240.277598558158,
+                 "height":208,
                  "id":8,
                  "name":"wall",
                  "opacity":1,
@@ -135,7 +135,7 @@
                          "y":0
                         }, 
                         {
-                         "x":448,
+                         "x":624,
                          "y":0
                         }],
                  "properties":[
@@ -148,7 +148,7 @@
                  "type":"Villain",
                  "visible":true,
                  "width":0,
-                 "x":416,
+                 "x":240,
                  "y":640
                 }, 
                 {
@@ -189,7 +189,7 @@
                  "visible":true,
                  "width":0,
                  "x":864,
-                 "y":448
+                 "y":432
                 }, 
                 {
                  "height":0,
