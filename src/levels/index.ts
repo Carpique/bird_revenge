@@ -3,7 +3,7 @@ import type { LevelDef } from '../level/types';
 
 /**
  * Tiled maps in this folder; a level's name is its file name without `.tmj`.
- * They're played in file name order (numbers compared as numbers: level-2 before level-10), back to the first after the last.
+ * They're played in file name order (`001.tmj`, `002.tmj`, …; numbers compared as numbers, so 2 comes before 10 even unpadded), back to the first after the last.
  */
 const files = import.meta.glob<string>('./*.tmj', { query: '?raw', import: 'default', eager: true });
 
