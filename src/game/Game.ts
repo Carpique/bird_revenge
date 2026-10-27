@@ -14,9 +14,10 @@ import { i18n, t } from '../ui/i18n';
 import { Apple } from './Apple';
 import { Background } from './Background';
 import { Bird } from './Bird';
+import { Button } from './Button';
 import { Friend } from './Friend';
 import { landingBranch } from './branches';
-import { Bodies, Composite, Engine, Events, Query, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
+import { Bodies, Composite, Engine, Events, Query, Sleeping, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
 import { Poo } from './Poo';
 import { Villain, type Span } from './Villain';
 
@@ -68,8 +69,11 @@ export class Game {
   private levelLayer = new Container();
   private built: BuiltLevel = { bodies: [], joints: [] };
   private levelView: LevelView | null = null;
-  /** the level's bodies, which the bird can stand on and apples stop at */
+  /** the level's bodies, which the bird can stand on and apples stop at (an open door isn't one) */
   private levelBodies: MBody[] = [];
+  private buttons: Button[] = [];
+  /** each door (terrain a button switches) is there (true) or open (false), by terrain id */
+  private doors = new Map<number, boolean>();
   /** the level's branches the bird can sit on */
   private branches: readonly Branch[] = [];
   private bird: Bird;
@@ -225,8 +229,11 @@ export class Game {
     Composite.add(world, [...this.built.bodies.map((b) => b.body), ...this.built.joints.map((j) => j.constraint)]);
     this.levelView = new LevelView(this.level, this.built);
     this.levelLayer.addChild(this.levelView);
-    this.levelBodies = this.built.bodies.map((b) => b.body);
     this.branches = this.level.branches;
+    this.buttons = this.level.buttons.map((def) => new Button(def));
+    // every door starts there (as built); the "close" ones open straight away
+    this.doors = new Map(this.buttons.map((b) => [b.def.target, true]));
+    this.switchDoors();
   }
 
   private birdStart() {
@@ -280,6 +287,7 @@ export class Game {
     this.bird.standOn(this.levelBodies);
     this.landPoosOnBranches(pooYs);
     for (const fn of this.pending.splice(0)) fn();
+    this.pressButtons();
     for (const t of this.timers) t.ms -= STEP_MS;
     const due = this.timers.filter((t) => t.ms <= 0);
     this.timers = this.timers.filter((t) => t.ms > 0);
@@ -338,6 +346,58 @@ export class Game {
       audio.play('friend');
     }
     if (this.friends.length && this.friends.every((f) => f.state !== 'waiting')) this.completeLevel();
+  }
+
+  /** A button is pressed by the bird's feet on it, a poo falling into it or a splat lying on it; the doors follow. */
+  private pressButtons() {
+    const b = this.bird.body.position;
+    const r = config.physics.birdRadius;
+    for (const button of this.buttons) {
+      const pressed =
+        (!this.bird.dying && button.under(b.x, b.y + r)) ||
+        this.poos.some(
+          (p) =>
+            (p.state === 'falling' && button.touches(p.body.position.x, p.body.position.y, config.physics.pooRadius)) ||
+            (p.state === 'splat' && button.under(p.view.x, p.view.y)),
+        );
+      if (button.step(pressed, STEP_MS)) audio.play('button');
+      this.levelView?.setPressed(button.def.id, button.pressed);
+    }
+    this.switchDoors();
+  }
+
+  /**
+   * Each door there or open as its buttons say: an "open" door is open while one of its buttons is in effect,
+   * a "close" door there only then. An open door is out of the physics world, and out of `levelBodies`.
+   */
+  private switchDoors() {
+    const active = new Set(this.buttons.filter((b) => b.active).map((b) => b.def.target));
+    const actions = new Map(this.buttons.map((b) => [b.def.target, b.def.action]));
+    for (const { def, body } of this.built.bodies) {
+      const action = actions.get(def.id);
+      if (!action) continue;
+      const solid = active.has(def.id) === (action === 'close');
+      if (this.doors.get(def.id) === solid) continue;
+      this.doors.set(def.id, solid);
+      if (solid) Composite.add(this.engine.world, body);
+      else {
+        Composite.remove(this.engine.world, body);
+        this.openUnder(body);
+      }
+      this.levelView?.setSolid(def.id, solid);
+    }
+    this.levelBodies = this.built.bodies.filter((b) => this.doors.get(b.def.id) !== false).map((b) => b.body);
+  }
+
+  /** A door just opened: what rested on it falls (sleeping crates wake), the splats on it go. */
+  private openUnder(door: MBody) {
+    for (const b of this.built.bodies) if (b.def.kind === 'body') Sleeping.set(b.body, false);
+    const { min, max } = door.bounds;
+    for (const p of this.poos) {
+      if (p.state === 'splat' && p.view.x >= min.x && p.view.x <= max.x && Math.abs(p.view.y - min.y) <= SURFACE_TOLERANCE) {
+        p.state = 'done';
+      }
+    }
   }
 
   /** All friends saved: everything stops, "Hooray" drops in, and a while later the next level starts (`onLevelComplete`). */

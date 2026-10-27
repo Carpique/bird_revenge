@@ -1,4 +1,4 @@
-import type { Branch, FriendKind, JointDef, LevelDef, Material, Shape } from './types';
+import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Shape } from './types';
 
 /**
  * Loads a map saved by the Tiled editor (JSON, `.tmj`) into a `LevelDef`.
@@ -14,6 +14,7 @@ import type { Branch, FriendKind, JointDef, LevelDef, Material, Shape } from './
  * | Villain   | polyline                       | a villain walking its x range, on what's under its first point, starting there |
  * | Friend    | point                          | a friend to save, standing on the point   |
  * | BirdStart | point                          | where the bird starts                     |
+ * | Button    | rectangle (unrotated)          | a button on the surface under its bottom edge, switching the Terrain `target` |
  *
  * Objects without a class are ignored (handy for notes and guides); hidden layers and objects are skipped.
  */
@@ -79,11 +80,13 @@ export const CLASS_DEFAULTS = {
   Villain: { throwDelay: 4 },
   Friend: { kind: 'bunny' },
   BirdStart: {},
+  Button: { target: 0, action: 'open', duration: 3 },
 } as const;
 
 type ClassName = keyof typeof CLASS_DEFAULTS;
 const MATERIALS: readonly Material[] = ['wood', 'stone', 'rubber', 'ice'];
 const FRIEND_KINDS: readonly FriendKind[] = ['bunny'];
+const BUTTON_ACTIONS: readonly ButtonAction[] = ['open', 'close'];
 
 export class LevelError extends Error {}
 
@@ -102,6 +105,7 @@ export function parseTiledMap(name: string, map: TiledMap): LevelDef {
     bodies: [],
     branches: [],
     joints: [],
+    buttons: [],
   };
 
   const visit = (layers: TiledLayer[], ox: number, oy: number) => {
@@ -126,6 +130,13 @@ export function parseTiledMap(name: string, map: TiledMap): LevelDef {
   for (const j of level.joints) {
     if (!ids.has(j.body)) problems.push(`a ${j.kind} at (${j.x}, ${j.y}) has no "body", or it isn't a Body or Terrain`);
     if (j.to !== null && !ids.has(j.to)) problems.push(`a ${j.kind} at (${j.x}, ${j.y}): its "to" isn't a Body or Terrain`);
+  }
+  const terrain = new Set(level.bodies.filter((b) => b.kind === 'terrain').map((b) => b.id));
+  const actions = new Map<number, ButtonAction>();
+  for (const b of level.buttons) {
+    if (!terrain.has(b.target)) problems.push(`button ${b.id}: its "target" isn't a Terrain`);
+    else if ((actions.get(b.target) ?? b.action) !== b.action) problems.push(`button ${b.id}: another button does the opposite to its target`);
+    actions.set(b.target, b.action);
   }
 
   if (problems.length) throw new LevelError(`Level "${name}":\n- ${problems.join('\n- ')}`);
@@ -184,6 +195,17 @@ function addObject(level: LevelDef, o: TiledObject) {
       const kind = String(p.kind) as FriendKind;
       if (!FRIEND_KINDS.includes(kind)) throw new Error(`unknown friend kind "${kind}"`);
       level.friends.push({ kind, x: o.x, y: o.y });
+      break;
+    }
+    case 'Button': {
+      if (o.point || o.ellipse || o.polygon || o.polyline) throw new Error('a Button must be a rectangle');
+      if (o.rotation) throw new Error("a Button can't be rotated");
+      if (o.width <= 0 || o.height <= 0) throw new Error('has no size');
+      const action = String(p.action) as ButtonAction;
+      if (!BUTTON_ACTIONS.includes(action)) throw new Error(`unknown action "${action}"`);
+      const duration = num(p.duration);
+      if (duration < 0) throw new Error('"duration" can\'t be negative (0 = for good)');
+      level.buttons.push({ id: o.id, x0: o.x, x1: o.x + o.width, y0: o.y, y1: o.y + o.height, target: num(p.target), action, duration });
       break;
     }
     case 'BirdStart':

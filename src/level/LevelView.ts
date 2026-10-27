@@ -3,11 +3,15 @@ import rough from 'roughjs';
 import type { Options } from 'roughjs/bin/core';
 import { Constraint } from '../game/physics';
 import type { BuiltLevel, LevelBody } from './build';
-import type { Branch, LevelDef, Material } from './types';
+import type { Branch, ButtonDef, LevelDef, Material } from './types';
 
 const INK = '#2b2b2b';
 const BARK = '#8a6440';
 const FILLS: Record<Material, string> = { wood: '#c79a6b', stone: '#a3a8ad', rubber: '#d9534f', ice: '#b5dcf5' };
+const BUTTON_CAP = '#e0533d';
+const BUTTON_BASE = '#6b6f73';
+/** how see-through a door is while it's open (where it'll come back stays visible) */
+const OPEN_ALPHA = 0.15;
 /** canvases are drawn at this many pixels per world pixel, so they stay crisp when the stage is scaled up */
 const RES = 2;
 /** room around a shape for the sketchy strokes */
@@ -27,17 +31,37 @@ const style = (seed: number, fill: string, extra: Options = {}): Options => ({
 });
 
 /**
- * Draws a level's bodies, branches and joints in the placeholder art's sketchy style (Rough.js, at load time).
- * Terrain and branches go into one picture; each movable body is its own sprite following its physics body.
+ * Draws a level's bodies, branches, joints and buttons in the placeholder art's sketchy style (Rough.js, at load time).
+ * Terrain and branches go into one picture; each movable body is its own sprite following its physics body,
+ * and so is each door (terrain a button switches), which fades while it's open.
  */
 export class LevelView extends Container {
   private movers: { item: LevelBody; sprite: Sprite }[] = [];
   private jointLines = new Graphics();
+  /** by terrain id */
+  private doors = new Map<number, { sprite: Sprite; solid: boolean }>();
+  /** by button id */
+  private buttons = new Map<number, { up: Sprite; down: Sprite }>();
 
   constructor(level: LevelDef, private built: BuiltLevel) {
     super();
-    const terrain = built.bodies.filter((b) => b.def.kind === 'terrain');
+    const targets = new Set(level.buttons.map((b) => b.target));
+    const terrain = built.bodies.filter((b) => b.def.kind === 'terrain' && !targets.has(b.def.id));
     this.addChild(staticSprite(level, terrain));
+    for (const item of built.bodies) {
+      if (!targets.has(item.def.id)) continue;
+      const sprite = bodySprite(item, style(item.def.id * 7, BARK, { hachureAngle: 20 }));
+      sprite.position.set(item.body.position.x, item.body.position.y);
+      sprite.rotation = item.body.angle;
+      this.doors.set(item.def.id, { sprite, solid: true });
+      this.addChild(sprite);
+    }
+    for (const b of level.buttons) {
+      const up = buttonSprite(b, false), down = buttonSprite(b, true);
+      down.visible = false;
+      this.buttons.set(b.id, { up, down });
+      this.addChild(up, down);
+    }
     this.addChild(this.jointLines);
     for (const item of built.bodies) {
       if (item.def.kind !== 'body') continue;
@@ -48,7 +72,24 @@ export class LevelView extends Container {
     this.sync();
   }
 
+  /** A door (terrain switched by a button) is there or open. */
+  setSolid(id: number, solid: boolean) {
+    const door = this.doors.get(id);
+    if (door) door.solid = solid;
+  }
+
+  setPressed(id: number, pressed: boolean) {
+    const b = this.buttons.get(id);
+    if (!b) return;
+    b.up.visible = !pressed;
+    b.down.visible = pressed;
+  }
+
   sync() {
+    for (const door of this.doors.values()) {
+      const to = door.solid ? 1 : OPEN_ALPHA;
+      door.sprite.alpha += 0.25 * (to - door.sprite.alpha);
+    }
     for (const { item, sprite } of this.movers) {
       sprite.position.set(item.body.position.x, item.body.position.y);
       sprite.rotation = item.body.angle;
@@ -94,7 +135,7 @@ function staticSprite(level: LevelDef, terrain: LevelBody[]): Sprite {
   return new Sprite(textureOf(c));
 }
 
-function bodySprite(item: LevelBody): Sprite {
+function bodySprite(item: LevelBody, o?: Options): Sprite {
   // bounds of the unrotated shape around the body's centre
   const r = item.def.shape.kind === 'circle' ? item.def.shape.r : 0;
   const xs = r ? [-r, r] : item.outline.map((p) => p[0]);
@@ -104,7 +145,7 @@ function bodySprite(item: LevelBody): Sprite {
   const { c, ctx, rc } = canvas(w, h);
   ctx.translate(-x0, -y0);
   const material = item.def.kind === 'body' ? item.def.material : 'wood';
-  drawShape(rc, item, style(item.def.id * 7, FILLS[material]));
+  drawShape(rc, item, o ?? style(item.def.id * 7, FILLS[material]));
   const sprite = new Sprite(textureOf(c));
   sprite.anchor.set(-x0 / w, -y0 / h);
   return sprite;
@@ -121,4 +162,25 @@ function drawShape(rc: ReturnType<typeof rough.canvas>, item: LevelBody, o: Opti
 function drawBranch(rc: ReturnType<typeof rough.canvas>, br: Branch) {
   const [x0, y0] = br.from, [x1, y1] = br.to;
   rc.polygon([[x0, y0], [x1, y1], [x1, y1 + 6], [x0, y0 + 16]], style(Math.round(x0 + y0), BARK, { hachureAngle: 20, hachureGap: 5 }));
+}
+
+/** A button: a red cap on a grey base plate, domed when up, squashed flat when pressed. */
+function buttonSprite(b: ButtonDef, pressed: boolean): Sprite {
+  const w = b.x1 - b.x0, h = b.y1 - b.y0;
+  const { c, ctx, rc } = canvas(w + 2 * PAD, h + 2 * PAD);
+  ctx.translate(PAD, PAD);
+  const base = Math.min(8, h * 0.3);
+  const capH = (h - base) * (pressed ? 0.25 : 1);
+  const inset = w * 0.12;
+  // the cap: a half ellipse standing on the base
+  const cap: [number, number][] = [];
+  for (let i = 0; i <= 12; i++) {
+    const a = (Math.PI * i) / 12;
+    cap.push([w / 2 - Math.cos(a) * (w / 2 - inset), h - base - Math.sin(a) * capH]);
+  }
+  rc.polygon(cap, style(b.id * 7, BUTTON_CAP, { fillStyle: 'solid' }));
+  rc.rectangle(0, h - base, w, base, style(b.id * 7 + 1, BUTTON_BASE));
+  const sprite = new Sprite(textureOf(c));
+  sprite.position.set(b.x0 - PAD, b.y0 - PAD);
+  return sprite;
 }

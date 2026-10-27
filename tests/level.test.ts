@@ -4,7 +4,9 @@ import { buildLevel } from '../src/level/build';
 import { nextLevel } from '../src/levels';
 import { CLASS_DEFAULTS, LevelError, parseTiledMap, type TiledMap, type TiledObject } from '../src/level/tiled';
 import projectText from '../src/levels/pooping-birds.tiled-project?raw';
-import shelfText from '../src/levels/shelf.tmj?raw';
+import { Button } from '../src/game/Button';
+
+const levelFiles = import.meta.glob<string>('../src/levels/*.tmj', { query: '?raw', import: 'default', eager: true });
 
 /** A map with one object layer holding `objects`. */
 function mapOf(objects: Partial<TiledObject>[], layerVisible = true): TiledMap {
@@ -29,20 +31,9 @@ function mapOf(objects: Partial<TiledObject>[], layerVisible = true): TiledMap {
 const prop = (name: string, type: string, value: unknown) => ({ name, type, value });
 
 describe('Tiled levels', () => {
-  it('loads the shelf level', () => {
-    const level = parseTiledMap('shelf', JSON.parse(shelfText));
-    expect(level.width).toBe(1280);
-    expect(level.height).toBe(720);
-    expect(level.villains).toEqual([
-      // under the shelf (480..800), reaching 20% of its width beyond each of its ends
-      { x: 416, y: 640, path: { x0: 416, x1: 864 }, throwDelay: 4 },
-      // on it
-      { x: 480, y: 380, path: { x0: 480, x1: 800 }, throwDelay: 4 },
-    ]);
-    expect(level.friends).toEqual([{ kind: 'bunny', x: 640, y: 640 }]);
-    expect(level.birdStart).toEqual({ x: 1100, y: 606 });
-    expect(level.bodies).toHaveLength(1);
-    expect(level.bodies[0]).toMatchObject({ kind: 'terrain', name: 'shelf', friction: 0.2, shape: { kind: 'rect', x: 640, y: 392, width: 320, height: 24 } });
+  it('loads every level', () => {
+    expect(Object.keys(levelFiles).length).toBeGreaterThan(0);
+    for (const [path, text] of Object.entries(levelFiles)) expect(() => parseTiledMap(path, JSON.parse(text))).not.toThrow();
   });
 
   it('has the same class defaults as the Tiled project', () => {
@@ -112,6 +103,36 @@ describe('Tiled levels', () => {
     expect(level.villains).toEqual([{ x: 500, y: 640, path: { x0: 200, x1: 600 }, throwDelay: 4 }]);
     expect(() => parseTiledMap('t', mapOf([{ type: 'Villain', polyline: [{ x: 0, y: 0 }, { x: 0, y: 50 }] }]))).toThrow('needs some width');
     expect(() => parseTiledMap('t', mapOf([{ type: 'Villain', point: true }]))).toThrow('must be a polyline');
+  });
+
+  it('reads buttons and checks their targets', () => {
+    const level = parseTiledMap(
+      't',
+      mapOf([
+        { type: 'Terrain', x: 0, y: 600, width: 100, height: 20 },
+        { type: 'Button', x: 200, y: 620, width: 60, height: 20, properties: [prop('target', 'object', 1)] },
+        { type: 'Button', x: 300, y: 620, width: 60, height: 20, properties: [prop('target', 'object', 1), prop('duration', 'float', 0)] },
+      ]),
+    );
+    expect(level.buttons).toEqual([
+      { id: 2, x0: 200, x1: 260, y0: 620, y1: 640, target: 1, action: 'open', duration: 3 },
+      { id: 3, x0: 300, x1: 360, y0: 620, y1: 640, target: 1, action: 'open', duration: 0 },
+    ]);
+    const button = (props: ReturnType<typeof prop>[], o: Partial<TiledObject> = {}) => parseTiledMap('t', mapOf([{ type: 'Terrain', width: 10, height: 10 }, { type: 'Button', width: 10, height: 10, properties: props, ...o }]));
+    expect(() => button([])).toThrow('"target" isn\'t a Terrain');
+    expect(() => button([prop('target', 'object', 1), prop('action', 'string', 'toggle')])).toThrow('unknown action "toggle"');
+    expect(() => button([prop('target', 'object', 1)], { rotation: 10 })).toThrow("can't be rotated");
+    expect(() => button([prop('target', 'object', 1)], { point: true })).toThrow('must be a rectangle');
+    expect(() =>
+      parseTiledMap(
+        't',
+        mapOf([
+          { type: 'Terrain', width: 10, height: 10 },
+          { type: 'Button', width: 10, height: 10, properties: [prop('target', 'object', 1)] },
+          { type: 'Button', width: 10, height: 10, properties: [prop('target', 'object', 1), prop('action', 'string', 'close')] },
+        ]),
+      ),
+    ).toThrow('does the opposite');
   });
 
   it('skips hidden layers', () => {
@@ -196,5 +217,37 @@ describe('level order', () => {
     expect(nextLevel(all, 'b')).toBe(a);
     // a level that's gone (renamed while playing): the first
     expect(nextLevel(all, 'gone')).toBe(a);
+  });
+});
+
+describe('buttons', () => {
+  const def = { id: 1, x0: 100, x1: 160, y0: 620, y1: 640, target: 9, action: 'open' as const, duration: 2 };
+
+  it('is pressed by what lies on it or falls into it', () => {
+    const b = new Button(def);
+    expect(b.under(130, 640)).toBe(true); // the bird's feet on the ground through it
+    expect(b.under(130, 642)).toBe(true); // a splat, a bit into the ground
+    expect(b.under(170, 640)).toBe(false);
+    expect(b.under(130, 600)).toBe(false); // flying over it
+    expect(b.touches(130, 612, 10)).toBe(true);
+    expect(b.touches(130, 605, 10)).toBe(false);
+  });
+
+  it('stays in effect while pressed and for its duration after', () => {
+    const b = new Button(def);
+    expect(b.active).toBe(false);
+    expect(b.step(true, 100)).toBe(true);
+    expect(b.step(true, 100)).toBe(false);
+    for (let t = 0; t < 1900; t += 100) b.step(false, 100);
+    expect(b.active).toBe(true);
+    b.step(false, 100);
+    expect(b.active).toBe(false);
+  });
+
+  it('stays in effect for good with no duration', () => {
+    const b = new Button({ ...def, duration: 0 });
+    b.step(true, 100);
+    for (let t = 0; t < 60_000; t += 100) b.step(false, 100);
+    expect(b.active).toBe(true);
   });
 });

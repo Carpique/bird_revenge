@@ -83,6 +83,27 @@ export interface VillainDef {
   throwDelay: number;
 }
 
+export type ButtonAction = 'open' | 'close';
+
+/**
+ * A button on a surface: the bird standing on it, or a poo landing on it, switches `target` (a Terrain: a door, a trapdoor)
+ * while it's pressed and for `duration` after.
+ */
+export interface ButtonDef {
+  id: number;
+  /** its footprint; the bottom edge (`y1`) sits on the surface */
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  /** id of the Terrain it switches */
+  target: number;
+  /** open: the target is there until the button is pressed; close: it's there only while the button is in effect */
+  action: ButtonAction;
+  /** s the target stays switched after the button is let go; 0 = for good */
+  duration: number;
+}
+
 export interface LevelDef {
   name: string;
   width: number;
@@ -95,4 +116,5 @@ export interface LevelDef {
   bodies: BodyDef[];
   branches: Branch[];
   joints: JointDef[];
+  buttons: ButtonDef[];
 }

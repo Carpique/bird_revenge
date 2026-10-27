@@ -26,10 +26,10 @@ function parseAll(): Map<string, LevelDef> {
 export const levels = parseAll();
 
 /** An empty screen, played when no level loads. */
-const EMPTY: LevelDef = { name: 'empty', width: 1280, height: 720, birdStart: null, villains: [], friends: [], bodies: [], branches: [], joints: [] };
+const EMPTY: LevelDef = { name: 'empty', width: 1280, height: 720, birdStart: null, villains: [], friends: [], bodies: [], branches: [], joints: [], buttons: [] };
 
 /** The level the URL asks for (`?level=<name>`), for testing it: the game skips the menu and plays just this level. */
-export const testLevelName = new URLSearchParams(location.search).get('level');
+export const testLevelName = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('level');
 
 /** The level to start with: the one the URL asks for, else the first; an empty screen when none loads (the console says why). */
 export function firstLevel(): LevelDef {

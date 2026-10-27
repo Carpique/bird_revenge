@@ -1,6 +1,6 @@
 import Matter from 'matter-js';
 
-export const { Engine, Bodies, Body, Common, Composite, Constraint, Events, Query, Vertices } = Matter;
+export const { Engine, Bodies, Body, Common, Composite, Constraint, Events, Query, Sleeping, Vertices } = Matter;
 export type MBody = Matter.Body;
 export type MConstraint = Matter.Constraint;
 export type MEngine = Matter.Engine;
