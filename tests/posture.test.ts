@@ -58,7 +58,7 @@ describe('posture physics', () => {
     for (let i = 0; i < 120; i++) {
       const s = postureStep(v, p, STEP_MS);
       const k = 1 - (p.mode === 'fall' ? config.physics.birdAirFriction : config.posture.airFriction);
-      v = { x: s.x * k, y: (s.y + (s.holdUp ? 0 : g)) * k };
+      v = { x: s.x * k, y: (s.y + g * s.gravity) * k };
     }
     return v;
   };

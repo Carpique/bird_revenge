@@ -8,7 +8,7 @@ describe('config docs for the tuning panel tooltips', () => {
 
   it('reads one-line, multi-line and section comments', () => {
     expect(docs['flap.velocityDeadzone']).toBe('downward arm angular speed (deg/s) below which nothing happens');
-    expect(docs['tilt.holdDrag']).toMatch(/^tilted or hovering \(a T\), .* keeps its altitude$/);
+    expect(docs['tilt.holdDrag']).toMatch(/^hovering \(arms held out, .* keeps its altitude$/);
     expect(docs['tilt']).toMatch(/^Tilting the arms/);
     expect(docs['smoothing']).toMatch(/^One-Euro filter/);
   });

@@ -72,11 +72,15 @@ export const config = {
     liftGain: 30,
     maxLiftAccel: 3000,
     /**
-     * Right after the last flap the bird falls gently: only this fraction of gravity acts, rising smoothly (ease-in)
-     * back to full gravity over `afterFlapMs`, so a few flaps keep the altitude. Only while falling, in flapping mode.
+     * the wingbeats' lift is smoothed over this many ms (higher = straighter climbs, laggier), so the bird climbs in a
+     * straight line, not in steps, and after the last flap the lift fades out, so the fall starts gently
      */
-    afterFlapGravity: 0.4,
-    afterFlapMs: 300,
+    liftSmoothMs: 350,
+    /**
+     * flapping bears the bird's weight: flapping hard enough (smoothed lift at least gravity), only this fraction of
+     * gravity acts, more of it as the flapping fades out, so even weak flaps slow a fall
+     */
+    flappingGravity: 0.5,
     /** minimum peak-to-trough arm swing (deg) to count as a stroke (stats only) */
     strokeMinAmplitude: 25,
   },
@@ -94,8 +98,8 @@ export const config = {
 
   /**
    * Tilting the arms (one hand lower than the other: a tilted T, flapping tilted, or leaning the whole body) flies
-   * the bird sideways towards the lower hand, faster the more they're tilted, keeping its altitude: it doesn't fall,
-   * and flapping tilted climbs in a straight line, beak up (`climbSmoothMs`).
+   * the bird sideways towards the lower hand, faster the more they're tilted. Up and down work as when level: the
+   * arms held out keep the altitude (`hover`), flapping climbs (a little less of its lift going up: `sideLift`).
    */
   tilt: {
     /** EMA factor for the tilt per pose frame (lower = steadier through out-of-step flaps, laggier) */
@@ -120,24 +124,22 @@ export const config = {
     boostTilt: 35,
     /** how far the bird leans (deg) flying sideways at full speed */
     leanDeg: 20,
-    /**
-     * flapping tilted climbs in a straight line, not in steps: the wingbeats' lift is smoothed over this many ms
-     * (higher = straighter, laggier) and gravity is cancelled
-     */
-    climbSmoothMs: 350,
-    /** ...but this fraction of gravity is taken off the smoothed lift, so weak flaps don't climb (1 = as when level) */
-    climbGravity: 0.6,
+    /** flapping at full tilt, this share of the lift goes up (1 = climbs as fast as flapping level) */
+    sideLift: 0.75,
     /**
      * climbing tilted, the bird pitches its beak up along its flight path, at most this far (deg), scaled by its
      * sideways speed: none when slow, all of it at `sideSpeed`
      */
     climbPitchDeg: 50,
     /**
-     * tilted or hovering (a T), a fall is braked by this fraction per physics step (gravity cancelled), so the bird
-     * keeps its altitude
+     * hovering (arms held out, a T, tilted or not), a fall is braked by this fraction per physics step (gravity
+     * cancelled), so the bird keeps its altitude
      */
     holdDrag: 0,
-    /** tilted or hovering in the air, the wings beat this many times faster than the flap animation's normal fps */
+    /**
+     * hovering in the air (a T, tilted or not) or flapping, the wings beat this many times faster than the flap
+     * animation's normal fps
+     */
     holdFlapRate: 2,
     /**
      * tilted while standing (ground, branch, shelf), the bird doesn't slide: it rises this many px and holds there,
@@ -151,8 +153,8 @@ export const config = {
    * arm straight; below horizontal, a roughly straight line through both arms, or both lowered by about the same
    * angle. Level or tilted. In flapping mode, in a T or higher the bird keeps its altitude (`tilt.holdDrag`); lowered,
    * it holds back less and less of gravity, so it sinks faster the lower the arms (`holdDroop` → `fallDroop`).
-   * Tilted, it also flies sideways (and keeps its altitude). Posture control's T parachute sinks slowly instead,
-   * using `sinkSpeed` and `parachuteDrag`.
+   * Tilted, it also flies sideways. Posture control's T parachute sinks slowly instead, using `sinkSpeed` and
+   * `parachuteDrag`.
    */
   hover: {
     /** arms below horizontal: how far the arm points may stray from a straight line (perpendicular RMS / along-line RMS) */
@@ -164,7 +166,7 @@ export const config = {
     /** ...lower, the hold fades (less of gravity cancelled), gone at this (deg below horizontal): a free fall */
     fallDroop: 60,
     /** arms tilted more than this (deg) aren't a spread */
-    maxTilt: 40,
+    maxTilt: 60,
     /** arms above horizontal: the highest average raise (deg above horizontal) that still counts, a V */
     maxRaise: 50,
     /** arms above horizontal: each elbow at least this straight (deg, 180 = straight) */

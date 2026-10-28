@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { config, type Config } from '../src/config';
 import { FlapDetector } from '../src/gestures/FlapDetector';
 import { droopHold, fitArmLine, TiltDetector } from '../src/gestures/TiltDetector';
-import { climbAccel, flightStep, sideBoost, sideAmount, smoothClimbLift } from '../src/game/flight';
+import { flightStep, liftShare, sideBoost, sideAmount, smoothLift } from '../src/game/flight';
 import { STEP_MS } from '../src/game/physics';
 import { armElevation, hipAbduction, kneeAngle } from '../src/gestures/geometry';
 import { ShootDetector } from '../src/gestures/ShootDetector';
@@ -406,27 +406,31 @@ describe('TiltDetector', () => {
 });
 
 describe('flight physics', () => {
-  pin('tilt', { fullTilt: 35, holdDrag: 0.2 });
+  pin('tilt', { fullTilt: 35, holdDrag: 0.2, sideLift: 0.75 });
+  pin('flap', { liftSmoothMs: 350, flappingGravity: 0.5 });
+  /** wingbeats: 150 ms of lift, then 250 ms of none */
+  const beat = (i: number) => ((i * STEP_MS) % 400 < 150 ? 3000 : 0);
   /**
    * `steps` physics steps (default 2 s) at a fixed tilt with Matter's gravity and air friction, from velocity v0
-   * (px/step) and `sinceFlap` ms after the last flap; `lift` (px/s²) counts as flapping. Returns the velocity and
-   * how far the bird fell (px, + = down).
+   * (px/step) and smoothed lift `lift0`; `lift` (px/s², or per step) is the wingbeats' lift. Returns the velocity,
+   * how far the bird fell (px, + = down) and the vertical speed at every step.
    */
-  const sim = (tilt: number, hovering: boolean | number, o: { v0?: { x: number; y: number }; lift?: number; sinceFlap?: number; steps?: number } = {}) => {
+  const sim = (tilt: number, hovering: boolean | number, o: { v0?: { x: number; y: number }; lift?: number | ((i: number) => number); lift0?: number; steps?: number } = {}) => {
     const g = config.physics.gravity * 1e-3 * STEP_MS ** 2;
-    const lift = o.lift ?? 0;
-    const up = lift * 1e-6 * STEP_MS ** 2;
+    const k = 1 - config.physics.birdAirFriction;
     let v = { ...(o.v0 ?? { x: 0, y: 0 }) };
-    let since = o.sinceFlap ?? Infinity;
+    let lift = o.lift0 ?? 0;
     let fell = 0;
+    const vys: number[] = [];
     for (let i = 0; i < (o.steps ?? 120); i++) {
-      since = lift > 0 ? 0 : since + STEP_MS;
-      const s = flightStep(v, tilt, Number(hovering), since, STEP_MS);
-      const k = 1 - config.physics.birdAirFriction;
-      v = { x: s.x * k, y: (s.y + (s.holdUp ? 0 : g * (s.gravity ?? 1)) - up) * k };
+      const raw = typeof o.lift === 'function' ? o.lift(i) : (o.lift ?? 0);
+      lift = smoothLift(lift, raw * liftShare(tilt), STEP_MS);
+      const s = flightStep(v, tilt, Number(hovering), lift, STEP_MS);
+      v = { x: s.x * k, y: (s.y + g * s.gravity - lift * 1e-6 * STEP_MS ** 2) * k };
       fell += v.y;
+      vys.push(v.y);
     }
-    return { ...v, fell };
+    return { ...v, fell, vys };
   };
   const fly = (tilt: number, hovering: boolean, v0?: { x: number; y: number }) => sim(tilt, hovering, { v0 });
 
@@ -437,14 +441,23 @@ describe('flight physics', () => {
     expect(braked.x).toBe(0);
   });
 
-  it('tilted: flies sideways, faster with more tilt, keeping its altitude', () => {
-    const shallow = fly(-20, false); // the right hand lower: flies right
+  it('a tilted T: flies sideways, faster with more tilt, keeping its altitude', () => {
+    const shallow = fly(-20, true); // the right hand lower: flies right
     const steep = fly(-45, true);
     expect(shallow.x).toBeGreaterThan(1);
     expect(steep.x).toBeGreaterThan(shallow.x);
     expect(Math.abs(shallow.fell)).toBeLessThan(3);
     expect(Math.abs(steep.fell)).toBeLessThan(3);
-    expect(fly(45, false).x).toBeLessThan(-1); // the other way
+    expect(fly(45, true).x).toBeLessThan(-1); // the other way
+    // a fall is braked to a stop, as when level
+    expect(Math.abs(fly(-30, true, { x: 0, y: 7 }).y)).toBeLessThan(0.1);
+  });
+
+  it('the tilt only steers: without the arms held out or flapping, a tilted bird falls like a level one', () => {
+    const tilted = fly(-30, false);
+    const level = fly(0, false);
+    expect(tilted.x).toBeGreaterThan(1);
+    expect(tilted.y).toBeCloseTo(level.y, 5);
   });
 
   it('hovering with the arms lowered: sinks steadily, faster the lower they are', () => {
@@ -457,10 +470,8 @@ describe('flight physics', () => {
     expect(free).toBeGreaterThan(half);
     // settled at a sink speed: no longer speeding up
     expect(sim(0, 0.5, { steps: 480 }).y - half).toBeLessThan(0.3);
-  });
-
-  it('tilted: a fall is braked to a stop', () => {
-    expect(Math.abs(fly(-30, false, { x: 0, y: 7 }).y)).toBeLessThan(0.1);
+    // tilted, the same
+    expect(sim(-30, 0.5, { steps: 240 }).y).toBeCloseTo(half, 5);
   });
 
   it('turns a sideways flight around when tilted the other way', () => {
@@ -470,7 +481,7 @@ describe('flight physics', () => {
   it('a fresh small tilt stays slow; holding it or tilting more speeds up fast; braking stays crisp', () => {
     const run = (tilt: number, ms: number, x0 = 0) => {
       let x = x0;
-      for (let t = 0; t < ms; t += STEP_MS) x = flightStep({ x, y: 0 }, tilt, 0, Infinity, STEP_MS, t).x;
+      for (let t = 0; t < ms; t += STEP_MS) x = flightStep({ x, y: 0 }, tilt, 0, 0, STEP_MS, t).x;
       return x;
     };
     const small = config.tilt.fineTilt; // the right hand higher: flies left
@@ -488,43 +499,47 @@ describe('flight physics', () => {
     // turning back from full speed brakes at the full sideAccel, gentle start or not
     const v = config.tilt.sideSpeed;
     const fullDv = config.tilt.sideAccel * (STEP_MS / 1000) ** 2;
-    expect(flightStep({ x: v, y: 0 }, small, 0, Infinity, STEP_MS, 0).x).toBeCloseTo(v - fullDv, 5);
+    expect(flightStep({ x: v, y: 0 }, small, 0, 0, STEP_MS, 0).x).toBeCloseTo(v - fullDv, 5);
   });
 
-  it('arms level, long after flapping: falls as fast as ever', () => {
+  it('arms level, not flapping: falls as fast as ever', () => {
     const g = config.physics.gravity * 1e-3 * STEP_MS ** 2;
     const free = sim(0, false, { steps: 30 });
     // full gravity, only air friction against it
     expect(free.y).toBeGreaterThan(30 * g * 0.6);
   });
 
-  it('right after a flap the fall starts gently, then speeds up to normal', () => {
-    const justFlapped = sim(0, false, { sinceFlap: 0, steps: 30 });
+  it('right after flapping the fall starts gently, then speeds up to normal', () => {
+    const justFlapped = sim(0, false, { lift0: 1200, steps: 30 });
     const long = sim(0, false, { steps: 30 });
     expect(justFlapped.fell).toBeLessThan(long.fell * 0.6);
-    // after afterFlapMs it's back to full gravity: the speed grows as fast as in a plain fall
-    const later = sim(0, false, { sinceFlap: config.flap.afterFlapMs, steps: 30 });
-    expect(later.y).toBeCloseTo(long.y, 5);
+    // the lift fades out: then it speeds up as fast as in a plain fall
+    const late = (r: { vys: number[] }) => r.vys[29] - r.vys[25];
+    expect(late(sim(0, false, { lift0: 1200, steps: 60 }))).toBeCloseTo(late(long), 1);
   });
 
-  it('flapping tilted climbs in a straight line, not in steps', () => {
-    // wingbeats: 150 ms of lift, then 250 ms of none
-    const beat = (i: number) => ((i * STEP_MS) % 400 < 150 ? 3000 : 0);
-    const k = 1 - config.physics.birdAirFriction;
-    let v = { x: 0, y: 0 };
-    let smooth = 0;
-    const vys: number[] = [];
-    for (let i = 0; i < 240; i++) {
-      const lift = beat(i);
-      smooth = smoothClimbLift(smooth, lift, STEP_MS);
-      const s = flightStep(v, -30, 0, lift > 0 ? 0 : STEP_MS, STEP_MS);
-      expect(s.holdUp).toBe(true);
-      v = { x: s.x * k, y: (s.y - climbAccel(smooth) * 1e-6 * STEP_MS ** 2) * k };
-      if (i >= 120) vys.push(v.y);
+  it('weak flapping slows a fall, without climbing', () => {
+    const weak = sim(0, false, { lift: 400, steps: 240 });
+    const free = sim(0, false, { steps: 240 });
+    expect(weak.y).toBeGreaterThan(0);
+    expect(weak.y).toBeLessThan(free.y * 0.5);
+  });
+
+  it('flapping climbs in a straight line, not in steps, level and tilted alike', () => {
+    for (const tilt of [0, -30]) {
+      const { x, vys } = sim(tilt, false, { lift: beat, steps: 240 });
+      const settled = vys.slice(120);
+      expect(Math.abs(x) > 1).toBe(tilt !== 0);
+      // climbing steadily: never stalls between wingbeats
+      expect(Math.max(...settled)).toBeLessThan(-1);
+      expect(Math.max(...settled) - Math.min(...settled)).toBeLessThan(0.5 * -Math.max(...settled));
     }
-    expect(v.x).toBeGreaterThan(1);
-    // climbing steadily: never stalls between wingbeats
-    expect(Math.max(...vys)).toBeLessThan(-1);
-    expect(Math.max(...vys) - Math.min(...vys)).toBeLessThan(0.5 * -Math.max(...vys));
+  });
+
+  it('flapping level climbs faster than flapping tilted', () => {
+    const level = sim(0, false, { lift: beat, steps: 240 });
+    const tilted = sim(-30, false, { lift: beat, steps: 240 });
+    expect(level.fell).toBeLessThan(tilted.fell);
+    expect(tilted.fell).toBeLessThan(0);
   });
 });

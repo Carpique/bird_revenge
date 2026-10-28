@@ -5,7 +5,7 @@ import type { Controls } from '../input/controls';
 import type { Branch } from '../level/types';
 import { landingBranch } from './branches';
 import { CharacterSprite } from '../render/CharacterSprite';
-import { climbAccel, climbPitch, flightStep, leanFor, sideAmount, smoothClimbLift } from './flight';
+import { climbPitch, flightStep, leanFor, liftShare, sideAmount, smoothLift } from './flight';
 import { postureLean, postureStep } from './posture';
 import { BIRD_GROUP, Bodies, Body, forceFor, Query, type MBody } from './physics';
 
@@ -34,15 +34,13 @@ export class Bird {
   /** ms of invulnerability left after coming back from losing a life */
   private invulnT = 0;
   private death: Death | null = null;
-  /** ms since the last flap (lift) */
-  private sinceFlapMs = Infinity;
   /** ms the arms have been tilted towards `tiltDir` (-1 / +1; 0 = level) */
   private tiltHeldMs = 0;
   private tiltDir = 0;
   /** rose off the floor by tilting: holds its altitude once the rise tops out, until the tilt ends or a flap */
   private liftingOff = false;
-  /** flying tilted: the wingbeats' lift, smoothed (px/s²) */
-  private climbLift = 0;
+  /** the wingbeats' lift going up, smoothed (px/s²) */
+  private lift = 0;
   /** posture control is steering the bird this step */
   private posturing = false;
   /** current lean, radians (eased towards the direction of sideways flight) */
@@ -155,10 +153,9 @@ export class Bird {
     this.perched = false;
     this.supported = false;
     this.bankAngle = 0;
-    this.sinceFlapMs = Infinity;
     this.tiltHeldMs = 0;
     this.tiltDir = 0;
-    this.climbLift = 0;
+    this.lift = 0;
     this.liftingOff = false;
     this.invulnT = invulnerable ? config.player.invulnerableMs : 0;
   }
@@ -194,7 +191,6 @@ export class Bird {
     b.frictionAir = this.posturing && p!.mode !== 'fall' ? config.posture.airFriction : config.physics.birdAirFriction;
     // otherwise flapping + tilt + hover: hovering only acts in the air; tilted on the floor, the bird rises a
     // little instead of sliding, then flies sideways just above it
-    this.sinceFlapMs = c.lift > 0 ? 0 : this.sinceFlapMs + stepMs;
     // a fresh tilt (or one turned the other way) starts gently
     const dir = Math.sign(sideAmount(c.tilt));
     this.tiltHeldMs = dir !== 0 && dir === this.tiltDir ? this.tiltHeldMs + stepMs : 0;
@@ -206,20 +202,18 @@ export class Bird {
       Body.setVelocity(b, { x: 0, y: -Math.sqrt(2 * gStep * config.tilt.liftOffHeight) });
       this.liftingOff = true;
     }
+    // the wingbeats' lift, smoothed (so climbs are straight lines, level or tilted), less of it going up when tilted
+    this.lift = this.posturing ? 0 : smoothLift(this.lift, c.lift * liftShare(c.tilt), stepMs);
     const g = this.posturing
       ? postureStep(b.velocity, p!, stepMs)
-      : flightStep(b.velocity, c.tilt, this.onGround ? 0 : c.hover, this.sinceFlapMs, stepMs, this.tiltHeldMs);
+      : flightStep(b.velocity, c.tilt, this.onGround ? 0 : c.hover, this.lift, stepMs, this.tiltHeldMs);
     // topped out after lifting off: stay at that height (on the way up, gravity tops it out)
     if (this.liftingOff && g.y > 0) g.y = 0;
-    const holdUp = g.holdUp && !(this.liftingOff && g.y < 0);
+    const gravity = this.liftingOff && g.y >= 0 ? 0 : g.gravity;
     Body.setVelocity(b, { x: g.x, y: g.y });
-    // tilted in the air, flapping climbs on the smoothed lift (gravity cancelled): a straight line, not steps
-    const tilted = !this.posturing && dir !== 0;
-    this.climbLift = tilted ? smoothClimbLift(this.climbLift, c.lift, stepMs) : 0;
-    const lift = tilted && !this.onGround ? climbAccel(this.climbLift) : c.lift;
-    // Matter applies the full gravity itself; the hover (or flying by posture) holds against it
-    const antiGravity = config.physics.gravity * 1000 * (holdUp ? 1 : 1 - (g.gravity ?? 1));
-    Body.applyForce(b, b.position, { x: 0, y: -forceFor(b, lift + antiGravity) });
+    // Matter applies the full gravity itself; the arms (or flying by posture) hold against part of it
+    const antiGravity = config.physics.gravity * 1000 * (1 - gravity);
+    Body.applyForce(b, b.position, { x: 0, y: -forceFor(b, this.lift + antiGravity) });
     const v = b.velocity;
     const speed = Math.hypot(v.x, v.y);
     const max = config.physics.maxSpeed;
@@ -250,8 +244,8 @@ export class Bird {
     const b = this.body;
     const r = config.physics.birdRadius;
     if (Math.abs(b.velocity.x) > 0.4) this.facing = b.velocity.x > 0 ? 'right' : 'left';
-    // lean into sideways flight (in the air); climbing tilted, the beak points up along the flight path instead
-    const pitch = !this.posturing && !this.onGround && sideAmount(c.tilt) !== 0 ? climbPitch(b.velocity) : 0;
+    // lean into sideways flight (in the air); climbing sideways, the beak points up along the flight path instead
+    const pitch = !this.posturing && !this.onGround ? climbPitch(b.velocity) : 0;
     const climbing = Math.min(1, pitch / Math.max(1, config.tilt.leanDeg));
     const bankTo =
       this.posturing && c.posture ? (postureLean(c.posture) * Math.PI) / 180
@@ -265,11 +259,12 @@ export class Bird {
     // posture control: flap while the arms push the bird up or sideways, faster the faster it flies
     if (p?.mode === 'fly' && p.speed > 0) this.sprite.play('flap', config.posture.flapRateMin + (config.posture.flapRateMax - config.posture.flapRateMin) * p.speed);
     else if (this.onGround && c.lift < 50 && !c.flapping) this.sprite.play('idle');
-    // flapping mode, tilted or in a T: holding the altitude, the wings beat fast; arms lowered, slower as it sinks
-    else if (!this.posturing && !this.onGround && (c.hover > 0 || sideAmount(c.tilt) !== 0)) {
-      const hold = sideAmount(c.tilt) !== 0 ? 1 : c.hover;
-      this.sprite.play('flap', 1 + (config.tilt.holdFlapRate - 1) * hold);
-    }
+    // flapping mode, the player flapping (the smoothed lift at least a quarter of gravity): the wings beat fast, as
+    // in sideways flight, level or tilted
+    else if (!this.posturing && this.lift >= 0.25 * config.physics.gravity * 1000) this.sprite.play('flap', config.tilt.holdFlapRate);
+    // flapping mode, arms held out (a T, tilted or not): holding the altitude, the wings beat fast; arms lowered,
+    // slower as it sinks
+    else if (!this.posturing && !this.onGround && c.hover > 0) this.sprite.play('flap', 1 + (config.tilt.holdFlapRate - 1) * c.hover);
     else if (c.wingPhase !== null) this.sprite.showPhase('flap', c.wingPhase);
     else if (c.flapping) this.sprite.play('flap');
     else this.sprite.showPhase('flap', 0.5); // wings out

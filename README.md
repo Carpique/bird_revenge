@@ -19,7 +19,7 @@ your arms are visible, raised ones included, down to the elbows plus a bit of th
 |---|---|---|
 | Flap / fly up | flap both arms (faster, bigger = more lift); right after the last flap the bird falls gently at first | ↑ |
 | Hover | spread both arms out in a T, or raised into a V (up to ~45°), held still: the bird keeps its altitude; lowering both arms evenly below horizontal lets it sink, faster the lower they go (free fall at ~60° down) | Shift |
-| Fly sideways | tilt the arms (one hand lower than the other): the bird flies horizontally towards the lower hand, faster the more you tilt, keeping its altitude; flapping tilted climbs as fast as flapping level | ← → |
+| Fly sideways | tilt the arms (one hand lower than the other): the bird flies sideways towards the lower hand, faster the more you tilt; arms held out (a tilted T) keep its altitude, flapping tilted climbs (a little slower than flapping level) | ← → |
 | Poo | shoot: raise either leg sideways (the poo drops straight down) | ↓ |
 
 The controls above are the default (flapping mode). **Posture control** is the alternative: untick "Posture: Flapping" in the tuning panel (**G**). It replaces flapping, tilt and hover, and the arms work like this:

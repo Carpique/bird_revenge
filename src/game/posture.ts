@@ -59,7 +59,7 @@ function approach(v: { x: number; y: number }, t: { x: number; y: number }, maxD
 
 /**
  * One physics step under posture control, from the bird's current velocity `v` (px per step, y down).
- * `holdUp` asks the caller to cancel gravity this step (flying holds the bird up; diving and falling don't).
+ * `gravity` 0 asks the caller to cancel gravity this step (flying holds the bird up; diving and falling don't).
  */
 export function postureStep(v: { x: number; y: number }, p: PostureIntent, stepMs: number): FlightVelocity {
   const cfg = config.posture;
@@ -70,18 +70,18 @@ export function postureStep(v: { x: number; y: number }, p: PostureIntent, stepM
       // the hover's slow sink (`hover.sinkSpeed`, `hover.parachuteDrag`); the sideways speed decays slowly
       const sink = config.hover.sinkSpeed;
       const holdUp = v.y > sink;
-      return { x: v.x * (1 - cfg.parachuteSideDrag), y: holdUp ? v.y + (sink - v.y) * config.hover.parachuteDrag : v.y, holdUp };
+      return { x: v.x * (1 - cfg.parachuteSideDrag), y: holdUp ? v.y + (sink - v.y) * config.hover.parachuteDrag : v.y, gravity: holdUp ? 0 : 1 };
     }
     case 'fall': {
       // lift gone: sideways and upward momentum fade, gravity takes over
       const k = 1 - cfg.fallDrag;
-      return { x: v.x * k, y: v.y < 0 ? v.y * k : v.y, holdUp: false };
+      return { x: v.x * k, y: v.y < 0 ? v.y * k : v.y, gravity: 1 };
     }
     case 'fly': {
       const s = p.speed * cfg.flySpeed;
       // a slow fly still sinks a bit, blending into the parachute as the speed arm comes down to level
       const t = { x: p.dir * s * Math.cos(a), y: -s * Math.sin(a) + (1 - p.speed) * config.hover.sinkSpeed };
-      return { ...approach(v, t, maxDv), holdUp: true };
+      return { ...approach(v, t, maxDv), gravity: 0 };
     }
     case 'dive': {
       const s = p.speed * cfg.diveSpeed;
@@ -90,7 +90,7 @@ export function postureStep(v: { x: number; y: number }, p: PostureIntent, stepM
       const x = v.x + Math.max(-maxDv, Math.min(maxDv, tx - v.x));
       // gravity always pulls; push down too while slower than the dive
       const y = v.y < ty ? v.y + Math.min(maxDv, ty - v.y) : v.y;
-      return { x, y, holdUp: false };
+      return { x, y, gravity: 1 };
     }
   }
 }
