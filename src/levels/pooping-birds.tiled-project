@@ -233,6 +233,19 @@
             "useAs": [
                 "object"
             ]
+        },
+        {
+            "color": "#ffe8b012",
+            "drawFill": true,
+            "id": 13,
+            "members": [
+            ],
+            "name": "Coin",
+            "type": "class",
+            "useAs": [
+                "object",
+                "tile"
+            ]
         }
     ]
 }

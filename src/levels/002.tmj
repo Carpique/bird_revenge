@@ -66,6 +66,45 @@
                  "width":384,
                  "x":896,
                  "y":224
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":13,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":960,
+                 "y":320
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":14,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":1072,
+                 "y":320
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":15,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":1184,
+                 "y":320
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -238,12 +277,16 @@
          "y":0
         }],
  "nextlayerid":7,
- "nextobjectid":13,
+ "nextobjectid":16,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",
  "tileheight":16,
- "tilesets":[],
+ "tilesets":[
+        {
+         "firstgid":1,
+         "source":"coin.tsj"
+        }],
  "tilewidth":16,
  "type":"map",
  "version":"1.11",

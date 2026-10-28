@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { Constraint, Engine, Composite } from '../src/game/physics';
 import { buildLevel } from '../src/level/build';
 import { nextLevel } from '../src/levels';
-import { CLASS_DEFAULTS, LevelError, parseTiledMap, type TiledMap, type TiledObject } from '../src/level/tiled';
+import { CLASS_DEFAULTS, LevelError, parseTiledMap, type TiledMap, type TiledObject, type TiledTileset } from '../src/level/tiled';
 import projectText from '../src/levels/pooping-birds.tiled-project?raw';
 import { Button } from '../src/game/Button';
 
 const levelFiles = import.meta.glob<string>('../src/levels/*.tmj', { query: '?raw', import: 'default', eager: true });
+const tilesetFiles = import.meta.glob<string>('../src/levels/*.tsj', { query: '?raw', import: 'default', eager: true });
+const tilesets: Record<string, TiledTileset> = Object.fromEntries(
+  Object.entries(tilesetFiles).map(([path, text]) => [path.replace(/^.*\//, ''), JSON.parse(text)]),
+);
 
 /** A map with one object layer holding `objects`. */
 function mapOf(objects: Partial<TiledObject>[], layerVisible = true): TiledMap {
@@ -33,7 +37,7 @@ const prop = (name: string, type: string, value: unknown) => ({ name, type, valu
 describe('Tiled levels', () => {
   it('loads every level', () => {
     expect(Object.keys(levelFiles).length).toBeGreaterThan(0);
-    for (const [path, text] of Object.entries(levelFiles)) expect(() => parseTiledMap(path, JSON.parse(text))).not.toThrow();
+    for (const [path, text] of Object.entries(levelFiles)) expect(() => parseTiledMap(path, JSON.parse(text), tilesets)).not.toThrow();
   });
 
   it('has the same class defaults as the Tiled project', () => {
@@ -79,6 +83,36 @@ describe('Tiled levels', () => {
     ]);
     expect(() => parseTiledMap('t', mapOf([{ type: 'Friend', point: true, properties: [prop('kind', 'string', 'dragon')] }]))).toThrow('unknown friend kind "dragon"');
     expect(() => parseTiledMap('t', mapOf([{ type: 'Friend', width: 10, height: 10 }]))).toThrow('must be a point');
+  });
+
+  it('reads coins: points, and tiles from the coin tileset (centred on the image)', () => {
+    const map = mapOf([
+      { type: 'Coin', x: 10, y: 20, point: true },
+      // bottom-left aligned (the default): the image spans x 100..140, y 160..200
+      { gid: 1, x: 100, y: 200, width: 40, height: 40 },
+      // flipped horizontally: still a coin
+      { gid: (1 + 0x80000000) >>> 0, x: 300, y: 300, width: 40, height: 40 },
+    ]);
+    map.tilesets = [{ firstgid: 1, source: 'coin.tsj' }];
+    expect(parseTiledMap('t', map, tilesets).coins).toEqual([
+      { x: 10, y: 20 },
+      { x: 120, y: 180 },
+      { x: 320, y: 280 },
+    ]);
+  });
+
+  it('reads tile objects of embedded tilesets, by their alignment', () => {
+    const map = mapOf([{ gid: 11, x: 100, y: 100, width: 40, height: 40 }]);
+    map.tilesets = [{ firstgid: 10, objectalignment: 'center', tiles: [{ id: 1, type: 'Coin' }] }];
+    expect(parseTiledMap('t', map).coins).toEqual([{ x: 100, y: 100 }]);
+  });
+
+  it('rejects coins that are not points or tiles, and tiles that are not coins', () => {
+    expect(() => parseTiledMap('t', mapOf([{ type: 'Coin', width: 10, height: 10 }]))).toThrow('must be a point');
+    const map = mapOf([{ gid: 1, type: 'Terrain', width: 40, height: 40 }]);
+    map.tilesets = [{ firstgid: 1, source: 'coin.tsj' }];
+    expect(() => parseTiledMap('t', map, tilesets)).toThrow('only a Coin can be a tile');
+    expect(() => parseTiledMap('t', map)).toThrow('tileset "coin.tsj" isn\'t loaded');
   });
 
   it('reads each villain\'s throw delay, 0 for one who never throws', () => {

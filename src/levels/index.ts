@@ -1,4 +1,4 @@
-import { LevelError, parseTiledMap, type TiledMap } from '../level/tiled';
+import { LevelError, parseTiledMap, type TiledMap, type TiledTileset } from '../level/tiled';
 import type { LevelDef } from '../level/types';
 
 /**
@@ -6,14 +6,24 @@ import type { LevelDef } from '../level/types';
  * They're played in file name order (`001.tmj`, `002.tmj`, …; numbers compared as numbers, so 2 comes before 10 even unpadded), back to the first after the last.
  */
 const files = import.meta.glob<string>('./*.tmj', { query: '?raw', import: 'default', eager: true });
+/** the tilesets the maps use (`coin.tsj`), by file name; editing one reloads the levels too */
+const tilesetFiles = import.meta.glob<string>('./*.tsj', { query: '?raw', import: 'default', eager: true });
 
 function parseAll(): Map<string, LevelDef> {
   const out = new Map<string, LevelDef>();
+  const tilesets: Record<string, TiledTileset> = {};
+  for (const [path, text] of Object.entries(tilesetFiles)) {
+    try {
+      tilesets[path.replace(/^\.\//, '')] = JSON.parse(text) as TiledTileset;
+    } catch (e) {
+      console.error(`Tileset "${path}": ${(e as Error).message}`);
+    }
+  }
   const paths = Object.keys(files).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   for (const path of paths) {
     const name = path.replace(/^\.\/|\.tmj$/g, '');
     try {
-      out.set(name, parseTiledMap(name, JSON.parse(files[path]) as TiledMap));
+      out.set(name, parseTiledMap(name, JSON.parse(files[path]) as TiledMap, tilesets));
     } catch (e) {
       // a broken map is left out; the message says what to fix
       console.error(e instanceof LevelError || e instanceof SyntaxError ? `${e.message}` : e);
@@ -26,7 +36,7 @@ function parseAll(): Map<string, LevelDef> {
 export const levels = parseAll();
 
 /** An empty screen, played when no level loads. */
-const EMPTY: LevelDef = { name: 'empty', width: 1280, height: 720, birdStart: null, villains: [], friends: [], bodies: [], branches: [], joints: [], buttons: [] };
+const EMPTY: LevelDef = { name: 'empty', width: 1280, height: 720, birdStart: null, villains: [], friends: [], coins: [], bodies: [], branches: [], joints: [], buttons: [] };
 
 /** The level the URL asks for (`?level=<name>`), for testing it: the game skips the menu and plays just this level. */
 export const testLevelName = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('level');

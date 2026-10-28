@@ -1,5 +1,6 @@
 import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
 import { audio } from '../audio/audio';
+import { coinDef } from '../characters/coin';
 import { splatHalfWidth } from '../characters/poo';
 import { villainDef, villainHitbox } from '../characters/villain';
 import { config, WORLD } from '../config';
@@ -17,6 +18,7 @@ import { Apple } from './Apple';
 import { Background } from './Background';
 import { Bird } from './Bird';
 import { Button } from './Button';
+import { Coin } from './Coin';
 import { Friend } from './Friend';
 import { landingBranch } from './branches';
 import { Bodies, Composite, Engine, Events, Query, Sleeping, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
@@ -43,6 +45,8 @@ export class Game {
   /** show the big "Paused" label while paused (only for a manual pause, not behind dialogs) */
   showPausedText = false;
   score = 0;
+  /** coins collected this game: extra points, counted apart from the score */
+  coinCount = 0;
   lives = config.player.lives;
   /** lost the last life; frozen behind "Game Over" until `reset()` */
   over = false;
@@ -61,6 +65,8 @@ export class Game {
   private actors = new Container();
   /** the friends to save: behind the villain */
   private friendLayer = new Container();
+  /** the coins: in front of the friends, behind the villain */
+  private coinLayer = new Container();
   /** poos and apples: in front of the villain, behind the bird */
   private fx = new Container();
   /** the bird, then score popups */
@@ -86,6 +92,7 @@ export class Game {
   private poos: Poo[] = [];
   private apples: Apple[] = [];
   private friends: Friend[] = [];
+  private coins: Coin[] = [];
   private popups: Popup[] = [];
   private pending: (() => void)[] = [];
   /** things to do after a while, in game time (so they wait while paused) */
@@ -94,6 +101,9 @@ export class Game {
   /** the score: a little villain, then the count */
   private scoreBox = new Container();
   private scoreText: Text;
+  /** the coins collected: a coin, then the count; right of the score */
+  private coinBox = new Container();
+  private coinText: Text;
   private pausedText: GlowText;
   private hearts = new Container();
   /** darkens the game behind the "Pause", "Game Over" and "Hooray" signs */
@@ -139,7 +149,7 @@ export class Game {
 
     // layers
     this.top.addChild(this.bird.view);
-    this.world.addChild(this.background, this.levelLayer, this.friendLayer, this.actors, this.fx, this.top, this.front);
+    this.world.addChild(this.background, this.levelLayer, this.friendLayer, this.coinLayer, this.actors, this.fx, this.top, this.front);
     this.root.addChild(this.world, this.hud);
 
     // the icon is as tall as the digits' font size
@@ -149,6 +159,12 @@ export class Game {
     this.scoreText.x = scoreIcon.width + 8;
     this.scoreBox.addChild(scoreIcon, this.scoreText);
     this.scoreBox.position.set(24, 14);
+    const coinIcon = new Sprite(tex(coinDef.animations.spin.frames[0]));
+    coinIcon.scale.set(40 / coinIcon.texture.height);
+    this.coinText = new Text({ text: '', style: { fontFamily: FONT, fontSize: 40, fill: '#2b2b2b' } });
+    this.coinText.x = coinIcon.width + 8;
+    this.coinBox.addChild(coinIcon, this.coinText);
+    this.coinBox.y = 14;
     this.hearts.position.set(WORLD.width - 24, 14);
     this.buildHearts();
     this.pausedText = bigText('');
@@ -167,7 +183,7 @@ export class Game {
     // far bigger than the world, so it covers the letterbox bands too
     this.dim.rect(-WORLD.width * 5, -WORLD.height * 5, WORLD.width * 11, WORLD.height * 11).fill('#000');
     this.dim.alpha = 0;
-    this.hud.addChild(this.scoreBox, this.hearts, this.dim, this.pausedText, this.gameOverText, this.completeText);
+    this.hud.addChild(this.scoreBox, this.coinBox, this.hearts, this.dim, this.pausedText, this.gameOverText, this.completeText);
 
     app.stage.addChild(this.root);
     app.ticker.add((ticker) => this.update(ticker.deltaMS));
@@ -182,6 +198,7 @@ export class Game {
   /** Start a new game: score, lives, the level, bird, villain and poos back to the start. */
   reset() {
     this.score = 0;
+    this.coinCount = 0;
     this.updateScoreText();
     this.lives = config.player.lives;
     this.buildHearts();
@@ -237,6 +254,9 @@ export class Game {
     for (const f of this.friends) f.view.destroy();
     this.friends = this.level.friends.map((def) => new Friend(def));
     for (const f of this.friends) this.friendLayer.addChild(f.view);
+    for (const c of this.coins) c.view.destroy();
+    this.coins = this.level.coins.map((def) => new Coin(def));
+    for (const c of this.coins) this.coinLayer.addChild(c.view);
     for (const p of this.popups) p.text.destroy();
     this.popups = [];
     this.pending = [];
@@ -281,6 +301,7 @@ export class Game {
       // the world stands still; the last friend fades out meanwhile
       this.completeT += dtMs;
       for (const f of this.friends) f.step(dtMs);
+      for (const c of this.coins) c.step(dtMs);
       this.background.update(dtMs);
       this.updatePopups(dtMs);
       if (this.completeT >= config.levelComplete.nextMs) this.onLevelComplete?.();
@@ -309,6 +330,7 @@ export class Game {
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
     for (const f of this.friends) f.step(STEP_MS);
+    for (const c of this.coins) c.step(STEP_MS);
     const birdY = this.bird.body.position.y;
     const pooYs = new Map(this.poos.map((p) => [p, p.body.position.y]));
     Engine.update(this.engine, STEP_MS);
@@ -322,6 +344,7 @@ export class Game {
     this.timers = this.timers.filter((t) => t.ms > 0);
     for (const t of due) t.fn();
     this.saveFriends();
+    this.collectCoins();
     if (this.allSavedT !== null && (this.allSavedT += STEP_MS) >= config.levelComplete.graceMs) this.completeLevel();
     // bird touching a walking villain costs a life
     const b = this.bird.body;
@@ -381,6 +404,19 @@ export class Game {
       this.bird.makeInvulnerable(config.levelComplete.graceMs);
       for (const v of this.villains) v.frozen = true;
       audio.stopMusic(config.levelComplete.graceMs);
+    }
+  }
+
+  /** The bird flying into a coin collects it. */
+  private collectCoins() {
+    if (this.bird.dying) return;
+    const b = this.bird.body.position;
+    for (const c of this.coins) {
+      if (c.state !== 'waiting' || !c.touches(b.x, b.y, config.physics.birdRadius)) continue;
+      c.collect();
+      this.coinCount++;
+      this.updateScoreText();
+      audio.play('coin');
     }
   }
 
@@ -614,8 +650,11 @@ export class Game {
     }
   }
 
+  /** The score and coin counts; the coins follow the score, however wide it is. */
   private updateScoreText() {
     this.scoreText.text = String(this.score);
+    this.coinText.text = String(this.coinCount);
+    this.coinBox.x = this.scoreBox.x + this.scoreBox.width + 32;
   }
 
   private addScore(points: number, x: number, y: number) {
@@ -669,6 +708,7 @@ export class Game {
     for (const p of this.poos) p.sync();
     for (const a of this.apples) a.sync();
     for (const f of this.friends) f.sync();
+    for (const c of this.coins) c.sync();
   }
 }
 

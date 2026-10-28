@@ -316,6 +316,9 @@ export const config = {
   /** a saved friend grows to this many times its size while fading out, in this long */
   friend: { savedScale: 4, savedMs: 1000 },
 
+  /** a collected coin floats up this far (px) while fading out, in this long */
+  coin: { collectedRise: 50, collectedMs: 400 },
+
   countdownMs: 2000,
   /** how much the game darkens (0–1) behind the "Pause", "Game Over" and "Hooray" signs, the calibration dialog and the countdown */
   signDim: 0.4,

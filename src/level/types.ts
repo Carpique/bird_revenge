@@ -71,6 +71,13 @@ export interface FriendDef {
   y: number;
 }
 
+/** A coin to collect: it spins in the air, outside the physics world, until the bird flies into it. */
+export interface CoinDef {
+  /** its centre */
+  x: number;
+  y: number;
+}
+
 /** A villain walking along the ground. */
 export interface VillainDef {
   /** where he starts */
@@ -113,6 +120,7 @@ export interface LevelDef {
   villains: VillainDef[];
   /** saving all of them completes the level (a level without any never ends) */
   friends: FriendDef[];
+  coins: CoinDef[];
   bodies: BodyDef[];
   branches: Branch[];
   joints: JointDef[];

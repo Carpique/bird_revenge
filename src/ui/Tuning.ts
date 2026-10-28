@@ -20,6 +20,8 @@ const RANGES: Record<string, [number, number, number]> = {
   'flap.strokeMinAmplitude': [5, 90, 1],
   'friend.savedScale': [1, 8, 0.1],
   'friend.savedMs': [100, 4000, 50],
+  'coin.collectedRise': [0, 200, 5],
+  'coin.collectedMs': [50, 2000, 50],
   'shoot.angleEnter': [5, 80, 1],
   'shoot.angleExit': [0, 60, 1],
   'shoot.cooldownMs': [0, 3000, 50],
@@ -109,7 +111,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'audio.fallMs': [100, 5000, 50],
 };
 
-const SECTIONS = ['posture', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'friend', 'player', 'audio'] as const;
+const SECTIONS = ['posture', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'friend', 'coin', 'player', 'audio'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {

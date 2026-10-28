@@ -1,4 +1,4 @@
-import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Shape } from './types';
+import type { Branch, ButtonAction, CoinDef, FriendKind, JointDef, LevelDef, Material, Shape } from './types';
 
 /**
  * Loads a map saved by the Tiled editor (JSON, `.tmj`) into a `LevelDef`.
@@ -13,10 +13,12 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  * | Hinge     | point                          | `body` pinned at the point                |
  * | Villain   | polyline                       | a villain walking its x range, on what's under its first point, starting there |
  * | Friend    | point                          | a friend to save, standing on the point   |
+ * | Coin      | point, or a tile from coin.tsj | a coin to collect, centred on the point / the tile's image |
  * | BirdStart | point                          | where the bird starts                     |
  * | Button    | rectangle (unrotated)          | a button on the surface under its bottom edge, switching the Terrain `target` |
  *
  * Objects without a class are ignored (handy for notes and guides); hidden layers and objects are skipped.
+ * A tile (image) object takes its tile's class unless it has its own; only a Coin can be one.
  */
 
 export interface TiledProperty {
@@ -56,6 +58,20 @@ export interface TiledLayer {
   layers?: TiledLayer[];
 }
 
+/** A tileset: kept in its own file (`.tsj`, `source` in the map), or embedded in the map. */
+export interface TiledTileset {
+  /** where a tile object's position is on its image; `unspecified` = bottom left (for orthogonal maps) */
+  objectalignment?: string;
+  /** only the tiles that have something set, like a class */
+  tiles?: { id: number; type?: string; class?: string }[];
+}
+
+export interface TiledTilesetRef extends TiledTileset {
+  firstgid: number;
+  /** the tileset's file, relative to the map's; absent when it's embedded */
+  source?: string;
+}
+
 export interface TiledMap {
   width: number;
   height: number;
@@ -64,6 +80,7 @@ export interface TiledMap {
   orientation: string;
   infinite: boolean;
   layers: TiledLayer[];
+  tilesets?: TiledTilesetRef[];
 }
 
 /**
@@ -80,6 +97,7 @@ export const CLASS_DEFAULTS = {
   Villain: { throwDelay: 4 },
   Friend: { kind: 'bunny' },
   BirdStart: {},
+  Coin: {},
   Button: { target: 0, action: 'open', duration: 3 },
 } as const;
 
@@ -90,7 +108,8 @@ const BUTTON_ACTIONS: readonly ButtonAction[] = ['open', 'close'];
 
 export class LevelError extends Error {}
 
-export function parseTiledMap(name: string, map: TiledMap): LevelDef {
+/** `tilesets`: the tileset files the map's `tilesets` refer to, by their `source` as written in the map. */
+export function parseTiledMap(name: string, map: TiledMap, tilesets: Record<string, TiledTileset> = {}): LevelDef {
   const problems: string[] = [];
   if (map.orientation !== 'orthogonal') problems.push(`orientation is "${map.orientation}"; use Orthogonal`);
   if (map.infinite) problems.push('the map is infinite; use a fixed-size map');
@@ -102,12 +121,14 @@ export function parseTiledMap(name: string, map: TiledMap): LevelDef {
     birdStart: null,
     villains: [],
     friends: [],
+    coins: [],
     bodies: [],
     branches: [],
     joints: [],
     buttons: [],
   };
 
+  const tiles = tileLookup(map, tilesets);
   const visit = (layers: TiledLayer[], ox: number, oy: number) => {
     for (const layer of layers) {
       if (!layer.visible) continue;
@@ -117,7 +138,7 @@ export function parseTiledMap(name: string, map: TiledMap): LevelDef {
       for (const o of layer.objects ?? []) {
         if (!o.visible) continue;
         try {
-          addObject(level, { ...o, x: o.x + lx, y: o.y + ly });
+          addObject(level, { ...o, x: o.x + lx, y: o.y + ly }, tiles);
         } catch (e) {
           problems.push(`${describe(o)} on layer "${layer.name}": ${(e as Error).message}`);
         }
@@ -143,11 +164,12 @@ export function parseTiledMap(name: string, map: TiledMap): LevelDef {
   return level;
 }
 
-function addObject(level: LevelDef, o: TiledObject) {
-  const cls = o.type || o.class;
+function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup) {
+  const tile = o.gid !== undefined ? tiles(o.gid) : null;
+  const cls = o.type || o.class || tile?.cls;
   if (!cls) return;
   if (!(cls in CLASS_DEFAULTS)) throw new Error(`unknown class "${cls}"`);
-  if (o.gid !== undefined) throw new Error('tile (image) objects are not supported yet; draw a shape');
+  if (tile && cls !== 'Coin') throw new Error('only a Coin can be a tile (image) object; draw a shape');
   const p = props(cls as ClassName, o);
 
   switch (cls as ClassName) {
@@ -208,6 +230,13 @@ function addObject(level: LevelDef, o: TiledObject) {
       level.buttons.push({ id: o.id, x0: o.x, x1: o.x + o.width, y0: o.y, y1: o.y + o.height, target: num(p.target), action, duration });
       break;
     }
+    case 'Coin':
+      if (tile) level.coins.push(tileCentre(o, tile.alignment));
+      else {
+        requirePoint(o);
+        level.coins.push({ x: o.x, y: o.y });
+      }
+      break;
     case 'BirdStart':
       requirePoint(o);
       if (level.birdStart) throw new Error('there is more than one BirdStart');
@@ -262,6 +291,37 @@ function branchesOf(o: TiledObject): Branch[] {
     out.push({ from: pts[i - 1], to: pts[i] });
   }
   return out;
+}
+
+type TileLookup = (gid: number) => { cls: string | undefined; alignment: string };
+
+/** Finds a tile object's tile: its class, and its tileset's object alignment. */
+function tileLookup(map: TiledMap, tilesets: Record<string, TiledTileset>): TileLookup {
+  const refs = [...(map.tilesets ?? [])].sort((a, b) => b.firstgid - a.firstgid);
+  return (gid) => {
+    const id = gid & 0x0fffffff; // without the flip flags
+    const ref = refs.find((r) => r.firstgid <= id);
+    if (!ref) throw new Error(`its tile ${id} is in no tileset`);
+    const set = ref.source === undefined ? ref : tilesets[ref.source];
+    if (!set) throw new Error(`its tileset "${ref.source}" isn't loaded; keep tilesets next to the maps, as .tsj`);
+    const tile = set.tiles?.find((t) => t.id === id - ref.firstgid);
+    return { cls: tile?.type || tile?.class, alignment: set.objectalignment ?? 'unspecified' };
+  };
+}
+
+/** The point of a tile's image (as a fraction of its size) that its object's position is at. */
+const ALIGNMENTS: Record<string, [number, number]> = {
+  topleft: [0, 0], top: [0.5, 0], topright: [1, 0],
+  left: [0, 0.5], center: [0.5, 0.5], right: [1, 0.5],
+  bottomleft: [0, 1], bottom: [0.5, 1], bottomright: [1, 1],
+};
+
+/** The centre of a tile object's image; it's rotated around the object's position. */
+function tileCentre(o: TiledObject, alignment: string): CoinDef {
+  const [ax, ay] = ALIGNMENTS[alignment] ?? ALIGNMENTS.bottomleft;
+  const a = ((o.rotation ?? 0) * Math.PI) / 180;
+  const [x, y] = add(o, rotate(o.width * (0.5 - ax), o.height * (0.5 - ay), a));
+  return { x, y };
 }
 
 function requirePoint(o: TiledObject) {

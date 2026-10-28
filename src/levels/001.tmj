@@ -28,6 +28,56 @@
         }, 
         {
          "draworder":"topdown",
+         "id":7,
+         "name":"coins",
+         "objects":[
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":8,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":96,
+                 "y":512
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":9,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":96,
+                 "y":592
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":10,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":96,
+                 "y":432
+                }],
+         "opacity":1,
+         "type":"objectgroup",
+         "visible":true,
+         "x":0,
+         "y":0
+        }, 
+        {
+         "draworder":"topdown",
          "id":2,
          "name":"terrain",
          "objects":[
@@ -161,13 +211,17 @@
          "x":0,
          "y":0
         }],
- "nextlayerid":7,
- "nextobjectid":8,
+ "nextlayerid":8,
+ "nextobjectid":24,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",
  "tileheight":16,
- "tilesets":[],
+ "tilesets":[
+        {
+         "firstgid":1,
+         "source":"coin.tsj"
+        }],
  "tilewidth":16,
  "type":"map",
  "version":"1.11",
