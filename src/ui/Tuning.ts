@@ -134,7 +134,7 @@ export class Tuning {
         const doc = DOCS[`${section}.${key}`];
         if (doc) controller.domElement.title = doc;
       }
-      if (section !== 'posture' && section !== 'flap' && section !== 'tilt' && section !== 'hover' && section !== 'shoot') folder.close();
+      folder.close();
     }
     this.gui.add({ save: () => saveConfig() }, 'save').name('💾 save to this browser');
     this.gui.add({ copy: () => navigator.clipboard?.writeText(JSON.stringify(changedConfig(), null, 2)) }, 'copy').name('📋 copy changes as JSON');
