@@ -70,7 +70,7 @@ const PL = {
 
 export type Msg = keyof typeof PL;
 
-const STORAGE_KEY = 'pooping-birds.lang';
+const STORAGE_KEY = 'bird-revenge.lang';
 
 function initialLang(): Lang {
   try {

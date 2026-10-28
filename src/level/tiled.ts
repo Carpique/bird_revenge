@@ -85,7 +85,7 @@ export interface TiledMap {
 
 /**
  * Each class's fields and their defaults. Tiled leaves a field out of the file while it has its default value,
- * so these must match the custom types in `src/levels/pooping-birds.tiled-project` (a test checks they do).
+ * so these must match the custom types in `src/levels/bird-revenge.tiled-project` (a test checks they do).
  * Object references are ids, 0 = none.
  */
 export const CLASS_DEFAULTS = {

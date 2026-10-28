@@ -371,7 +371,7 @@ export function changedConfig(): Record<string, unknown> {
   return (diffDeep(config, defaults) as Record<string, unknown>) ?? {};
 }
 
-const STORAGE_KEY = 'pooping-birds-config';
+const STORAGE_KEY = 'bird-revenge-config';
 
 /** Deep-assign saved values onto config (ignores unknown keys). */
 function assignDeep(target: Record<string, unknown>, src: Record<string, unknown>) {

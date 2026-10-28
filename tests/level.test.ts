@@ -3,7 +3,7 @@ import { Constraint, Engine, Composite } from '../src/game/physics';
 import { buildLevel } from '../src/level/build';
 import { nextLevel } from '../src/levels';
 import { CLASS_DEFAULTS, LevelError, parseTiledMap, type TiledMap, type TiledObject, type TiledTileset } from '../src/level/tiled';
-import projectText from '../src/levels/pooping-birds.tiled-project?raw';
+import projectText from '../src/levels/bird-revenge.tiled-project?raw';
 import { Button } from '../src/game/Button';
 
 const levelFiles = import.meta.glob<string>('../src/levels/*.tmj', { query: '?raw', import: 'default', eager: true });

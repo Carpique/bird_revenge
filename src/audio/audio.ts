@@ -6,7 +6,7 @@ import { config } from '../config';
 export type SfxGroup = 'shot' | 'splat' | 'bad-guy-dies' | 'score' | 'player-hit' | 'boing' | 'sad-audience' | 'friend' | 'coin' | 'button' | 'fanfare';
 
 const DIR = 'assets/audio/';
-const STORAGE_KEY = 'pooping-birds-volume';
+const STORAGE_KEY = 'bird-revenge-volume';
 
 /** "splat-2.mp3" → "splat"; every "music-*" file is in the "music" group, every "main-theme-*" in "main-theme" */
 const groupOf = (file: string) => file.replace(/\.[^.]+$/, '').replace(/-\d+$/, '');

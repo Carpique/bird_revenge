@@ -59,7 +59,7 @@ To use real drawings, replace those files (SVG or PNG) and/or edit the paths in:
 
 ## Levels
 
-Levels are [Tiled](https://www.mapeditor.org/) maps in `src/levels/` (`*.tmj`). Open `src/levels/pooping-birds.tiled-project`
+Levels are [Tiled](https://www.mapeditor.org/) maps in `src/levels/` (`*.tmj`). Open `src/levels/bird-revenge.tiled-project`
 in Tiled first: it defines the object classes the game understands (Terrain, Body, Branch, Rope, Hinge, Villain, Friend, Coin, BirdStart, Button —
 see `src/level/tiled.ts`). Saving all the Friends (points, standing on the ground or a shelf) completes a level; the
 levels are played in file name order, round and round. Coins are extra points, counted next to the score: place them
