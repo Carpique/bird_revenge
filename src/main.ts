@@ -149,7 +149,7 @@ async function main() {
   const tuning = new Tuning();
   const recorder = new Recorder();
   const corner = document.getElementById('corner')!;
-  new FullscreenButton(corner);
+  const fullscreen = new FullscreenButton(corner);
   const volume = new VolumeButton(corner);
   const language = new LanguageButton();
   const keyboard = new Keyboard();
@@ -424,6 +424,8 @@ async function main() {
     if (!splash.visible && menuShown) audio.stopTheme(config.audio.themeFadeMs);
     menuShown = splash.visible;
     language.visible = splash.visible;
+    // only the title screen lets Esc leave full screen; in the game it opens the pause menu
+    fullscreen.lockEscape = !splash.visible;
     game.root.visible = !splash.visible;
 
     const mode = state === 'keyboard' || poseError ? 'keyboard' : 'pose';
