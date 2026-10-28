@@ -25,7 +25,6 @@ const PL = {
     'Klawiatura: ↑ machanie · ← → lot w bok · Shift opadanie · ↓ kupa · Spacja pauza',
 
   // game
-  'Score: {score}': 'Trafieni: {score}',
   Pause: 'Zaraz\nWracam',
   'Game Over': 'Klops!',
   'Hooray!': 'Wypas!',

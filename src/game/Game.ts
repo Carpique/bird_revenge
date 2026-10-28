@@ -1,12 +1,13 @@
-import { Application, Container, Graphics, Text } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
 import { audio } from '../audio/audio';
 import { splatHalfWidth } from '../characters/poo';
-import { villainHitbox } from '../characters/villain';
+import { villainDef, villainHitbox } from '../characters/villain';
 import { config, WORLD } from '../config';
 import { noControls, type Controls } from '../input/controls';
 import { buildLevel, type BuiltLevel } from '../level/build';
 import { LevelView } from '../level/LevelView';
 import type { Branch, LevelDef } from '../level/types';
+import { tex } from '../render/assets';
 import { fitWorld } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
 import { HAND_FONT as FONT, titleStyle } from '../ui/fonts';
@@ -90,6 +91,8 @@ export class Game {
   /** things to do after a while, in game time (so they wait while paused) */
   private timers: { ms: number; fn: () => void }[] = [];
   private acc = 0;
+  /** the score: a little villain, then the count */
+  private scoreBox = new Container();
   private scoreText: Text;
   private pausedText: GlowText;
   private hearts = new Container();
@@ -139,15 +142,20 @@ export class Game {
     this.world.addChild(this.background, this.levelLayer, this.friendLayer, this.actors, this.fx, this.top, this.front);
     this.root.addChild(this.world, this.hud);
 
+    // the icon is as tall as the digits' font size
+    const scoreIcon = new Sprite(tex(villainDef.animations.walk.frames[0]));
+    scoreIcon.scale.set(40 / scoreIcon.texture.height);
     this.scoreText = new Text({ text: '', style: { fontFamily: FONT, fontSize: 40, fill: '#2b2b2b' } });
-    this.scoreText.position.set(24, 14);
+    this.scoreText.x = scoreIcon.width + 8;
+    this.scoreBox.addChild(scoreIcon, this.scoreText);
+    this.scoreBox.position.set(24, 14);
     this.hearts.position.set(WORLD.width - 24, 14);
     this.buildHearts();
     this.pausedText = bigText('');
     this.gameOverText = bigText('');
     this.completeText = bigText('');
+    this.updateScoreText();
     const relabel = () => {
-      this.updateScoreText();
       this.pausedText.text = t('Pause');
       this.gameOverText.text = t('Game Over');
       this.completeText.text = t('Hooray!');
@@ -159,7 +167,7 @@ export class Game {
     // far bigger than the world, so it covers the letterbox bands too
     this.dim.rect(-WORLD.width * 5, -WORLD.height * 5, WORLD.width * 11, WORLD.height * 11).fill('#000');
     this.dim.alpha = 0;
-    this.hud.addChild(this.scoreText, this.hearts, this.dim, this.pausedText, this.gameOverText, this.completeText);
+    this.hud.addChild(this.scoreBox, this.hearts, this.dim, this.pausedText, this.gameOverText, this.completeText);
 
     app.stage.addChild(this.root);
     app.ticker.add((ticker) => this.update(ticker.deltaMS));
@@ -607,7 +615,7 @@ export class Game {
   }
 
   private updateScoreText() {
-    this.scoreText.text = t('Score: {score}', { score: this.score });
+    this.scoreText.text = String(this.score);
   }
 
   private addScore(points: number, x: number, y: number) {
