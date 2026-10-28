@@ -10,6 +10,7 @@ const PL = {
   "Sun is shining, yet it's raining...": 'Słońce świeci, z nieba ...',
   Start: 'Start',
   Instructions: 'Instrukcja Obsługi',
+  Training: 'Trening',
   Back: 'Wróć',
   'Flap both arms to fly up.': 'Machaj obiema rękami, żeby lecieć w górę.',
   'Tilt your arms to fly sideways — flap them tilted to climb that way.':

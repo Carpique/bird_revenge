@@ -3,7 +3,8 @@ import type { LevelDef } from '../level/types';
 
 /**
  * Tiled maps in this folder; a level's name is its file name without `.tmj`.
- * They're played in file name order (`001.tmj`, `002.tmj`, …; numbers compared as numbers, so 2 comes before 10 even unpadded), back to the first after the last.
+ * The numbered ones (`001.tmj`, `002.tmj`, …) are the game, played in number order (2 comes before 10 even unpadded),
+ * back to the first after the last. The others (`training.tmj`) are played on their own, over and over.
  */
 const files = import.meta.glob<string>('./*.tmj', { query: '?raw', import: 'default', eager: true });
 /** the tilesets the maps use (`coin.tsj`), by file name; editing one reloads the levels too */
@@ -35,24 +36,36 @@ function parseAll(): Map<string, LevelDef> {
 /** in play order */
 export const levels = parseAll();
 
+/** The training level's name, played from the title screen's "Training". */
+export const TRAINING = 'training';
+
+/** Whether `name` is one of the game's numbered levels, rather than one played on its own like training. */
+const isNumbered = (name: string) => /^\d+$/.test(name);
+
 /** An empty screen, played when no level loads. */
 const EMPTY: LevelDef = { name: 'empty', width: 1280, height: 720, birdStart: null, villains: [], friends: [], coins: [], bodies: [], branches: [], joints: [], buttons: [] };
 
 /** The level the URL asks for (`?level=<name>`), for testing it: the game skips the menu and plays just this level. */
 export const testLevelName = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('level');
 
-/** The level to start with: the one the URL asks for, else the first; an empty screen when none loads (the console says why). */
+/** The level to start with: the one the URL asks for, else the first numbered one; an empty screen when none loads (the console says why). */
 export function firstLevel(): LevelDef {
   const name = testLevelName;
   const level = name ? levels.get(name) : undefined;
   if (name && !level && !(`./${name}.tmj` in files)) console.error(`No level "${name}"; there are: ${[...levels.keys()].join(', ')}`);
-  return level ?? levels.values().next().value ?? EMPTY;
+  return level ?? [...levels.values()].find((l) => isNumbered(l.name)) ?? EMPTY;
 }
 
-/** The level after `name` in `all` (`levels`, or a newer version from `onLevelEdited`), back to the first after the last. */
+/**
+ * The level after `name` in `all` (`levels`, or a newer version from `onLevelEdited`): the next numbered one, back to the
+ * first after the last; a level that isn't numbered (training) comes after itself.
+ */
 export function nextLevel(all: Map<string, LevelDef>, name: string): LevelDef {
-  const order = [...all.values()];
+  const again = isNumbered(name) ? undefined : all.get(name);
+  if (again) return again;
+  const order = [...all.values()].filter((l) => isNumbered(l.name));
   if (!order.length) return EMPTY;
+  // a level that's gone (renamed while playing): the first
   return order[(order.findIndex((l) => l.name === name) + 1) % order.length];
 }
 

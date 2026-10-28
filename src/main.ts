@@ -2,7 +2,7 @@ import { Application } from 'pixi.js';
 import { audio } from './audio/audio';
 import { config, loadSavedConfig } from './config';
 import { Game } from './game/Game';
-import { firstLevel, levels, nextLevel, onLevelEdited, testLevelName } from './levels';
+import { firstLevel, levels, nextLevel, onLevelEdited, testLevelName, TRAINING } from './levels';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
 import { FlapDetector, type FlapOutput } from './gestures/FlapDetector';
 import { PostureDetector, type PostureOutput } from './gestures/PostureDetector';
@@ -131,7 +131,7 @@ async function main() {
 
   const game = new Game(app, firstLevel());
   let allLevels = levels;
-  // all friends saved: on to the next level, keeping score, lives back to full (testing a level from the URL: that level again)
+  // all friends saved: on to the next level, keeping score, lives back to full (training, or testing a level from the URL: that level again)
   game.onLevelComplete = () => game.startNextLevel(testLevelName ? game.level : nextLevel(allLevels, game.level.name));
   // saving the level being played in Tiled while the dev server runs swaps it in, without reloading the page
   onLevelEdited((next) => {
@@ -140,7 +140,7 @@ async function main() {
     // a map saved broken is left out: the game keeps the version it has
     if (level && JSON.stringify(level) !== JSON.stringify(game.level)) game.loadLevel(level);
   });
-  const splash = new SplashScreen(app);
+  const splash = new SplashScreen(app, levels.has(TRAINING));
   app.stage.addChild(splash);
   const pauseMenu = new PauseMenu(app);
   app.stage.addChild(pauseMenu);
@@ -173,6 +173,11 @@ async function main() {
   };
 
   splash.onStart = recalibrate;
+  // the training level, over and over until quit from the pause menu (which goes back to the first level)
+  splash.onTraining = () => {
+    game.reset(allLevels.get(TRAINING) ?? levels.get(TRAINING));
+    recalibrate();
+  };
   game.onGameOver = () => {
     keyboardAfterGameOver = state === 'keyboard';
     state = 'gameOver';

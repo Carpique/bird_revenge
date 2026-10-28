@@ -32,6 +32,7 @@ const INSTRUCTIONS: (Msg | '')[] = [
  */
 export class SplashScreen extends Container {
   onStart: () => void = () => {};
+  onTraining: () => void = () => {};
 
   private page: Page = 'main';
   private items: PageItem[] = [];
@@ -39,7 +40,11 @@ export class SplashScreen extends Container {
   private tagline: Text;
   private pageText: Text;
 
-  constructor(app: Application) {
+  /** `hasTraining`: show "Training" as the last item (the training level loaded) */
+  constructor(
+    app: Application,
+    private hasTraining = false,
+  ) {
     super();
     const root = new Container();
     this.addChild(root);
@@ -87,6 +92,7 @@ export class SplashScreen extends Container {
         { label: 'Start', action: () => this.onStart() },
         { page: 'instructions', label: 'Instructions', action: () => this.showPage('instructions') },
       ];
+      if (this.hasTraining) this.items.push({ label: 'Training', action: () => this.onTraining() });
     } else {
       this.pageText.text = INSTRUCTIONS.map((line) => line && t(line)).join('\n');
       this.items = [{ label: 'Back', action: () => this.showPage('main') }];

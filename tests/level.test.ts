@@ -242,15 +242,21 @@ describe('building a level', () => {
 });
 
 describe('level order', () => {
-  const a = parseTiledMap('a', mapOf([]));
-  const b = parseTiledMap('b', mapOf([]));
-  const all = new Map([['a', a], ['b', b]]);
+  const a = parseTiledMap('1', mapOf([]));
+  const b = parseTiledMap('2', mapOf([]));
+  const training = parseTiledMap('training', mapOf([]));
+  const all = new Map([['1', a], ['2', b], ['training', training]]);
 
-  it('goes round in order', () => {
-    expect(nextLevel(all, 'a')).toBe(b);
-    expect(nextLevel(all, 'b')).toBe(a);
+  it('goes round the numbered levels in order', () => {
+    expect(nextLevel(all, '1')).toBe(b);
+    expect(nextLevel(all, '2')).toBe(a);
     // a level that's gone (renamed while playing): the first
+    expect(nextLevel(all, '3')).toBe(a);
     expect(nextLevel(all, 'gone')).toBe(a);
+  });
+
+  it('plays a level that is not numbered over and over', () => {
+    expect(nextLevel(all, 'training')).toBe(training);
   });
 });
 
