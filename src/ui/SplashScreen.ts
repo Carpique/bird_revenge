@@ -1,20 +1,17 @@
 import { Container, Text, type Application } from 'pixi.js';
 import { audio } from '../audio/audio';
-import { birdDef } from '../characters/bird';
 import { WORLD } from '../config';
 import { Ground } from '../game/Ground';
-import { CharacterSprite } from '../render/CharacterSprite';
 import { fitWorld } from '../render/fitWorld';
-import { ACCENT, HAND_FONT, INK, TITLE_FONT, titleStyle } from './fonts';
+import { HAND_FONT, INK, titleStyle } from './fonts';
 import { i18n, t, type Msg } from './i18n';
+import { Menu, type MenuItem } from './Menu';
 
 type Page = 'main' | 'instructions';
 
-interface MenuItem {
+interface PageItem extends MenuItem {
   /** the page it opens, so coming back keeps it selected */
   page?: Page;
-  label: Msg;
-  action: () => void;
 }
 
 const INSTRUCTIONS: (Msg | '')[] = [
@@ -37,13 +34,10 @@ export class SplashScreen extends Container {
   onStart: () => void = () => {};
 
   private page: Page = 'main';
-  private items: MenuItem[] = [];
-  private selected = 0;
-  private menu = new Container();
+  private items: PageItem[] = [];
+  private menu = new Menu();
   private tagline: Text;
   private pageText: Text;
-  private cursors: CharacterSprite<keyof typeof birdDef.animations>[] = [];
-  private t = 0;
 
   constructor(app: Application) {
     super();
@@ -68,21 +62,12 @@ export class SplashScreen extends Container {
     // the instructions take the tagline's place, so they end above the Back button
     this.pageText.position.set(WORLD.width / 2, 258);
 
-    // a small flapping bird on each side of the selected item
-    for (const facing of ['right', 'left'] as const) {
-      const bird = new CharacterSprite<keyof typeof birdDef.animations>(birdDef);
-      bird.play('flap');
-      bird.setFacing(facing);
-      bird.scale.set(0.6);
-      this.cursors.push(bird);
-    }
-
-    root.addChild(title, tagline, this.pageText, this.menu, ...this.cursors);
+    root.addChild(title, tagline, this.pageText, this.menu);
 
     window.addEventListener('keydown', (e) => this.onKey(e));
     app.ticker.add((ticker) => {
       fitWorld(app, root);
-      if (this.visible) this.animate(ticker.deltaMS);
+      if (this.visible) this.menu.animate(ticker.deltaMS);
     });
     const relabel = () => {
       title.text = t('Bird Revenge');
@@ -107,69 +92,18 @@ export class SplashScreen extends Container {
       this.items = [{ label: 'Back', action: () => this.showPage('main') }];
     }
     this.tagline.visible = page === 'main';
-    this.buildMenu(page === 'main' ? 370 : 590);
     // coming back to the main menu, keep the item we came from selected (also when re-labelled)
-    const keep = from === page ? this.selected : this.items.findIndex((it) => it.page === from);
-    this.select(Math.max(0, keep));
-  }
-
-  private buildMenu(top: number) {
-    for (const c of this.menu.removeChildren()) c.destroy();
-    this.items.forEach((item, i) => {
-      const text = new Text({ text: t(item.label), style: { fontFamily: TITLE_FONT, fontSize: 54, fill: INK } });
-      text.anchor.set(0.5);
-      text.position.set(WORLD.width / 2, top + i * 82);
-      text.eventMode = 'static';
-      text.cursor = 'pointer';
-      text.on('pointerover', () => this.select(i));
-      text.on('pointertap', () => this.activate(i));
-      this.menu.addChild(text);
-    });
-  }
-
-  private select(i: number) {
-    this.selected = (i + this.items.length) % this.items.length;
-    this.menu.children.forEach((c, j) => {
-      const text = c as Text;
-      text.style.fill = j === this.selected ? ACCENT : INK;
-      text.scale.set(j === this.selected ? 1.08 : 1);
-    });
-  }
-
-  /** Arrow keys: the next / previous item, with a click when the highlight moves. */
-  private move(step: number) {
-    const from = this.selected;
-    this.select(this.selected + step);
-    if (this.selected !== from) audio.play('button');
-  }
-
-  private activate(i: number) {
-    audio.play('button');
-    this.select(i);
-    this.items[i].action();
+    const keep = from === page ? this.menu.selected : this.items.findIndex((it) => it.page === from);
+    this.menu.setItems(this.items, page === 'main' ? 370 : 590, Math.max(0, keep));
   }
 
   private onKey(e: KeyboardEvent) {
     if (!this.visible || e.repeat) return;
-    const k = e.key;
-    if (k === 'ArrowUp' || k === 'w') this.move(-1);
-    else if (k === 'ArrowDown' || k === 's') this.move(1);
-    else if (k === 'Enter' || k === ' ') this.activate(this.selected);
-    else if (k === 'Escape' && this.page !== 'main') {
+    if (this.menu.key(e.key)) e.preventDefault();
+    else if (e.key === 'Escape' && this.page !== 'main') {
       audio.play('button');
       this.showPage('main');
+      e.preventDefault();
     }
-    else return;
-    e.preventDefault();
-  }
-
-  private animate(dtMs: number) {
-    this.t += dtMs;
-    const item = this.menu.children[this.selected] as Text | undefined;
-    if (!item) return;
-    const bob = Math.sin(this.t / 220) * 6;
-    const gap = 30 + item.width / 2;
-    this.cursors[0].position.set(item.x - gap - 30, item.y + bob);
-    this.cursors[1].position.set(item.x + gap + 30, item.y - bob);
   }
 }

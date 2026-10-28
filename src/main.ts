@@ -22,6 +22,7 @@ import { FrameGuide, type GuideState } from './ui/FrameGuide';
 import { FullscreenButton } from './ui/FullscreenButton';
 import { t, type Msg } from './ui/i18n';
 import { LanguageButton } from './ui/LanguageButton';
+import { PauseMenu } from './ui/PauseMenu';
 import { Recorder } from './ui/Recorder';
 import { SplashScreen } from './ui/SplashScreen';
 import { Tuning } from './ui/Tuning';
@@ -36,7 +37,9 @@ import { wakeLock } from './ui/wakeLock';
  *   and a pose game's gameOver — not in the menu or keyboard play
  *   calibrating shows a dialog over the paused game (also camera loading / camera errors)
  *   outOfFrame pauses the game (no "Pause" sign, just the small pose box) until the player is back
- *   keyboard (Esc toggles; pose is ignored)
+ *   calibrating → keyboard (Esc; pose is ignored)
+ *   Esc in a game (countdown, playing, outOfFrame, keyboard) opens the pause menu over the frozen game:
+ *   keep playing, restart the level, or quit to the menu
  *   playing / outOfFrame / keyboard → gameOver (last life lost) → new game: countdown, or keyboard again
  * Pausing (Space / P in game, or the window losing focus during a game) freezes the game and shows "Pause".
  * While paused or while the window is unfocused / hidden, everything is suspended — render loop, guide
@@ -66,6 +69,9 @@ async function main() {
   /** the camera stopped working after it had started; it's being retried */
   let cameraError: Msg | null = null;
   let manualPause = false;
+  /** the pause menu (Esc in a game) is open */
+  let menuOpen = false;
+  let menuOpenedAt = 0;
   let countdownEnd = 0;
   let gameOverEnd = 0;
   /** whether the game after "Game Over" is played with the keyboard */
@@ -97,7 +103,9 @@ async function main() {
       return;
     }
     const gs: GuideState = { mode: 'hidden', frame, vis };
-    if (state === 'loading') Object.assign(gs, { mode: 'loading', message: t('Loading…') });
+    // the pause menu hides the countdown and the out-of-frame box
+    if (menuOpen) gs.mode = 'hidden';
+    else if (state === 'loading') Object.assign(gs, { mode: 'loading', message: t('Loading…') });
     else if (state === 'calibrating' && poseError)
       Object.assign(gs, { mode: 'calibrate', title: t('No camera'), message: poseError, error: true, hint: t('Press Esc to play with the keyboard') });
     else if (state === 'calibrating' && cameraError)
@@ -133,6 +141,8 @@ async function main() {
   });
   const splash = new SplashScreen(app);
   app.stage.addChild(splash);
+  const pauseMenu = new PauseMenu(app);
+  app.stage.addChild(pauseMenu);
   const status = document.getElementById('status')!;
   const debug = new DebugPanel(video);
   const tuning = new Tuning();
@@ -266,10 +276,32 @@ async function main() {
     updateSuspended();
   };
 
-  // losing focus pauses a game; elsewhere (menu, calibration) it just suspends silently
+  const openPauseMenu = () => {
+    setPaused(false);
+    pauseMenu.open();
+    menuOpen = true;
+    menuOpenedAt = performance.now();
+  };
+  pauseMenu.onResume = () => {
+    menuOpen = false;
+    countdownEnd += performance.now() - menuOpenedAt; // the countdown carries on where it was
+  };
+  pauseMenu.onRestart = () => {
+    menuOpen = false;
+    game.retryLevel();
+    if (state !== 'keyboard') startCountdown();
+  };
+  pauseMenu.onQuit = () => {
+    menuOpen = false;
+    game.reset();
+    audio.stopMusic(config.audio.themeFadeMs);
+    state = 'menu';
+  };
+
+  // losing focus pauses a game; elsewhere (menu, calibration, the pause menu) it just suspends silently
   const onWindowChange = (e: Event) => {
     if (e.type === 'blur' || e.type === 'focus') focused = e.type === 'focus';
-    if (!windowActive() && inGame()) manualPause = true;
+    if (!windowActive() && inGame() && !menuOpen) manualPause = true;
     updateSuspended();
   };
   window.addEventListener('blur', onWindowChange);
@@ -280,23 +312,23 @@ async function main() {
 
   keyboard.onPoo = () => game.requestPoo();
   keyboard.onPause = () => {
-    if (manualPause || inGame()) setPaused(!manualPause);
+    if (!menuOpen && (manualPause || inGame())) setPaused(!manualPause);
   };
   keyboard.onHotkey = (k) => {
     if (k === 'd') debug.toggle();
     else if (k === 'g') tuning.toggle();
     else if (k === 'r') recorder.toggle();
     else if (k === 'm') volume.toggleMute();
-    if (state === 'loading' || state === 'menu') return;
+    if (state === 'loading' || state === 'menu' || menuOpen) return;
     if (k === 'p') keyboard.onPause();
     else if (state === 'gameOver') return;
     else if (k === 'c' && tracker) recalibrate();
     else if (k === 'escape') {
-      if (state !== 'keyboard') {
+      if (state === 'calibrating') {
         state = 'keyboard';
         audio.startMusic(); // keyboard play skips calibration and the countdown
       }
-      else state = shoot.baseline && !poseError ? 'outOfFrame' : 'calibrating';
+      else openPauseMenu();
     }
   };
 
@@ -375,10 +407,10 @@ async function main() {
     const poseFresh = state === 'playing' && now - lastPoseT < 300;
     game.controls = keyboard.apply(poseFresh ? poseControls : noControls());
     // during gameOver the game runs only to slide the "Game Over" sign through
-    game.paused = manualPause || !(state === 'playing' || state === 'keyboard' || state === 'gameOver');
+    game.paused = manualPause || menuOpen || !(state === 'playing' || state === 'keyboard' || state === 'gameOver');
     game.showPausedText = manualPause;
     // the countdown keeps the calibration dialog's dimming, so it doesn't flicker in between
-    game.dimmed = state === 'calibrating' || state === 'countdown';
+    game.dimmed = menuOpen || state === 'calibrating' || state === 'countdown';
     splash.visible = state === 'menu';
     // the title screen showing up plays its theme from the start; leaving it fades the theme out
     if (splash.visible && !menuShown) audio.playTheme();

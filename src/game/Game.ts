@@ -120,6 +120,8 @@ export class Game {
   private allSavedT: number | null = null;
   /** a poo was requested and the bird hasn't squatted for it yet */
   private pooQueued = false;
+  /** score, coins and lives as the level started, for `retryLevel` */
+  private levelStart = { score: 0, coins: 0, lives: config.player.lives };
 
   constructor(
     private app: Application,
@@ -213,6 +215,16 @@ export class Game {
     this.restartLevel();
   }
 
+  /** This level again from its start, with the score, coins and lives it started with. */
+  retryLevel() {
+    this.score = this.levelStart.score;
+    this.coinCount = this.levelStart.coins;
+    this.updateScoreText();
+    this.lives = this.levelStart.lives;
+    this.buildHearts();
+    this.restartLevel();
+  }
+
   /** Move on to the next level: from its start, keeping score but with lives back to full. */
   startNextLevel(level: LevelDef) {
     this.lives = config.player.lives;
@@ -222,6 +234,7 @@ export class Game {
 
   /** The level, bird, villain, friends and poos back to the start. */
   private restartLevel() {
+    this.levelStart = { score: this.score, coins: this.coinCount, lives: this.lives };
     this.pooQueued = false;
     this.complete = false;
     this.completeT = 0;

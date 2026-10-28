@@ -28,4 +28,9 @@ export class GlowText extends Container {
     this.halo.text = text;
     this.body.text = text;
   }
+
+  /** the text's colour (the halo stays) */
+  set fill(fill: string) {
+    this.body.style.fill = fill;
+  }
 }

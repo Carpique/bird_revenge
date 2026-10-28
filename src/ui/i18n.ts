@@ -29,6 +29,12 @@ const PL = {
   'Game Over': 'Klops!',
   'Hooray!': 'Wypas!',
 
+  // the Esc menu during a game
+  'What now?': 'Czego?',
+  'Keep playing': 'Grać dalej',
+  'Start over': 'Od nowa',
+  "I've had enough": 'Mam dość',
+
   // overlays and the calibration dialog
   'Loading…': 'Ładowanie…',
   'Get ready to flap!': 'Szykuj skrzydła!',
