@@ -6,6 +6,7 @@ import { fitWorld } from '../render/fitWorld';
 import { HAND_FONT, INK, titleStyle } from './fonts';
 import { i18n, t, type Msg } from './i18n';
 import { Menu, type MenuItem } from './Menu';
+import { PooRain } from './PooRain';
 
 type Page = 'main' | 'instructions';
 
@@ -49,7 +50,8 @@ export class SplashScreen extends Container {
     const root = new Container();
     this.addChild(root);
 
-    root.addChild(new Ground());
+    const rain = new PooRain();
+    root.addChild(rain, new Ground());
 
     const title = new Text({ text: '', style: titleStyle(150) });
     title.anchor.set(0.5);
@@ -72,7 +74,9 @@ export class SplashScreen extends Container {
     window.addEventListener('keydown', (e) => this.onKey(e));
     app.ticker.add((ticker) => {
       fitWorld(app, root);
-      if (this.visible) this.menu.animate(ticker.deltaMS);
+      if (!this.visible) return;
+      this.menu.animate(ticker.deltaMS);
+      rain.update(ticker.deltaMS);
     });
     const relabel = () => {
       title.text = t('Bird Revenge');
