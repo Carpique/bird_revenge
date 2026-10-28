@@ -1,26 +1,25 @@
-{
- "columns": 0,
- "grid": {
-  "height": 1,
-  "orientation": "orthogonal",
-  "width": 1
- },
- "margin": 0,
- "name": "coin",
- "spacing": 0,
- "tilecount": 1,
- "tiledversion": "1.12.2",
- "tileheight": 40,
- "tiles": [
-  {
-   "id": 0,
-   "image": "tiles/coin.png",
-   "imageheight": 40,
-   "imagewidth": 40,
-   "type": "Coin"
-  }
- ],
- "tilewidth": 40,
- "type": "tileset",
- "version": "1.10"
+{ "columns":0,
+ "grid":
+    {
+     "height":1,
+     "orientation":"orthogonal",
+     "width":1
+    },
+ "margin":0,
+ "name":"coin",
+ "spacing":0,
+ "tilecount":1,
+ "tiledversion":"1.12.2",
+ "tileheight":40,
+ "tiles":[
+        {
+         "id":0,
+         "image":"tiles\/coin.png",
+         "imageheight":40,
+         "imagewidth":40,
+         "type":"Coin"
+        }],
+ "tilewidth":40,
+ "type":"tileset",
+ "version":"1.11"
 }
