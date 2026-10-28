@@ -316,8 +316,16 @@ export const config = {
   /** a saved friend grows to this many times its size while fading out, in this long */
   friend: { savedScale: 4, savedMs: 1000 },
 
-  /** a collected coin floats up this far (px) while fading out, in this long */
-  coin: { collectedRise: 50, collectedMs: 400 },
+  /** a collected coin floats up this far (px) while fading out, in this long; a coin glows: a soft halo this wide (px), this strong (0–1) and of this hue (0–360°, 45 = gold), pulsing by this much (0–1) of its size and strength, once every `glowPulseMs` */
+  coin: { 
+    collectedRise: 50, 
+    collectedMs: 400, 
+    glowSize: 100, 
+    glowAlpha: 0.2, 
+    glowHue: 46, 
+    glowPulse: 0.25, 
+    glowPulseMs: 2900 
+  },
 
   countdownMs: 2000,
   /** how much the game darkens (0–1) behind the "Pause", "Game Over" and "Hooray" signs, the calibration dialog and the countdown */
