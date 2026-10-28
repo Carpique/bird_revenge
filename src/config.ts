@@ -105,7 +105,7 @@ export const config = {
     /** EMA factor for the tilt per pose frame (lower = steadier through out-of-step flaps, laggier) */
     smoothing: 0.2,
     /** tilts within ±this (deg) count as level: no sideways flight */
-    deadZone: 10,
+    deadZone: 15,
     /** tilt (deg) at which the bird flies sideways at full `sideSpeed` */
     fullTilt: 11,
     /** sideways speed at full tilt, px per physics step */
