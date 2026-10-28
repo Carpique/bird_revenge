@@ -299,6 +299,12 @@ export const config = {
   /** Mix levels (multiplied by the speaker button's volume) and the falling-poo sound. */
   audio: {
     music: 0.5,
+    /** between levels the music plays on at this fraction of its volume... */
+    musicDucked: 1 / 3,
+    /** ...and comes back up over this when the next level starts (it goes down over levelComplete.graceMs) */
+    musicRestoreMs: 1500,
+    /** the music fades out over this under the level-end fanfare, and back in over this after it */
+    musicHushMs: 400,
     /** the title screen's theme fades out over this when the game starts */
     themeFadeMs: 1500,
     effects: 0.75,

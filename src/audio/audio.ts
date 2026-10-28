@@ -34,11 +34,12 @@ class GameAudio {
   private track = '';
   /** the game wants music (from the first countdown on) */
   private musicWanted = false;
-  /** stopped by `stopMusic` until `nextTrackIfStopped` */
-  private musicStopped = false;
-  /** when (performance.now) `stopMusic` started fading the music out; null when not fading */
-  private fadeStart: number | null = null;
-  private fadeMs = 0;
+  /** turned down by `duckMusic` until `restoreMusic` */
+  private musicDucked = false;
+  /** faded out under a `playOverMusic` sound until it ends */
+  private musicHushed = false;
+  /** the music's level (0–1, times the mix), gliding between `duckMusic` / `restoreMusic` / `stopMusic` */
+  private musicRamp = { from: 1, to: 1, start: 0, ms: 1 };
   /** the music element has played once inside a click / key press, so it may play later */
   private musicUnlocked = false;
   private themes: string[] = [];
@@ -102,17 +103,30 @@ class GameAudio {
     this.update();
   }
 
-  /** A random sound of `group`. */
-  play(group: SfxGroup) {
+  /** A random sound of `group`; `onEnd` is called when it has finished (right away if there's none to play). */
+  play(group: SfxGroup, onEnd?: () => void) {
     const list = this.groups.get(group);
     if (!list?.length) {
       if (!this.warned.has(group)) console.warn(`no sound files for "${group}" in public/${DIR}`);
       this.warned.add(group);
+      onEnd?.();
       return;
     }
     const alias = list[Math.floor(Math.random() * list.length)];
     // a sound still loading would otherwise play late, whenever it arrives
-    if (sound.find(alias).isLoaded) sound.play(alias);
+    if (sound.find(alias).isLoaded) sound.play(alias, { complete: () => onEnd?.() });
+    else onEnd?.();
+  }
+
+  /** A random sound of `group` with the music faded out under it (config.audio.musicHushMs), and back in after it. */
+  playOverMusic(group: SfxGroup) {
+    this.musicHushed = true;
+    this.rampMusic(0, config.audio.musicHushMs);
+    this.play(group, () => {
+      if (!this.musicHushed) return;
+      this.musicHushed = false;
+      this.rampMusic(this.musicLevel(), config.audio.musicHushMs);
+    });
   }
 
   /** Starts the falling tone (pitch gliding down); call the returned function when the poo lands. */
@@ -193,16 +207,24 @@ class GameAudio {
     this.applied = { effects, music, theme, fall };
   }
 
-  /** 1 → 0 while the music fades out after `stopMusic`; it's paused at 0. */
+  /** The music's current level along its ramp; once `stopMusic` has faded it to 0, it's paused. */
   private musicFade(): number {
-    if (this.fadeStart === null) return 1;
-    const k = Math.min(1, (performance.now() - this.fadeStart) / this.fadeMs);
-    if (k >= 1) {
-      this.fadeStart = null;
-      this.music.pause();
-      return 1; // volume back for the next song; it stays paused until then
-    }
-    return 1 - k;
+    const r = this.musicRamp;
+    const k = Math.min(1, (performance.now() - r.start) / r.ms);
+    const level = r.from + (r.to - r.from) * k;
+    if (k >= 1 && r.to === 0 && !this.musicWanted && !this.music.paused) this.music.pause();
+    return level;
+  }
+
+  /** The level the music should be at: down between levels, silent under a `playOverMusic` sound. */
+  private musicLevel() {
+    if (this.musicHushed) return 0;
+    return this.musicDucked ? config.audio.musicDucked : 1;
+  }
+
+  /** Glide the music from its current level to `to` over `ms`. */
+  private rampMusic(to: number, ms: number) {
+    this.musicRamp = { from: this.musicFade(), to, start: performance.now(), ms: Math.max(1, ms) };
   }
 
   /** 1 → 0 while the theme fades out after `stopTheme`; it's paused at 0. */
@@ -258,36 +280,36 @@ class GameAudio {
     return this.fallBus;
   }
 
-  /** Start the background music (once; later calls do nothing). */
+  /** Start the background music, or carry on with it after `stopMusic`; otherwise nothing changes. */
   startMusic() {
     if (this.musicWanted) return;
     this.musicWanted = true;
+    this.rampMusic(1, 0);
     if (!this.suspended) this.playMusic();
   }
 
-  /** Fade the music out over `fadeMs` (a level is won); it stays stopped until `nextTrackIfStopped`. */
+  /** Turn the music down to config.audio.musicDucked over `ms` (a level is won); it plays on until `restoreMusic`. */
+  duckMusic(ms: number) {
+    if (!this.musicWanted) return;
+    this.musicDucked = true;
+    this.rampMusic(this.musicLevel(), ms);
+  }
+
+  /** After `duckMusic` / `playOverMusic`: back to full volume over `ms` (a new level). Otherwise nothing changes. */
+  restoreMusic(ms: number) {
+    if (!this.musicDucked && !this.musicHushed) return;
+    this.musicDucked = false;
+    this.musicHushed = false;
+    if (this.musicWanted) this.rampMusic(1, ms);
+  }
+
+  /** Fade the music out over `fadeMs` and pause it (back to the title screen); `startMusic` carries on. */
   stopMusic(fadeMs: number) {
     if (!this.musicWanted) return;
     this.musicWanted = false;
-    this.musicStopped = true;
-    if (this.music.paused) return;
-    this.fadeStart = performance.now();
-    this.fadeMs = Math.max(1, fadeMs);
-  }
-
-  /** After `stopMusic`: the next song, from its start (a new level). Otherwise nothing changes. */
-  nextTrackIfStopped() {
-    if (!this.musicStopped) return;
-    this.musicStopped = false;
-    this.musicWanted = true;
-    if (this.fadeStart !== null) {
-      // still fading out: cut it short
-      this.fadeStart = null;
-      this.music.pause();
-    }
-    if (!this.tracks.length) return;
-    this.setTrack(this.tracks[(this.tracks.indexOf(this.track) + 1) % this.tracks.length]);
-    if (!this.suspended) this.playMusic();
+    this.musicDucked = false;
+    this.musicHushed = false;
+    this.rampMusic(0, fadeMs);
   }
 
   private playMusic() {
@@ -324,9 +346,8 @@ class GameAudio {
 
   /** Several songs: the next one in order, back to the first after the last. */
   private nextTrack() {
-    if (this.musicStopped) return; // the next level picks the next song
     this.setTrack(this.tracks[(this.tracks.indexOf(this.track) + 1) % this.tracks.length]);
-    if (!this.suspended) void this.music.play().catch(() => {});
+    if (this.musicWanted && !this.suspended) void this.music.play().catch(() => {});
   }
 }
 

@@ -243,7 +243,7 @@ export class Game {
     this.complete = false;
     this.completeT = 0;
     this.allSavedT = null;
-    audio.nextTrackIfStopped();
+    audio.restoreMusic(config.audio.musicRestoreMs);
     this.buildLevel();
     const start = this.birdStart();
     this.bird.respawn(start.x, start.y, false);
@@ -416,11 +416,11 @@ export class Game {
       audio.play('friend');
     }
     if (this.allSavedT === null && this.friends.length && this.friends.every((f) => f.state !== 'waiting')) {
-      // play goes on a little longer, without music; villains stand still and the bird blinks, so nothing can spoil it
+      // play goes on a little longer, the music turned down; villains stand still and the bird blinks, so nothing can spoil it
       this.allSavedT = 0;
       this.bird.makeInvulnerable(config.levelComplete.graceMs);
       for (const v of this.villains) v.frozen = true;
-      audio.stopMusic(config.levelComplete.graceMs);
+      audio.duckMusic(config.levelComplete.graceMs);
     }
   }
 
@@ -495,7 +495,7 @@ export class Game {
     this.completeT = 0;
     this.pooQueued = false;
     for (const p of this.poos) p.stopSound();
-    audio.play('fanfare');
+    audio.playOverMusic('fanfare');
   }
 
   /** A falling poo that crossed a branch's top edge this step splats on the branch. `prevYs`: poo centres before the step. */
