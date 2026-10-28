@@ -78,7 +78,7 @@ export const config = {
     afterFlapGravity: 0.4,
     afterFlapMs: 300,
     /** minimum peak-to-trough arm swing (deg) to count as a stroke (stats only) */
-    strokeMinAmplitude: 38,
+    strokeMinAmplitude: 25,
   },
 
   /** "shoot": a leg raised sideways, read from the hip angles */
