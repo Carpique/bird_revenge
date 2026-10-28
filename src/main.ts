@@ -41,7 +41,8 @@ import { wakeLock } from './ui/wakeLock';
  *   Esc in a game (countdown, playing, outOfFrame, keyboard) opens the pause menu over the frozen game:
  *   keep playing, restart the level, or quit to the menu
  *   playing / outOfFrame / keyboard → gameOver (last life lost) → new game: countdown, or keyboard again
- * Pausing (Space / P in game, or the window losing focus during a game) freezes the game and shows "Pause".
+ * Pausing (Space / P in game, or the window losing focus during a game) freezes the game and shows "Pause";
+ * not while "Game Over" or "Hooray" is on screen (losing focus then just suspends, without the sign).
  * While paused or while the window is unfocused / hidden, everything is suspended — render loop, guide
  * overlay, pose tracker and the camera itself — so an idle game uses almost no CPU.
  */
@@ -298,10 +299,13 @@ async function main() {
     state = 'menu';
   };
 
-  // losing focus pauses a game; elsewhere (menu, calibration, the pause menu) it just suspends silently
+  /** a game on screen that can be paused now: not behind the pause menu, "Game Over" or "Hooray" */
+  const canPause = () => inGame() && !menuOpen && !game.showingSign;
+
+  // losing focus pauses a game; elsewhere (menu, calibration, the pause menu, a sign) it just suspends silently
   const onWindowChange = (e: Event) => {
     if (e.type === 'blur' || e.type === 'focus') focused = e.type === 'focus';
-    if (!windowActive() && inGame() && !menuOpen) manualPause = true;
+    if (!windowActive() && canPause()) manualPause = true;
     updateSuspended();
   };
   window.addEventListener('blur', onWindowChange);
@@ -312,7 +316,8 @@ async function main() {
 
   keyboard.onPoo = () => game.requestPoo();
   keyboard.onPause = () => {
-    if (!menuOpen && (manualPause || inGame())) setPaused(!manualPause);
+    if (manualPause) setPaused(false);
+    else if (canPause()) setPaused(true);
   };
   keyboard.onHotkey = (k) => {
     if (k === 'd') debug.toggle();
@@ -323,7 +328,7 @@ async function main() {
     if (k === 'p') keyboard.onPause();
     else if (state === 'gameOver') return;
     else if (k === 'c' && tracker) recalibrate();
-    else if (k === 'escape') {
+    else if (k === 'escape' && !game.showingSign) {
       if (state === 'calibrating') {
         state = 'keyboard';
         audio.startMusic(); // keyboard play skips calibration and the countdown

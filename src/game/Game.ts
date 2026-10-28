@@ -56,6 +56,10 @@ export class Game {
   complete = false;
   /** called once, a while after the last friend is saved: time to load the next level */
   onLevelComplete: (() => void) | null = null;
+  /** "Game Over" or "Hooray" is on screen; the game can't be paused meanwhile */
+  get showingSign() {
+    return this.over || this.complete;
+  }
   /** latest controls; set by main from pose + keyboard */
   controls: Controls = noControls();
 
@@ -300,7 +304,7 @@ export class Game {
 
   private update(dtMs: number) {
     fitWorld(this.app, this.root);
-    this.pausedText.visible = this.paused && this.showPausedText && !this.over;
+    this.pausedText.visible = this.paused && this.showPausedText && !this.showingSign;
     // pausing stops the render loop right after this frame, so "Pause" darkens at once; a dialog fades it in
     const fade = dtMs / Math.max(1, config.dimFadeMs);
     if (this.pausedText.visible) this.overlayShade = 1;
