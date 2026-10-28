@@ -294,7 +294,9 @@ async function main() {
   };
   pauseMenu.onQuit = () => {
     menuOpen = false;
-    game.reset();
+    // a new game from the menu starts from the first level (the latest version of it, if edited meanwhile)
+    const first = firstLevel();
+    game.reset(allLevels.get(first.name) ?? first);
     audio.stopMusic(config.audio.themeFadeMs);
     state = 'menu';
   };

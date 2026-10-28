@@ -201,8 +201,9 @@ export class Game {
     if (!this.paused && !this.over && !this.complete) this.pooQueued = true;
   }
 
-  /** Start a new game: score, lives, the level, bird, villain and poos back to the start. */
-  reset() {
+  /** Start a new game: score, lives, the level, bird, villain and poos back to the start; on `level` if given. */
+  reset(level = this.level) {
+    this.level = level;
     this.score = 0;
     this.coinCount = 0;
     this.updateScoreText();
