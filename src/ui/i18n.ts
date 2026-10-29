@@ -8,7 +8,7 @@ const PL = {
   // title screen
   'Bird Revenge': 'Zemsta Ptaka',
   Start: 'Start',
-  Instructions: 'Instrukcja Obsługi',
+  Instructions: 'Instrukcje',
   Training: 'Trening',
   Back: 'Wróć',
   'Select level': 'Wybierz Poziom',

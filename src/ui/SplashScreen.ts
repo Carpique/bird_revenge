@@ -125,9 +125,9 @@ export class SplashScreen extends Container {
       this.pageText.text = '';
       this.items = [
         { page: 'levels', label: 'Start', action: () => (this.levels().levels.length ? this.showPage('levels') : this.onStart()) },
-        { page: 'instructions', label: 'Instructions', action: () => this.showPage('instructions') },
       ];
       if (this.hasTraining) this.items.push({ label: 'Training', action: () => this.onTraining() });
+      this.items.push({ page: 'instructions', label: 'Instructions', action: () => this.showPage('instructions') });
     } else {
       this.pageText.text = INSTRUCTIONS.map((line) => line && t(line)).join('\n');
       // the instructions start under the title (top at y = 258), so they end above the Back button

@@ -689,10 +689,10 @@ export class Game {
     }
   }
 
-  /** The score and coin counts; the coins follow the score, however wide it is. */
+  /** The score and coin counts, each number shown only when non-zero; the coins follow the score, however wide it is. */
   private updateScoreText() {
-    this.scoreText.text = String(this.score);
-    this.coinText.text = String(this.coinCount);
+    this.scoreText.text = this.score ? String(this.score) : '';
+    this.coinText.text = this.coinCount ? String(this.coinCount) : '';
     this.coinBox.x = this.scoreBox.x + this.scoreBox.width + 32;
   }
 
