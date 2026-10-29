@@ -1,9 +1,12 @@
+import type { Container } from 'pixi.js';
 import rough from 'roughjs';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { PART_NAMES, REQUIRED_PARTS, SKELETON, type PartName } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
 import { scenery } from '../scenery/scenery';
-import { TEXT_FONT as FONT, GLOW } from './fonts';
+import { WORLD } from '../config';
+import { BIG_FILL, BIG_OUTLINE, bigTextStyle, GLOW, INK, TEXT_FONT as FONT } from './fonts';
+import { GlowText } from './GlowText';
 import { t } from './i18n';
 
 export type GuideMode = 'hidden' | 'loading' | 'calibrate' | 'outOfFrame' | 'countdown';
@@ -27,14 +30,44 @@ export interface GuideState {
 type P = [number, number];
 interface Rect { x: number; y: number; w: number; h: number }
 
-/** Height of the out-of-frame box as a fraction of the screen's; portrait with MINI_ASPECT (width / height). */
-const MINI_HEIGHT = 0.3;
-const MINI_ASPECT = 0.75;
-const MINI_MARGIN = 16;
-/** Calibration dialog height as a fraction of the screen's height... */
-const DIALOG_HEIGHT = 0.8;
+const GREEN = '#1e7a32';
+/** the big text's outline red */
+const RED = BIG_OUTLINE;
+const MUTED = '#9aa5a8';
+
+/**
+ * The look of both pose panels, the calibration dialog and the small in-game box: sizes in world px,
+ * scaled with the panel (the dialog: like the game; the small box: `MINI_SCALE` of that).
+ */
+const PANEL = {
+  /** a brighter take on the bird's blue */
+  background: '#a9d6f2',
+  /** like the selected level thumbnail: the big text's colours, yellow inside red */
+  border: { width: 5, color: BIG_FILL, outerWidth: 12, outerColor: BIG_OUTLINE, radius: 18 },
+  padding: 22,
+  /** the messages under the pose: the instructions page's font, size, line height and glow */
+  text: { size: 28, lineHeight: 32, color: INK, errorColor: RED },
+  /** the smaller second line, relative to `text` */
+  hintScale: 0.8,
+  /** the target outline and the player's skeleton */
+  pose: { outlineWidth: 7, skeletonWidth: 3, skeletonColor: 'rgba(43,43,43,0.75)', belly: BIG_FILL },
+  /** the hold-still progress bar: height, and width as a fraction of the panel's */
+  bar: { height: 12, width: 0.6, border: 3, color: GREEN, borderColor: INK, emptyColor: MUTED },
+};
+
+/** Calibration dialog height, title included, as a fraction of the screen's height... */
+const DIALOG_HEIGHT = 0.88;
 /** ...and its width / height: portrait, like the pose it shows. */
 const DIALOG_ASPECT = 0.75;
+/** world px: the title's size (the level select's) and the space under it */
+const DIALOG_TITLE = 110;
+const TITLE_GAP = 24;
+
+/** The small in-game box, in world px (scaled like the game): height, width / height and margin; its contents at `MINI_SCALE` of the dialog's. */
+const MINI_HEIGHT = 216;
+const MINI_ASPECT = 0.75;
+const MINI_MARGIN = 16;
+const MINI_SCALE = 0.5;
 
 /**
  * Ideal pose outline, in MIRRORED display coordinates of the camera image (0..1).
@@ -50,29 +83,27 @@ const OUTLINE: Record<PartName, { kind: 'circle'; c: P; r: number } | { kind: 'p
   rightLeg: { kind: 'path', pts: [[0.53, 0.56], [0.545, 0.73], [0.56, 0.9]] },
 };
 
-const GREEN = '#2f9e44';
-const RED = '#e03131';
-const INK = '#2b2b2b';
-const MUTED = '#9aa5a8';
-/** light wash over the (dimmed) game behind the calibration dialog and the countdown; the same for both, so the switch doesn't flicker */
-const WASH = 'rgba(255,255,255,0.35)';
-
 /**
- * Full-screen 2D-canvas overlay: loading screen, the "stand in the outline" calibration dialog,
+ * Full-screen 2D-canvas overlay: loading screen, the "get in position" calibration dialog,
  * the small "get back in frame" box in the lower right corner and the resume countdown.
- * The dialog and the corner box share the same schematic: game-sky background, target outline and
- * the player's live skeleton (no camera image).
+ * The dialog and the corner box are the same panel (`PANEL`, `drawPanel`), in two sizes: target outline,
+ * the player's live skeleton (no camera image) and messages.
  */
 export class FrameGuide {
   private ctx: CanvasRenderingContext2D;
   private rc: ReturnType<typeof rough.canvas>;
+  /** the dialog's title: one of the game's big titles, drawn by PixiJS (under this canvas, beside the panel) */
+  private title = new GlowText('', bigTextStyle(DIALOG_TITLE));
 
+  /** `stage`: the game's (unscaled), for the dialog's title, on top of everything else there */
   constructor(
     private canvas: HTMLCanvasElement,
     private video: HTMLVideoElement,
+    private stage: Container,
   ) {
     this.ctx = canvas.getContext('2d')!;
     this.rc = rough.canvas(canvas);
+    this.title.visible = false;
   }
 
   draw(s: GuideState, now: number) {
@@ -85,6 +116,7 @@ export class FrameGuide {
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.title.visible = false;
     if (s.mode === 'hidden') return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -95,10 +127,9 @@ export class FrameGuide {
         this.text(s.message ?? t('Loading…'), W / 2, H / 2, 34, INK);
         break;
       case 'countdown':
-        ctx.fillStyle = WASH;
-        ctx.fillRect(0, 0, W, H);
-        this.text(String(Math.max(1, Math.ceil(s.countdown ?? 0))), W / 2, H / 2, 180, INK, undefined, true);
-        this.text(t('Get ready to flap!'), W / 2, H / 2 + 120, 34, INK, undefined, true);
+        // over the game, dimmed (like behind the calibration dialog)
+        this.text(String(Math.max(1, Math.ceil(s.countdown ?? 0))), W / 2, H / 2, 180, INK, undefined, 180);
+        this.text(t('Get ready to flap!'), W / 2, H / 2 + 120, 34, INK, undefined, 34);
         break;
       case 'calibrate':
         this.drawCalibrateDialog(s, W, H, now);
@@ -121,81 +152,113 @@ export class FrameGuide {
   }
 
   /**
-   * "Stand in the outline" dialog, centred over the (paused) game: title, schematic, hint and the
-   * hold-still progress bar. Also shows camera/model loading and camera errors. Portrait: the
-   * schematic shows only the middle strip of the (landscape) camera view, where the player stands.
+   * "Get in position" dialog, centred over the (paused, dimmed) game, styled like the level select: the
+   * big title above the panel. Also shows camera/model loading and camera errors.
    */
   private drawCalibrateDialog(s: GuideState, W: number, H: number, now: number) {
-    const ctx = this.ctx;
-    ctx.fillStyle = WASH;
-    ctx.fillRect(0, 0, W, H);
+    // world px -> screen px, as the game is scaled
+    const k = Math.min(W / WORLD.width, H / WORLD.height);
 
-    const h = Math.max(360, H * DIALOG_HEIGHT), w = Math.min(W * 0.9, h * DIALOG_ASPECT);
-    const box: Rect = { x: (W - w) / 2, y: (H - h) / 2, w, h };
-    this.drawPanel(box);
+    // the title above the panel, the two centred together; scaled like the game, a long one (a camera error) shrinks to fit
+    const title = this.title;
+    title.text = s.title ?? t('Get in position');
+    title.scale.set(1);
+    title.scale.set(k * Math.min(1, (W * 0.95) / (k * title.width)));
+    const titleH = title.textHeight * title.scale.y;
+    const gap = TITLE_GAP * k;
+    const total = Math.max(360 + titleH + gap, H * DIALOG_HEIGHT);
+    const h = total - titleH - gap, w = Math.min(W * 0.9, h * DIALOG_ASPECT);
+    const top = (H - total) / 2;
+    title.position.set(W / 2, top + titleH / 2);
+    if (this.stage.children.at(-1) !== title) this.stage.addChild(title); // on top
+    title.visible = true;
 
-    const titleSize = Math.max(22, w * 0.08);
-    const textSize = Math.max(15, w * 0.05);
-    const pad = textSize * 0.8;
-    const barH = Math.max(8, h * 0.025);
-    const cx = box.x + w / 2;
-    this.text(s.title ?? t('Stand in the outline'), cx, box.y + pad + titleSize / 2, titleSize, INK, w - 2 * pad);
+    const box: Rect = { x: (W - w) / 2, y: top + titleH + gap, w, h };
+    this.drawPanel(box, 1, s, now, { message: s.message ?? '', hint: s.hint, error: s.error, progress: s.progress ?? 0 });
+  }
 
-    const poseTop = box.y + pad * 1.5 + titleSize;
-    const footer = textSize * 1.5 + (s.hint ? textSize * 1.3 : 0) + barH + pad * 1.5;
-    const poseArea: Rect = { x: box.x + pad, y: poseTop, w: w - 2 * pad, h: box.y + h - footer - poseTop };
-    const cam = this.fitCamera(poseArea, true);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(poseArea.x, poseArea.y, poseArea.w, poseArea.h);
-    ctx.clip();
-    this.drawPose(s, cam, now, h);
-    ctx.restore();
-
-    let y = cam.y + cam.h + pad * 0.4 + textSize * 0.7;
-    this.text(s.message ?? '', cx, y, textSize, s.error ? RED : INK, w - 2 * pad);
-    if (s.hint) {
-      y += textSize * 1.3;
-      this.text(s.hint, cx, y, textSize * 0.85, '#555', w - 2 * pad);
-    }
-
-    const bw = w * 0.6, bx = cx - bw / 2, by = box.y + h - pad - barH;
-    if (s.progress) {
-      ctx.fillStyle = GREEN;
-      ctx.fillRect(bx, by, bw * s.progress, barH);
-    }
-    this.rc.rectangle(bx, by, bw, barH, { stroke: s.progress ? INK : MUTED, strokeWidth: 2, roughness: 0.8, seed: 3 });
+  /** The small "get back in frame" box in the lower right corner during the game: the dialog's panel, smaller. */
+  private drawOutOfFrameBox(s: GuideState, W: number, H: number, now: number) {
+    const k = Math.min(W / WORLD.width, H / WORLD.height);
+    const h = MINI_HEIGHT * k, w = h * MINI_ASPECT, margin = MINI_MARGIN * k;
+    const box: Rect = { x: W - w - margin, y: H - h - margin, w, h };
+    this.drawPanel(box, MINI_SCALE, s, now, { message: s.message ?? t('Get back in frame!') });
   }
 
   /**
-   * Unobtrusive "get back in frame" box in the lower right corner with a blinking frame. Portrait,
-   * like the calibration dialog: shows the middle strip of the camera view; the hint wraps.
+   * A pose panel (`PANEL`) filling `box`, its sizes scaled like the game and then by `scale`: the schematic, the messages (wrapped)
+   * and, with `progress` (0..1), the hold-still bar. Portrait: the schematic shows only the middle
+   * strip of the (landscape) camera view, where the player stands.
    */
-  private drawOutOfFrameBox(s: GuideState, W: number, H: number, now: number) {
-    const h = H * MINI_HEIGHT;
-    const box: Rect = { w: h * MINI_ASPECT, h, x: 0, y: 0 };
-    box.x = W - box.w - MINI_MARGIN;
-    box.y = H - box.h - MINI_MARGIN;
-    const blinkOn = Math.floor(now / 400) % 2 === 0;
-    this.drawPanel(box, blinkOn ? RED : INK, blinkOn ? 4 : 2);
-
-    const textSize = Math.max(11, box.w * 0.085);
-    const pad = textSize * 0.6;
+  private drawPanel(
+    box: Rect,
+    scale: number,
+    s: GuideState,
+    now: number,
+    c: { message: string; hint?: string; error?: boolean; progress?: number },
+  ) {
     const ctx = this.ctx;
-    ctx.font = `${textSize}px ${FONT}`;
-    const lines = this.wrap(s.message ?? t('Get back in frame!'), box.w - 2 * pad);
-    const lineH = textSize * 1.15;
-    const textTop = box.y + box.h - pad - lines.length * lineH;
+    const { border, text, bar } = PANEL;
+    // world px -> screen px
+    const k = Math.min(window.innerWidth / WORLD.width, window.innerHeight / WORLD.height) * scale;
+    ctx.beginPath();
+    ctx.roundRect(box.x, box.y, box.w, box.h, border.radius * k);
+    ctx.fillStyle = PANEL.background;
+    ctx.fill();
+    ctx.lineWidth = border.outerWidth * k;
+    ctx.strokeStyle = border.outerColor;
+    ctx.stroke();
+    ctx.lineWidth = border.width * k;
+    ctx.strokeStyle = border.color;
+    ctx.stroke();
 
-    const poseArea: Rect = { x: box.x + pad, y: box.y + pad, w: box.w - 2 * pad, h: textTop - pad * 0.5 - (box.y + pad) };
+    const pad = PANEL.padding * k;
+    const inner = box.w - 2 * pad;
+    const cx = box.x + box.w / 2;
+    // the sizes before the game's scaling set the glow, which isn't scaled (see `halo`)
+    const textWorld = text.size * scale, hintWorld = textWorld * PANEL.hintScale;
+    const textSize = text.size * k, hintSize = textSize * PANEL.hintScale;
+    const lineH = text.lineHeight * k, hintH = lineH * PANEL.hintScale;
+    ctx.font = `${textSize}px ${FONT}`;
+    const lines = this.wrap(c.message, inner);
+    ctx.font = `${hintSize}px ${FONT}`;
+    const hintLines = c.hint ? this.wrap(c.hint, inner) : [];
+    const barH = c.progress !== undefined ? bar.height * k : 0;
+
+    const footer = lines.length * lineH + hintLines.length * hintH + (barH ? barH + pad * 0.6 : 0) + pad * 1.3;
+    const poseArea: Rect = { x: box.x + pad, y: box.y + pad, w: inner, h: box.h - footer - pad };
     ctx.save();
     ctx.beginPath();
     ctx.rect(poseArea.x, poseArea.y, poseArea.w, poseArea.h);
     ctx.clip();
-    this.drawPose(s, this.fitCamera(poseArea, true), now, box.h);
+    this.drawPose(s, this.fitCamera(poseArea, true), now, k);
     ctx.restore();
 
-    lines.forEach((line, i) => this.text(line, box.x + box.w / 2, textTop + (i + 0.5) * lineH, textSize, INK, box.w - 2 * pad));
+    let y = poseArea.y + poseArea.h + pad * 0.3 + lineH / 2;
+    for (const line of lines) {
+      this.text(line, cx, y, textSize, c.error ? text.errorColor : text.color, inner, textWorld, false);
+      y += lineH;
+    }
+    y += (hintH - lineH) / 2;
+    for (const line of hintLines) {
+      this.text(line, cx, y, hintSize, text.color, inner, hintWorld, false);
+      y += hintH;
+    }
+
+    if (!barH) return;
+    const bw = box.w * bar.width, bx = cx - bw / 2, by = box.y + box.h - pad - barH;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, barH, barH / 2);
+    if (c.progress) {
+      ctx.save();
+      ctx.clip();
+      ctx.fillStyle = bar.color;
+      ctx.fillRect(bx, by, bw * c.progress, barH);
+      ctx.restore();
+    }
+    ctx.lineWidth = Math.max(1, bar.border * k);
+    ctx.strokeStyle = c.progress ? bar.borderColor : bar.emptyColor;
+    ctx.stroke();
   }
 
   /** Greedy word wrap using the current ctx.font. */
@@ -215,34 +278,48 @@ export class FrameGuide {
     return lines;
   }
 
-  /** Box with the game's sky colour and a sketchy border. */
-  private drawPanel(box: Rect, border = INK, borderWidth = 3) {
-    this.ctx.fillStyle = scenery.skyColor;
-    this.ctx.fillRect(box.x, box.y, box.w, box.h);
-    this.rc.rectangle(box.x, box.y, box.w, box.h, { stroke: border, strokeWidth: borderWidth, roughness: 1.2, seed: 11 });
-  }
-
   /**
-   * Target outline (each part green when visible; a lost required part blinks red, a lost optional
-   * part such as the legs is grey) plus the player's live
-   * skeleton, both mapped into the camera rectangle `cam` (mirrored). Line widths follow `boxH`,
-   * the height of the box it is drawn in. Without visibility data (still loading) the outline is grey.
+   * Target outline with a yellow belly (each part green when visible; a lost required part blinks red, a lost optional
+   * part such as the lower legs is grey; the thighs follow the torso, which includes the hips) plus the player's live
+   * skeleton, both mapped into the camera rectangle `cam` (mirrored). Line widths: `PANEL.pose`'s, scaled
+   * by `k`. Without visibility data (still loading) the outline is grey.
    */
-  private drawPose(s: GuideState, cam: Rect, now: number, boxH: number) {
+  private drawPose(s: GuideState, cam: Rect, now: number, k: number) {
     const ctx = this.ctx;
-    const outlineWidth = Math.min(7, Math.max(2, boxH * 0.022));
-    const skeletonWidth = Math.min(3, Math.max(1.5, boxH * 0.006));
+    const { pose } = PANEL;
+    const outlineWidth = Math.max(1.5, pose.outlineWidth * k);
+    const skeletonWidth = Math.max(1, pose.skeletonWidth * k);
     // display coords (already mirrored) -> screen
     const toScreen = ([x, y]: P): P => [cam.x + x * cam.w, cam.y + y * cam.h];
 
     const blinkOn = Math.floor(now / 350) % 2 === 0;
-    PART_NAMES.forEach((name, i) => {
+    /** the outline colour showing `name`'s visibility; null: blinked off */
+    const colorOf = (name: PartName): string | null => {
       const ok = s.vis?.parts[name].visible ?? false;
       const required = REQUIRED_PARTS.includes(name);
-      const color = !s.vis ? MUTED : ok ? GREEN : required ? RED : MUTED;
-      if (s.vis && !ok && required && !blinkOn) return;
-      const o = { stroke: color, strokeWidth: outlineWidth, roughness: 1.6, bowing: 1.5, seed: 40 + i };
+      if (s.vis && !ok && required && !blinkOn) return null;
+      return !s.vis ? MUTED : ok ? GREEN : required ? RED : MUTED;
+    };
+    // the belly filled yellow, like the big text's letters; it stays while the outline blinks
+    const torso = OUTLINE.torso;
+    if (torso.kind === 'polygon') {
+      const seed = 40 + PART_NAMES.indexOf('torso');
+      this.rc.polygon(torso.pts.map(toScreen), { stroke: 'none', fill: pose.belly, fillStyle: 'solid', roughness: 1.6, bowing: 1.5, seed });
+    }
+    PART_NAMES.forEach((name, i) => {
       const shape = OUTLINE[name];
+      const style = (color: string) => ({ stroke: color, strokeWidth: outlineWidth, roughness: 1.6, bowing: 1.5, seed: 40 + i });
+      if (shape.kind === 'path' && (name === 'leftLeg' || name === 'rightLeg')) {
+        // the thighs show the hips, which must be in view (they count with the torso); the rest of the leg is optional
+        const [hip, knee, ankle] = shape.pts.map(toScreen);
+        const thigh = colorOf('torso'), shin = colorOf(name);
+        if (thigh) this.rc.line(...hip, ...knee, style(thigh));
+        if (shin) this.rc.line(...knee, ...ankle, style(shin));
+        return;
+      }
+      const color = colorOf(name);
+      if (!color) return;
+      const o = style(color);
       if (shape.kind === 'circle') {
         const [cx, cy] = toScreen(shape.c);
         this.rc.circle(cx, cy, shape.r * 2 * cam.h, o);
@@ -257,7 +334,7 @@ export class FrameGuide {
       const lm = s.frame.lm;
       ctx.lineWidth = skeletonWidth;
       ctx.lineCap = 'round';
-      ctx.strokeStyle = 'rgba(43,43,43,0.75)';
+      ctx.strokeStyle = pose.skeletonColor;
       ctx.beginPath();
       for (const [a, b] of SKELETON) {
         const [x1, y1] = toScreen([1 - lm[a].x, lm[a].y]);
@@ -269,25 +346,40 @@ export class FrameGuide {
     }
   }
 
-  /** `glow`: a soft light halo around it, like the big signs over the dimmed game */
-  private text(t: string, x: number, y: number, size: number, color: string, maxWidth?: number, glow = false) {
+  /**
+   * `glow`: a soft light halo around it, like the big signs over the dimmed game (see `halo`); `outline`: a thin
+   * white outline (without a halo, so it reads on the sky)
+   */
+  private text(t: string, x: number, y: number, size: number, color: string, maxWidth?: number, glow?: number, outline = true) {
     const ctx = this.ctx;
     ctx.font = `${size}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.lineWidth = Math.max(3, size / 9);
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-    if (glow) {
-      ctx.save();
-      ctx.shadowColor = GLOW;
-      ctx.shadowBlur = size / 4;
-      ctx.strokeStyle = GLOW;
-      ctx.lineWidth = size / 6;
+    if (glow) this.halo(t, x, y, size, glow, maxWidth);
+    if (outline) {
+      ctx.lineWidth = Math.max(3, size / 9);
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
       ctx.strokeText(t, x, y, maxWidth);
-      ctx.restore();
     }
-    ctx.strokeText(t, x, y, maxWidth);
     ctx.fillStyle = color;
     ctx.fillText(t, x, y, maxWidth);
+  }
+
+  /**
+   * Soft light halo behind text, in the current font and alignment: exactly `GlowText`'s. `glowSize`: the
+   * font size `GlowText` would be given (before the world's scaling), which sets its blur: PixiJS's
+   * `BlurFilter` blurs by about 1.29 x its strength in device px, unscaled, as does a canvas filter.
+   */
+  private halo(t: string, x: number, y: number, size: number, glowSize: number, maxWidth?: number) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.filter = `blur(${(1.29 * glowSize) / 9}px)`;
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = ctx.strokeStyle = GLOW;
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = size / 5;
+    ctx.strokeText(t, x, y, maxWidth);
+    ctx.fillText(t, x, y, maxWidth);
+    ctx.restore();
   }
 }

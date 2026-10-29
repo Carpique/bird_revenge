@@ -64,7 +64,7 @@ async function main() {
   document.getElementById('game')!.appendChild(app.canvas);
 
   const video = document.getElementById('camera') as HTMLVideoElement;
-  const guide = new FrameGuide(document.getElementById('guide') as HTMLCanvasElement, video);
+  const guide = new FrameGuide(document.getElementById('guide') as HTMLCanvasElement, video, app.stage);
 
   let state: AppState = 'loading';
   /** camera / pose model status, shown in the calibration dialog (already translated) */
@@ -114,7 +114,7 @@ async function main() {
     else if (state === 'calibrating' && cameraError)
       Object.assign(gs, { mode: 'calibrate', title: t(cameraError), message: t('Reconnecting…'), hint: t('Press Esc to play with the keyboard') });
     else if (state === 'calibrating' && (!cameraOn || !tracker))
-      Object.assign(gs, { mode: 'calibrate', title: t('Getting ready'), message: t(cameraOn ? 'Loading pose model…' : 'Starting camera…') });
+      Object.assign(gs, { mode: 'calibrate', message: t(cameraOn ? 'Loading pose model…' : 'Starting camera…') });
     else if (state === 'calibrating')
       Object.assign(gs, { mode: 'calibrate', message: calibStatus?.message ?? t('Get into view'), progress: calibStatus?.progress });
     else if (state === 'outOfFrame')
