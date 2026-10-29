@@ -121,6 +121,8 @@ export interface LevelDef {
   /** saving all of them completes the level (a level without any never ends) */
   friends: FriendDef[];
   coins: CoinDef[];
+  /** what completes the level: saving all the friends (the default), or collecting all the coins (the training letters) */
+  goal?: 'friends' | 'coins';
   bodies: BodyDef[];
   branches: Branch[];
   joints: JointDef[];

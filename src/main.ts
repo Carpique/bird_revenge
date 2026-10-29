@@ -173,7 +173,7 @@ async function main() {
   };
 
   splash.onStart = recalibrate;
-  // the training level, over and over until quit from the pause menu (which goes back to the first level)
+  // the training letters, A to Z and round, until quit from the pause menu (which goes back to the first level)
   splash.onTraining = () => {
     game.reset(allLevels.get(TRAINING) ?? levels.get(TRAINING));
     recalibrate();

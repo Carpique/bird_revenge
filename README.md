@@ -63,7 +63,8 @@ Levels are [Tiled](https://www.mapeditor.org/) maps in `src/levels/` (`*.tmj`). 
 in Tiled first: it defines the object classes the game understands (Terrain, Body, Branch, Rope, Hinge, Villain, Friend, Coin, BirdStart, Button —
 see `src/level/tiled.ts`). Saving all the Friends (points, standing on the ground or a shelf) completes a level; the
 numbered levels (`001.tmj`, `002.tmj`, …) are played in number order, round and round; `training.tmj` is the
-title screen's "Training", played over and over until quit from the Esc menu. Coins are extra points, counted next to the score: place them
+base of the title screen's "Training": it is played once per letter, `training-A` to `training-Z` (A to Z and round, until quit
+from the Esc menu), each with its letter spelled in coins (`src/level/letters.ts`) and completed by collecting them all. Coins are extra points, counted next to the score: place them
 from the `coin` tileset (`coin.tsj`, in the Project view) with the Insert Tile tool (T) on an object layer, and they show
 as coins in Tiled too; a point of class Coin works as well (its centre). To test a level, open `?level=<file name>` (without `.tmj`): it
 skips the start screen and plays only that level, again each time it's completed. With `npm run dev` running, saving a map swaps it into the running game.

@@ -416,16 +416,20 @@ export class Game {
       this.front.addChild(f.view);
       audio.play('friend');
     }
-    if (this.allSavedT === null && this.friends.length && this.friends.every((f) => f.state !== 'waiting')) {
-      // play goes on a little longer, the music turned down; villains stand still and the bird blinks, so nothing can spoil it
-      this.allSavedT = 0;
-      this.bird.makeInvulnerable(config.levelComplete.graceMs);
-      for (const v of this.villains) v.frozen = true;
-      audio.duckMusic(config.levelComplete.graceMs);
-    }
+    if (this.level.goal !== 'coins' && this.friends.length && this.friends.every((f) => f.state !== 'waiting')) this.goalReached();
   }
 
-  /** The bird flying into a coin collects it. */
+  /** The level's goal is done (all friends saved, or all coins collected): it completes after a grace time. */
+  private goalReached() {
+    if (this.allSavedT !== null) return;
+    // play goes on a little longer, the music turned down; villains stand still and the bird blinks, so nothing can spoil it
+    this.allSavedT = 0;
+    this.bird.makeInvulnerable(config.levelComplete.graceMs);
+    for (const v of this.villains) v.frozen = true;
+    audio.duckMusic(config.levelComplete.graceMs);
+  }
+
+  /** The bird flying into a coin collects it; collecting the last one completes a level whose goal is coins. */
   private collectCoins() {
     if (this.bird.dying) return;
     const b = this.bird.body.position;
@@ -436,6 +440,7 @@ export class Game {
       this.updateScoreText();
       audio.play('coin');
     }
+    if (this.level.goal === 'coins' && this.coins.length && this.coins.every((c) => c.state !== 'waiting')) this.goalReached();
   }
 
   /** A button is pressed by the bird's feet on it, a poo falling into it or a splat lying on it; the doors follow. */

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { Constraint, Engine, Composite } from '../src/game/physics';
 import { buildLevel } from '../src/level/build';
 import { nextLevel } from '../src/levels';
+import { LETTERS, letterCoins, letterLevels } from '../src/level/letters';
+import { WORLD } from '../src/config';
 import { CLASS_DEFAULTS, LevelError, parseTiledMap, type TiledMap, type TiledObject, type TiledTileset } from '../src/level/tiled';
 import projectText from '../src/levels/bird-revenge.tiled-project?raw';
 import { Button } from '../src/game/Button';
@@ -289,5 +291,27 @@ describe('buttons', () => {
     b.step(true, 100);
     for (let t = 0; t < 60_000; t += 100) b.step(false, 100);
     expect(b.active).toBe(true);
+  });
+});
+
+describe('training letters', () => {
+  it('has every capital, each 7 coins tall, a coin apart, between the HUD and the ground', () => {
+    expect(LETTERS.join('')).toBe('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+    for (const letter of LETTERS) {
+      const coins = letterCoins(letter);
+      const ys = [...new Set(coins.map((c) => c.y))].sort((a, b) => a - b);
+      expect(ys.length, letter).toBe(7);
+      for (let i = 1; i < ys.length; i++) expect(ys[i] - ys[i - 1]).toBe(80);
+      expect(ys[0] - 20).toBeGreaterThanOrEqual(54);
+      expect(ys[6] + 20).toBeLessThanOrEqual(WORLD.groundY);
+      for (const c of coins) expect(c.x - 20 >= 0 && c.x + 20 <= WORLD.width, letter).toBe(true);
+    }
+  });
+
+  it('goes A to Z and round, each finished by its coins', () => {
+    const all = new Map(letterLevels(parseTiledMap('training', mapOf([]))).map((l) => [l.name, l]));
+    expect(nextLevel(all, 'training-A').name).toBe('training-B');
+    expect(nextLevel(all, 'training-Z').name).toBe('training-A');
+    expect(all.get('training-A')!.goal).toBe('coins');
   });
 });
