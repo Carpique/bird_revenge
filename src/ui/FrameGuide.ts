@@ -3,7 +3,7 @@ import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { PART_NAMES, REQUIRED_PARTS, SKELETON, type PartName } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
 import { scenery } from '../scenery/scenery';
-import { HAND_FONT as FONT, GLOW } from './fonts';
+import { TEXT_FONT as FONT, GLOW } from './fonts';
 import { t } from './i18n';
 
 export type GuideMode = 'hidden' | 'loading' | 'calibrate' | 'outOfFrame' | 'countdown';

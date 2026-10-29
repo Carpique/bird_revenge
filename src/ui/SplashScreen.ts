@@ -3,7 +3,7 @@ import { audio } from '../audio/audio';
 import { config, WORLD } from '../config';
 import { Ground } from '../game/Ground';
 import { fitWorld } from '../render/fitWorld';
-import { HAND_FONT, INK, titleStyle } from './fonts';
+import { bigTextStyle, INK, TEXT_FONT } from './fonts';
 import { GlowText } from './GlowText';
 import { i18n, t, type Msg } from './i18n';
 import { Menu, type MenuItem } from './Menu';
@@ -39,7 +39,6 @@ export class SplashScreen extends Container {
   private page: Page = 'main';
   private items: PageItem[] = [];
   private menu = new Menu(true);
-  private tagline: GlowText;
   private pageText: GlowText;
 
   /** `hasTraining`: show "Training" as the last item (the training level loaded) */
@@ -57,16 +56,13 @@ export class SplashScreen extends Container {
     dim.alpha = config.signDim;
     root.addChild(rain, new Ground(), dim);
 
-    const title = new GlowText('', titleStyle(150));
+    const title = new GlowText('', bigTextStyle(150));
     title.position.set(WORLD.width / 2, 170);
 
-    const tagline = (this.tagline = new GlowText('', { fontFamily: HAND_FONT, fontSize: 34, fill: '#555' }));
-    tagline.position.set(WORLD.width / 2, 275);
-
-    this.pageText = new GlowText('', { fontFamily: HAND_FONT, fontSize: 28, fill: INK, align: 'center', lineHeight: 32 });
+    this.pageText = new GlowText('', { fontFamily: TEXT_FONT, fontSize: 28, fill: INK, align: 'center', lineHeight: 32 });
     this.pageText.x = WORLD.width / 2;
 
-    root.addChild(title, tagline, this.pageText, this.menu);
+    root.addChild(title, this.pageText, this.menu);
 
     window.addEventListener('keydown', (e) => this.onKey(e));
     app.ticker.add((ticker) => {
@@ -77,7 +73,6 @@ export class SplashScreen extends Container {
     });
     const relabel = () => {
       title.text = t('Bird Revenge');
-      tagline.text = t("Sun is shining, yet it's raining...");
       this.showPage(this.page);
     };
     i18n.onChange(relabel);
@@ -96,11 +91,10 @@ export class SplashScreen extends Container {
       if (this.hasTraining) this.items.push({ label: 'Training', action: () => this.onTraining() });
     } else {
       this.pageText.text = INSTRUCTIONS.map((line) => line && t(line)).join('\n');
-      // the instructions take the tagline's place (top at y = 258), so they end above the Back button
+      // the instructions start under the title (top at y = 258), so they end above the Back button
       this.pageText.y = 258 + this.pageText.textHeight / 2;
       this.items = [{ label: 'Back', action: () => this.showPage('main') }];
     }
-    this.tagline.visible = page === 'main';
     // coming back to the main menu, keep the item we came from selected (also when re-labelled)
     const keep = from === page ? this.menu.selected : this.items.findIndex((it) => it.page === from);
     this.menu.setItems(this.items, page === 'main' ? 370 : 590, Math.max(0, keep));

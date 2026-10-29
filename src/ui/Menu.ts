@@ -3,7 +3,7 @@ import { audio } from '../audio/audio';
 import { birdDef } from '../characters/bird';
 import { WORLD } from '../config';
 import { CharacterSprite } from '../render/CharacterSprite';
-import { ACCENT, INK, TITLE_FONT } from './fonts';
+import { ACCENT, INK, TEXT_FONT } from './fonts';
 import { GlowText } from './GlowText';
 import { t, type Msg } from './i18n';
 
@@ -41,7 +41,7 @@ export class Menu extends Container {
     this.items = items;
     for (const c of this.list.removeChildren()) c.destroy();
     items.forEach((item, i) => {
-      const style: TextStyleOptions = { fontFamily: TITLE_FONT, fontSize: 54, fill: INK };
+      const style: TextStyleOptions = { fontFamily: TEXT_FONT, fontSize: 54, fill: INK };
       const text = this.glow ? new GlowText(t(item.label), style) : new Text({ text: t(item.label), style });
       if (text instanceof Text) text.anchor.set(0.5);
       text.position.set(WORLD.width / 2, top + i * 82);

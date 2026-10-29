@@ -11,7 +11,7 @@ import type { Branch, LevelDef } from '../level/types';
 import { tex } from '../render/assets';
 import { fitWorld } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
-import { HAND_FONT as FONT, titleStyle } from '../ui/fonts';
+import { bigTextStyle, TEXT_FONT as FONT } from '../ui/fonts';
 import { GlowText } from '../ui/GlowText';
 import { i18n, t } from '../ui/i18n';
 import { Apple } from './Apple';
@@ -732,7 +732,7 @@ export class Game {
 
 /** Big glowing sign in the middle of the screen ("Pause", "Game Over", "Hooray"), styled like the title. */
 function bigText(text: string) {
-  const t = new GlowText(text, titleStyle(180));
+  const t = new GlowText(text, bigTextStyle(180));
   t.position.set(WORLD.width / 2, WORLD.height / 2);
   return t;
 }

@@ -2,7 +2,7 @@ import { Container, type Application } from 'pixi.js';
 import { audio } from '../audio/audio';
 import { WORLD } from '../config';
 import { fitWorld } from '../render/fitWorld';
-import { titleStyle } from './fonts';
+import { bigTextStyle } from './fonts';
 import { GlowText } from './GlowText';
 import { i18n, t } from './i18n';
 import { Menu } from './Menu';
@@ -25,7 +25,7 @@ export class PauseMenu extends Container {
     const root = new Container();
     this.addChild(root);
 
-    const title = new GlowText('', titleStyle(110));
+    const title = new GlowText('', bigTextStyle(110));
     title.position.set(WORLD.width / 2, 210);
     root.addChild(title, this.menu);
 

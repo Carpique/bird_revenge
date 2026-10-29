@@ -7,7 +7,6 @@ export type Lang = 'en' | 'pl';
 const PL = {
   // title screen
   'Bird Revenge': 'Zemsta Ptaka',
-  "Sun is shining, yet it's raining...": 'Słońce świeci, z nieba ...',
   Start: 'Start',
   Instructions: 'Instrukcja Obsługi',
   Training: 'Trening',
