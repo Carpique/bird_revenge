@@ -29,6 +29,11 @@ export class GlowText extends Container {
     this.body.text = text;
   }
 
+  /** height of the text itself, without the halo */
+  get textHeight() {
+    return this.body.height;
+  }
+
   /** the text's colour (the halo stays) */
   set fill(fill: string) {
     this.body.style.fill = fill;
