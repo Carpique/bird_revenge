@@ -3,9 +3,13 @@ import { audio } from '../audio/audio';
 import { birdDef } from '../characters/bird';
 import { WORLD } from '../config';
 import { CharacterSprite } from '../render/CharacterSprite';
-import { ACCENT, INK, TEXT_FONT } from './fonts';
+import { BIG_FILL, BIG_OUTLINE, bigTextStyle, INK, TEXT_FONT } from './fonts';
 import { GlowText } from './GlowText';
 import { t, type Msg } from './i18n';
+
+/** Plain black items; the selected one in the big-text colours swapped (red, yellow outline, black shadow). */
+const ITEM_STYLE: TextStyleOptions = { fontFamily: TEXT_FONT, fontSize: 54, fill: INK };
+const SELECTED_STYLE = bigTextStyle(54, TEXT_FONT, BIG_OUTLINE, BIG_FILL);
 
 export interface MenuItem {
   label: Msg;
@@ -41,8 +45,8 @@ export class Menu extends Container {
     this.items = items;
     for (const c of this.list.removeChildren()) c.destroy();
     items.forEach((item, i) => {
-      const style: TextStyleOptions = { fontFamily: TEXT_FONT, fontSize: 54, fill: INK };
-      const text = this.glow ? new GlowText(t(item.label), style) : new Text({ text: t(item.label), style });
+      const label = t(item.label);
+      const text = this.glow ? new GlowText(label, ITEM_STYLE) : new Text({ text: label, style: ITEM_STYLE });
       if (text instanceof Text) text.anchor.set(0.5);
       text.position.set(WORLD.width / 2, top + i * 82);
       text.eventMode = 'static';
@@ -58,10 +62,13 @@ export class Menu extends Container {
     this.selected = (i + this.items.length) % this.items.length;
     this.list.children.forEach((c, j) => {
       const text = c as Text | GlowText;
-      const fill = j === this.selected ? ACCENT : INK;
-      if (text instanceof GlowText) text.fill = fill;
-      else text.style.fill = fill;
-      text.scale.set(j === this.selected ? 1.08 : 1);
+      const on = j === this.selected;
+      if (text instanceof GlowText) {
+        text.setStyle(on ? SELECTED_STYLE : ITEM_STYLE);
+        // the selected item's outline already makes it stand out
+        text.glow = on ? 0.75 : 1; // halo opacity 0.6 instead of 0.8
+      } else text.style = on ? SELECTED_STYLE : ITEM_STYLE;
+      text.scale.set(on ? 1.08 : 1);
     });
   }
 

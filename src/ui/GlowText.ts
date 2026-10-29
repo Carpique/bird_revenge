@@ -1,6 +1,8 @@
 import { BlurFilter, Container, Text, type TextStyleOptions } from 'pixi.js';
 import { GLOW } from './fonts';
 
+const HALO_ALPHA = 0.8;
+
 /** Centred text with a soft light halo behind it (a blurred, thickly outlined copy), so it stands out on the dimmed game. */
 export class GlowText extends Container {
   private halo: Text;
@@ -14,7 +16,7 @@ export class GlowText extends Container {
       style: { ...style, fill: GLOW, stroke: { color: GLOW, width: size / 5, join: 'round' }, dropShadow: false, padding: size / 2 },
     });
     this.halo.filters = [new BlurFilter({ strength: size / 9, quality: 4 })];
-    this.halo.alpha = 0.8;
+    this.halo.alpha = HALO_ALPHA;
     this.body = new Text({ text, style });
     for (const t of [this.halo, this.body]) t.anchor.set(0.5);
     this.addChild(this.halo, this.body);
@@ -34,8 +36,13 @@ export class GlowText extends Container {
     return this.body.height;
   }
 
-  /** the text's colour (the halo stays) */
-  set fill(fill: string) {
-    this.body.style.fill = fill;
+  /** restyle the text (the halo stays) */
+  setStyle(style: TextStyleOptions) {
+    this.body.style = style;
+  }
+
+  /** halo strength, 1 = the default */
+  set glow(glow: number) {
+    this.halo.alpha = HALO_ALPHA * glow;
   }
 }
