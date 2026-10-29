@@ -58,8 +58,10 @@ export class Menu extends Container {
     this.select(selected);
   }
 
+  /** Highlight item `i` (wrapping round); none for -1 (the level select's grid has the keys instead). */
   select(i: number) {
-    this.selected = (i + this.items.length) % this.items.length;
+    this.selected = i === -1 ? -1 : (i + this.items.length) % this.items.length;
+    for (const c of this.cursors) c.visible = this.selected !== -1;
     this.list.children.forEach((c, j) => {
       const text = c as Text | GlowText;
       const on = j === this.selected;

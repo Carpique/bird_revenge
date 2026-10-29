@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Sprite, Text } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Sprite, Text, type Texture } from 'pixi.js';
 import { audio } from '../audio/audio';
 import { coinDef } from '../characters/coin';
 import { splatHalfWidth } from '../characters/poo';
@@ -131,6 +131,8 @@ export class Game {
     private app: Application,
     /** the level being played; change it with `loadLevel` */
     public level: LevelDef,
+    /** false: an off-screen game, not on the stage and not running, only for `snapshot` */
+    private live = true,
   ) {
     app.renderer.background.color = scenery.skyColor;
     // resting bodies sleep until something touches them (the bird never does)
@@ -191,9 +193,23 @@ export class Game {
     this.dim.alpha = 0;
     this.hud.addChild(this.scoreBox, this.coinBox, this.hearts, this.dim, this.pausedText, this.gameOverText, this.completeText);
 
-    app.stage.addChild(this.root);
-    app.ticker.add((ticker) => this.update(ticker.deltaMS));
+    if (live) {
+      app.stage.addChild(this.root);
+      app.ticker.add((ticker) => this.update(ticker.deltaMS));
+    }
     this.restartLevel();
+  }
+
+  /** A picture of `level` as it starts, `width` px wide, without the score and lives (the level select's thumbnails). */
+  snapshot(level: LevelDef, width: number): Texture {
+    this.loadLevel(level);
+    return this.app.renderer.generateTexture({
+      target: this.world,
+      frame: new Rectangle(0, 0, WORLD.width, WORLD.height),
+      resolution: width / WORLD.width,
+      clearColor: scenery.skyColor,
+      antialias: true,
+    });
   }
 
   /** Ask the bird to squat and drop a poo (ignored while already squatting). */
@@ -244,7 +260,7 @@ export class Game {
     this.complete = false;
     this.completeT = 0;
     this.allSavedT = null;
-    audio.restoreMusic(config.audio.musicRestoreMs);
+    if (this.live) audio.restoreMusic(config.audio.musicRestoreMs);
     this.buildLevel();
     const start = this.birdStart();
     this.bird.respawn(start.x, start.y, false);

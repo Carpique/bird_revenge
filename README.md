@@ -67,7 +67,7 @@ base of the title screen's "Training": it is played once per letter, `training-A
 from the Esc menu), each with its letter spelled in coins (`src/level/letters.ts`) and completed by collecting them all. Coins are extra points, counted next to the score: place them
 from the `coin` tileset (`coin.tsj`, in the Project view) with the Insert Tile tool (T) on an object layer, and they show
 as coins in Tiled too; a point of class Coin works as well (its centre). To test a level, open `?level=<file name>` (without `.tmj`): it
-skips the start screen and plays only that level, again each time it's completed. With `npm run dev` running, saving a map swaps it into the running game.
+skips the start screen and plays only that level, again each time it's completed. With `npm run dev` running, saving a map swaps it into the running game. A new numbered map shows up in the level select by itself; `npm run build` draws the levels' thumbnails with headless Chrome (once after `npm install`: `npx puppeteer browsers install chrome-headless-shell`).
 
 ## Tests
 

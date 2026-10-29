@@ -2,7 +2,9 @@ import { Application } from 'pixi.js';
 import { audio } from './audio/audio';
 import { config, loadSavedConfig } from './config';
 import { Game } from './game/Game';
-import { firstLevel, levels, nextLevel, onLevelEdited, testLevelName, TRAINING } from './levels';
+import { firstLevel, gameLevels, levels, nextLevel, onLevelEdited, testLevelName, TRAINING } from './levels';
+import { markCompleted, unlockedLevels } from './levels/progress';
+import { Thumbnails } from './level/thumbnails';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
 import { FlapDetector, type FlapOutput } from './gestures/FlapDetector';
 import { PostureDetector, type PostureOutput } from './gestures/PostureDetector';
@@ -131,8 +133,12 @@ async function main() {
 
   const game = new Game(app, firstLevel());
   let allLevels = levels;
-  // all friends saved: on to the next level, keeping score, lives back to full (training, or testing a level from the URL: that level again)
-  game.onLevelComplete = () => game.startNextLevel(testLevelName ? game.level : nextLevel(allLevels, game.level.name));
+  // all friends saved: remembered (it opens the next one in the level select), and on to the next level, keeping score,
+  // lives back to full (training, or testing a level from the URL: that level again, not remembered)
+  game.onLevelComplete = () => {
+    if (!testLevelName) markCompleted(game.level.name);
+    game.startNextLevel(testLevelName ? game.level : nextLevel(allLevels, game.level.name));
+  };
   // saving the level being played in Tiled while the dev server runs swaps it in, without reloading the page
   onLevelEdited((next) => {
     allLevels = next;
@@ -140,7 +146,14 @@ async function main() {
     // a map saved broken is left out: the game keeps the version it has
     if (level && JSON.stringify(level) !== JSON.stringify(game.level)) game.loadLevel(level);
   });
-  const splash = new SplashScreen(app, levels.has(TRAINING));
+  // the level select: the latest version of the levels, the finished ones and the first one not finished pickable,
+  // that one selected (the last level once all are finished)
+  const levelChoice = () => {
+    const list = gameLevels(allLevels);
+    const unlocked = unlockedLevels(list.map((l) => l.name));
+    return { levels: list, unlocked, current: list.filter((l) => unlocked.has(l.name)).at(-1)?.name };
+  };
+  const splash = new SplashScreen(app, new Thumbnails(app), levelChoice, levels.has(TRAINING));
   app.stage.addChild(splash);
   const pauseMenu = new PauseMenu(app);
   app.stage.addChild(pauseMenu);
@@ -172,7 +185,11 @@ async function main() {
     state = 'calibrating';
   };
 
-  splash.onStart = recalibrate;
+  // a game from the level select starts on the level picked (none to pick: the first level)
+  splash.onStart = (level) => {
+    if (level) game.reset(level);
+    recalibrate();
+  };
   // the training letters, A to Z and round, until quit from the pause menu (which goes back to the first level)
   splash.onTraining = () => {
     game.reset(allLevels.get(TRAINING) ?? levels.get(TRAINING));

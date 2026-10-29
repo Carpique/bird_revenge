@@ -11,6 +11,7 @@ const PL = {
   Instructions: 'Instrukcja Obsługi',
   Training: 'Trening',
   Back: 'Wróć',
+  'Select level': 'Wybierz Poziom',
   'Flap both arms to fly up.': 'Machaj obiema rękami, żeby lecieć w górę.',
   'Tilt your arms to fly sideways — flap them tilted to climb that way.':
     'Przechyl ręce, żeby lecieć w bok — machaj nimi przechylonymi, żeby wznosić się w tę stronę.',

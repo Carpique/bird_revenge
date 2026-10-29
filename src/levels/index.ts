@@ -49,6 +49,9 @@ export const TRAINING = `${TRAINING_BASE}-${LETTERS[0]}`;
 /** Whether `name` is one of the game's numbered levels, rather than one played on its own like training. */
 const isNumbered = (name: string) => /^\d+$/.test(name);
 
+/** The game's numbered levels in `all` (`levels`, or a newer version from `onLevelEdited`), in play order: the level select's list. */
+export const gameLevels = (all: Map<string, LevelDef>): LevelDef[] => [...all.values()].filter((l) => isNumbered(l.name));
+
 /** An empty screen, played when no level loads. */
 const EMPTY: LevelDef = { name: 'empty', width: 1280, height: 720, birdStart: null, villains: [], friends: [], coins: [], bodies: [], branches: [], joints: [], buttons: [] };
 
@@ -73,7 +76,7 @@ export function nextLevel(all: Map<string, LevelDef>, name: string): LevelDef {
   if (nextLetter) return nextLetter;
   const again = isNumbered(name) ? undefined : all.get(name);
   if (again) return again;
-  const order = [...all.values()].filter((l) => isNumbered(l.name));
+  const order = gameLevels(all);
   if (!order.length) return EMPTY;
   // a level that's gone (renamed while playing): the first
   return order[(order.findIndex((l) => l.name === name) + 1) % order.length];

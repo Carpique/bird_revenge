@@ -138,6 +138,8 @@ Even with heuristics we need recorded data: to tune thresholds, to test detector
 
 **Splash screen** [DECIDED]: title "Bird Revenge" (Luckiest Guy, bouncy cartoon capitals, used for all big text; other text is Peralta: black, the selected menu item red with a yellow outline and a black shadow), menu **Start / Instructions / Training** (Training plays `training.tmj` once per letter, A to Z and round, its coins spelling the letter in a fat 7×7 bitmap font, between the HUD and the ground, a coin apart; collecting them all completes it; left through the Esc menu; arrow keys + Enter, Esc back, or mouse), the game's sky colour and the same `Ground` as the game. Camera and pose model load in the background while it is shown.
 
+**Level select** [DECIDED]: "Start" opens "Select level" ("Wybierz Poziom", big-text style): the numbered levels in play order as thumbnails of their first frame, three to a row, rounded borders (the selected one in red and yellow), in a panel that scrolls when they don't fit (wheel, drag, following the keys; a bar on the right). The finished levels and the first one not finished can be picked, that one selected; the rest are grey with a padlock and shake when chosen. Finished levels are remembered by name in `localStorage` (`src/levels/progress.ts`), so a level added between finished ones opens without locking those after it; testing a level from the URL doesn't count. The game goes on from the level picked as before: the next one after each, round robin. Arrow keys / W A S D + Enter, down past the last row to "Back", Esc back, or mouse. The list is whatever `src/levels/` holds. Thumbnails are the game's own drawing of the level (an off-screen `Game`, `Game.snapshot`): `vite build` draws them in headless Chrome (puppeteer, `tools/level-thumbnails.ts` + `tools/thumbnails.html`) and ships them as WebP images, so the built game doesn't draw every level for the list; the dev server draws them in the game itself, again when a map is saved (also the build's fallback if Chrome can't start).
+
 **Languages** [DECIDED]: English and Polish ("Zemsta Ptaka"). Only user-facing text is translated: the code passes the English text to `t()` (`src/ui/i18n.ts`), which looks up the Polish in one typed table, so a missing translation is a type error. A flag in the top-left corner of the splash screen (hidden during the game) switches language; the choice is saved in `localStorage`, defaulting to Polish. Debug panel, tuning GUI and the status line stay English.
 
 **Calibration dialog** [DECIDED, replaces the v0.1 full-screen camera view]:
@@ -203,12 +205,12 @@ src/config.ts               every tunable number (+ save/load to localStorage)
 src/pose/                   camera.ts, PoseTracker.ts (MediaPipe, One-Euro smoothing), landmarks.ts, types.ts
 src/gestures/               geometry.ts, FlapDetector.ts, TiltDetector.ts, PostureDetector.ts, ShootDetector.ts, VisibilityMonitor.ts, Calibration.ts  (pure TS, no DOM)
 src/game/                   Game.ts (Pixi stage + Matter engine + scoring), Bird.ts, flight.ts (tilt + hover physics), posture.ts (posture control), Villain.ts, Poo.ts, Background.ts (sun, clouds + Ground), Ground.ts (shared with the splash), physics.ts
-src/level/                  types.ts (LevelDef), tiled.ts (Tiled map → LevelDef), build.ts (→ Matter bodies/constraints), LevelView.ts (Rough.js drawing)
-src/levels/                 *.tmj Tiled maps, bird-revenge.tiled-project (object classes), index.ts (level choice, hot swap)
+src/level/                  types.ts (LevelDef), tiled.ts (Tiled map → LevelDef), build.ts (→ Matter bodies/constraints), LevelView.ts (Rough.js drawing), thumbnails.ts (level select pictures)
+src/levels/                 *.tmj Tiled maps, bird-revenge.tiled-project (object classes), index.ts (level choice, hot swap), progress.ts (finished levels)
 src/characters/, src/scenery/   art definition files (§6)
 src/render/                 assets.ts (loads everything named in the definitions), CharacterSprite.ts, fitWorld.ts (scales the 1280x720 world into the window)
 src/input/                  controls.ts (Controls interface), keyboard.ts
-src/ui/                     SplashScreen.ts (title + menu), i18n.ts (English → Polish texts), LanguageButton.ts (flag), FrameGuide.ts (calibration dialog, out-of-frame corner box, countdown overlay), fonts.ts, DebugPanel.ts (D), Tuning.ts (G), Recorder.ts (R)
+src/ui/                     SplashScreen.ts (title + menu), LevelSelect.ts, i18n.ts (English → Polish texts), LanguageButton.ts (flag), FrameGuide.ts (calibration dialog, out-of-frame corner box, countdown overlay), fonts.ts, DebugPanel.ts (D), Tuning.ts (G), Recorder.ts (R)
 tests/                      synthetic.ts (synthetic pose generator), gestures.test.ts
 tools/generate-placeholder-art.mjs, scripts/copy-mediapipe-wasm.mjs
 ```
