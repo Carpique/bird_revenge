@@ -69,6 +69,45 @@
                  "width":40,
                  "x":96,
                  "y":432
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":24,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":1152,
+                 "y":528
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":25,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":1152,
+                 "y":608
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":26,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":1152,
+                 "y":448
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -147,8 +186,8 @@
                  "type":"BirdStart",
                  "visible":true,
                  "width":0,
-                 "x":1100,
-                 "y":606
+                 "x":1136,
+                 "y":160
                 }, 
                 {
                  "height":0,
@@ -161,14 +200,20 @@
                          "y":0
                         }, 
                         {
-                         "x":544,
+                         "x":800,
                          "y":0
+                        }],
+                 "properties":[
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
                         }],
                  "rotation":0,
                  "type":"Villain",
                  "visible":true,
                  "width":0,
-                 "x":368,
+                 "x":240,
                  "y":640
                 }, 
                 {
@@ -198,6 +243,12 @@
                          "x":-320,
                          "y":0
                         }],
+                 "properties":[
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":20
+                        }],
                  "rotation":0,
                  "type":"Villain",
                  "visible":true,
@@ -212,7 +263,7 @@
          "y":0
         }],
  "nextlayerid":8,
- "nextobjectid":24,
+ "nextobjectid":27,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",
