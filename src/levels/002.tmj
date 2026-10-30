@@ -71,32 +71,6 @@
                  "y":112
                 }, 
                 {
-                 "gid":1,
-                 "height":40,
-                 "id":24,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":64,
-                 "y":416
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":26,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":64,
-                 "y":336
-                }, 
-                {
                  "height":0,
                  "id":28,
                  "name":"bunny",
@@ -182,32 +156,6 @@
                  "width":40,
                  "x":1184,
                  "y":112
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":33,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":1184,
-                 "y":416
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":34,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":1184,
-                 "y":336
                 }, 
                 {
                  "height":16,
