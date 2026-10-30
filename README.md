@@ -22,16 +22,14 @@ your arms are visible, raised ones included, down to the elbows plus a bit of th
 | Fly sideways | tilt the arms (one hand lower than the other): the bird flies sideways towards the lower hand, faster the more you tilt; arms held out (a tilted T) keep its altitude, flapping tilted climbs (a little slower than flapping level) | ← → |
 | Poo | shoot: raise either leg sideways (the poo drops straight down) | ↓ |
 
-The controls above are the default (flapping mode). **Posture control** is the alternative: untick "Posture: Flapping" in the tuning panel (**G**). It replaces flapping, tilt and hover, and the arms work like this:
+The controls above are the default (flapping mode). **Pointing control** is the alternative: untick "Flapping (off: pointing)" in the tuning panel (**G**, section *pointing*). It replaces flapping, tilt and hover (pooping stays the same), and the arms work like this:
 
 | Arms | Bird |
 |---|---|
-| both up | flies straight up, faster the higher they are |
-| one up, the other level | flies sideways towards the level arm; the raised arm sets the speed |
-| one up, the other in between | flies diagonally, more upwards as the arms get closer in height |
-| one up, the other below level | loses lift and dives towards the lower arm, steeper the lower it is; the raised arm still sets the speed |
-| both level (a T) | parachute: slow sink |
-| both down | free fall; sideways and upward speed fade |
+| both hanging down | no force: rests, or falls freely with its momentum fading |
+| both straight, pointing the same way | flies that way at a fixed cruising speed (almost any direction, up, sideways, diagonally, down) |
+| spread out in a T (a sloppy T, slightly raised or drooping, counts) | hovers in place |
+| a tilted T (one hand clearly lower) | moves slowly sideways towards the lower hand, keeping its altitude: for precise positioning |
 
 Hotkeys: **D** debug panel · **G** tuning panel · **Esc** keyboard-only mode · **C** recalibrate ·
 **Space** / **P** pause in game (also automatic when the window loses focus; camera and pose tracking are switched off while paused or unfocused) · **R** start/stop recording landmarks to a JSON file.

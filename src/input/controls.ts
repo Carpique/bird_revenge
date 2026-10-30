@@ -1,4 +1,4 @@
-import type { PostureIntent } from '../game/posture';
+import type { PointingIntent } from '../game/pointing';
 
 /** What the bird is told to do this frame, from pose and/or keyboard. */
 export interface Controls {
@@ -18,8 +18,8 @@ export interface Controls {
   wingPhase: number | null;
   /** keyboard flap held (bird plays the flap loop) */
   flapping: boolean;
-  /** posture control (`config.posture.flapping` off): what the arm angles ask for; null when off or no arms in view */
-  posture: PostureIntent | null;
+  /** pointing control (`config.pointing.flapping` off): what the arms ask for; null when off or no arms in view */
+  pointing: PointingIntent | null;
 }
 
-export const noControls = (): Controls => ({ lift: 0, tilt: 0, hover: 0, wingPhase: null, flapping: false, posture: null });
+export const noControls = (): Controls => ({ lift: 0, tilt: 0, hover: 0, wingPhase: null, flapping: false, pointing: null });

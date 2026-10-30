@@ -153,8 +153,7 @@ export const config = {
    * arm straight; below horizontal, a roughly straight line through both arms, or both lowered by about the same
    * angle. Level or tilted. In flapping mode, in a T or higher the bird keeps its altitude (`tilt.holdDrag`); lowered,
    * it holds back less and less of gravity, so it sinks faster the lower the arms (`holdDroop` → `fallDroop`).
-   * Tilted, it also flies sideways. Posture control's T parachute sinks slowly instead, using `sinkSpeed` and
-   * `parachuteDrag`.
+   * Tilted, it also flies sideways.
    */
   hover: {
     /** arms below horizontal: how far the arm points may stray from a straight line (perpendicular RMS / along-line RMS) */
@@ -177,48 +176,52 @@ export const config = {
     enterMs: 150,
     /** ...and be gone this long to stop */
     exitMs: 150,
-    /** posture control's T parachute: fall speed (px per physics step; normal free fall tops out around 7) */
-    sinkSpeed: 1.5,
-    /** posture control's T parachute: fraction of the fall speed above `sinkSpeed` braked away per physics step */
-    parachuteDrag: 0.24,
   },
 
   /**
-   * "posture" control, the alternative to the default flapping + tilt + hover (`flapping` off). Each arm's angle
-   * above or below horizontal steers the bird directly:
-   * - the higher arm, raised above horizontal, sets the speed (straight up = full speed)
-   * - the other arm sets the direction: level → sideways towards it, as high as the speed arm → straight up,
-   *   in between → diagonally; below horizontal → the lift is lost and the bird dives towards it, steeper the lower it is
-   * - both arms level (a T) → parachute (as the hover: `hover.sinkSpeed`, `hover.parachuteDrag`)
-   * - no arm above horizontal, one below → free fall, the momentum fades
+   * "pointing" control, the alternative to the default flapping + tilt + hover (`flapping` off). Arm directions are
+   * shoulder → wrist, as seen on the screen:
+   * - both arms hanging down → no force: the bird rests, or falls freely with its momentum fading
+   * - both arms pointing the same way → the bird flies that way at `cruiseSpeed` (almost any direction)
+   * - a T (arms spread out, roughly level) → hover: the bird keeps its place in the air
+   * - a tilted T → the bird moves slowly (`driftSpeed`) sideways towards the lower hand, keeping its altitude
+   * Pooping is the same as in flapping mode (`shoot`).
    */
-  posture: {
-    /** on (default): flapping + tilt + hover. off: posture control */
+  pointing: {
+    /** on (default): flapping + tilt + hover. off: pointing control */
     flapping: true,
-    /** EMA factor for the arm angles per pose frame (lower = steadier, laggier) */
+    /** EMA factor for the arm directions per pose frame (lower = steadier, laggier) */
     smoothing: 0.4,
-    /** arm angles within ±this (deg) of horizontal count as level */
-    deadZone: 10,
-    /** arm angle above horizontal (deg) for full speed; also the below-horizontal angle for a straight-down dive */
-    fullRaise: 80,
-    /** flying speed at full raise, px per physics step */
-    flySpeed: 8,
-    /** dive speed at full raise, px per physics step (gravity adds to it; capped by physics.maxSpeed) */
-    diveSpeed: 10,
-    /** how quickly the bird reaches the flying/dive speed, px/s² */
+    /** arms within this (deg) of straight down are hanging: rest */
+    restCone: 35,
+    /** T: each arm may be raised or lowered this much (deg) from level */
+    tMaxArm: 65,
+    /** T: the two arms' average may be raised or lowered this much (deg) from level (a shallow V or a droop) */
+    tMaxRaise: 40,
+    /** T: tilted less than this (deg, half the difference of the arms' angles) is a level T: hover; more: drift */
+    tiltDeadZone: 15,
+    /** once drifting, keeps drifting down to `tiltDeadZone` minus this (deg), so it doesn't flicker at the edge */
+    tiltHysteresis: 5,
+    /** pointing: the two arms may differ in direction by up to this (deg) and still count as pointing together */
+    parallelMax: 40,
+    /** a new pose must hold this long (ms) before the bird follows it */
+    enterMs: 100,
+    /** arms matching no pose keep the current one for this long (ms), then the bird rests */
+    ambiguousMs: 400,
+    /** flying speed while pointing, px per physics step */
+    cruiseSpeed: 7,
+    /** tilted T: sideways speed, px per physics step */
+    driftSpeed: 1.8,
+    /** how quickly the bird reaches its speed (or stops, in the hover), px/s² */
     accel: 1800,
-    /** free fall: fraction of the sideways and upward speed lost per physics step */
-    fallDrag: 0.08,
-    /** parachute: fraction of the sideways speed lost per physics step (on top of `airFriction`) */
-    parachuteSideDrag: 0.01,
-    /** Matter.js frictionAir while flying, diving or in the parachute (free fall: physics.birdAirFriction) */
+    /** rest: fraction of the sideways and upward speed lost per physics step */
+    restDrag: 0.08,
+    /** Matter.js frictionAir while flying, hovering or drifting (rest: physics.birdAirFriction) */
     airFriction: 0.01,
-    /** how far the bird leans (deg) flying flat out sideways; up to twice that in a straight-down dive */
-    leanDeg: 30,
-    /** wing flapping while flying (up or sideways), as a multiple of the flap animation's fps: at the slowest... */
-    flapRateMin: 0.6,
-    /** ...and at full speed */
-    flapRateMax: 1.4,
+    /** how far the bird leans (deg) flying sideways; a drift leans less */
+    leanDeg: 25,
+    /** wing flapping while flying, as a multiple of the flap animation's fps */
+    flapRate: 1.4,
   },
 
   physics: {

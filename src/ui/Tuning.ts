@@ -56,20 +56,22 @@ const RANGES: Record<string, [number, number, number]> = {
   'hover.maxArmSpeed': [0, 600, 10],
   'hover.enterMs': [0, 1000, 10],
   'hover.exitMs': [0, 1000, 10],
-  'hover.sinkSpeed': [0, 8, 0.1],
-  'hover.parachuteDrag': [0, 1, 0.01],
-  'posture.smoothing': [0.05, 1, 0.05],
-  'posture.deadZone': [0, 30, 1],
-  'posture.fullRaise': [20, 90, 1],
-  'posture.flySpeed': [0, 20, 0.5],
-  'posture.diveSpeed': [0, 20, 0.5],
-  'posture.accel': [100, 6000, 100],
-  'posture.fallDrag': [0, 0.5, 0.01],
-  'posture.parachuteSideDrag': [0, 0.2, 0.005],
-  'posture.airFriction': [0, 0.2, 0.005],
-  'posture.leanDeg': [0, 60, 1],
-  'posture.flapRateMin': [0.1, 3, 0.05],
-  'posture.flapRateMax': [0.1, 3, 0.05],
+  'pointing.smoothing': [0.05, 1, 0.05],
+  'pointing.restCone': [5, 80, 1],
+  'pointing.tMaxArm': [10, 90, 1],
+  'pointing.tMaxRaise': [0, 80, 1],
+  'pointing.tiltDeadZone': [0, 60, 1],
+  'pointing.tiltHysteresis': [0, 20, 1],
+  'pointing.parallelMax': [5, 90, 1],
+  'pointing.enterMs': [0, 1000, 10],
+  'pointing.ambiguousMs': [0, 2000, 50],
+  'pointing.cruiseSpeed': [0, 20, 0.5],
+  'pointing.driftSpeed': [0, 10, 0.1],
+  'pointing.accel': [100, 6000, 100],
+  'pointing.restDrag': [0, 0.5, 0.01],
+  'pointing.airFriction': [0, 0.2, 0.005],
+  'pointing.leanDeg': [0, 60, 1],
+  'pointing.flapRate': [0.1, 3, 0.05],
   'visibility.minLandmarkVisibility': [0, 1, 0.05],
   'visibility.frameMargin': [0, 0.1, 0.005],
   'visibility.emaAlpha': [0.05, 1, 0.05],
@@ -118,7 +120,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'audio.fallMs': [100, 5000, 50],
 };
 
-const SECTIONS = ['posture', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'friend', 'coin', 'player', 'audio'] as const;
+const SECTIONS = ['pointing', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'friend', 'coin', 'player', 'audio'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {
@@ -133,8 +135,8 @@ export class Tuning {
       for (const key of Object.keys(obj)) {
         const r = RANGES[`${section}.${key}`];
         const controller =
-          section === 'posture' && key === 'flapping'
-            ? folder.add(obj, key).name('Posture: Flapping')
+          section === 'pointing' && key === 'flapping'
+            ? folder.add(obj, key).name('Flapping (off: pointing)')
             : r
               ? folder.add(obj, key, r[0], r[1], r[2])
               : folder.add(obj, key);

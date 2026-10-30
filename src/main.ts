@@ -7,7 +7,7 @@ import { markCompleted, unlockedLevels } from './levels/progress';
 import { Thumbnails } from './level/thumbnails';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
 import { FlapDetector, type FlapOutput } from './gestures/FlapDetector';
-import { PostureDetector, type PostureOutput } from './gestures/PostureDetector';
+import { PointingDetector, type PointingOutput } from './gestures/PointingDetector';
 import { TiltDetector, type TiltOutput } from './gestures/TiltDetector';
 import { ShootDetector, type ShootOutput } from './gestures/ShootDetector';
 import { VisibilityMonitor, type VisibilityOutput } from './gestures/VisibilityMonitor';
@@ -86,7 +86,7 @@ async function main() {
   let flapOut: FlapOutput | null = null;
   let shootOut: ShootOutput | null = null;
   let tiltOut: TiltOutput | null = null;
-  let postureOut: PostureOutput | null = null;
+  let pointingOut: PointingOutput | null = null;
   let calibStatus: CalibrationStatus | null = null;
   let poseControls: Controls = noControls();
   let lastPoseT = 0;
@@ -170,7 +170,7 @@ async function main() {
   const flap = new FlapDetector();
   const shoot = new ShootDetector();
   const tilt = new TiltDetector();
-  const posture = new PostureDetector();
+  const pointing = new PointingDetector();
   const calibration = new Calibration();
 
   const startCountdown = () => {
@@ -371,7 +371,7 @@ async function main() {
       flapOut = flap.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible);
       shootOut = shoot.update(f, vis.parts.torso.visible);
       tiltOut = tilt.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible, flapOut);
-      postureOut = posture.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible);
+      pointingOut = pointing.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible);
       debug.record(now, flapOut, shootOut);
     }
 
@@ -394,16 +394,16 @@ async function main() {
           state = 'outOfFrame';
           break;
         }
-        if (f && flapOut && shootOut && tiltOut && postureOut) {
-          // posture control replaces flapping, tilt and hover; the wings still follow the arms
-          const byPosture = !config.posture.flapping;
+        if (f && flapOut && shootOut && tiltOut && pointingOut) {
+          // pointing control replaces flapping, tilt and hover; the wings still follow the arms
+          const byPointing = !config.pointing.flapping;
           poseControls = {
-            lift: byPosture ? 0 : flapOut.lift,
-            tilt: byPosture ? 0 : tiltOut.tilt,
-            hover: byPosture ? 0 : tiltOut.hold,
+            lift: byPointing ? 0 : flapOut.lift,
+            tilt: byPointing ? 0 : tiltOut.tilt,
+            hover: byPointing ? 0 : tiltOut.hold,
             wingPhase: flapOut.wingPhase,
             flapping: false,
-            posture: byPosture ? postureOut.intent : null,
+            pointing: byPointing ? pointingOut.intent : null,
           };
           lastPoseT = now;
           if (shootOut.triggered) game.requestPoo();
@@ -463,7 +463,7 @@ async function main() {
       flap: flapOut,
       shoot: shootOut,
       tilt: tiltOut,
-      posture: postureOut,
+      pointing: pointingOut,
       fps: tracker?.fps ?? 0,
       inferenceMs: tracker?.inferenceMs ?? 0,
       now,

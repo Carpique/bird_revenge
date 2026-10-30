@@ -1,5 +1,5 @@
 import type { FlapOutput } from '../gestures/FlapDetector';
-import type { PostureOutput } from '../gestures/PostureDetector';
+import type { PointingOutput } from '../gestures/PointingDetector';
 import type { ShootOutput } from '../gestures/ShootDetector';
 import type { TiltOutput } from '../gestures/TiltDetector';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
@@ -53,7 +53,7 @@ export class DebugPanel {
     flap: FlapOutput | null;
     shoot: ShootOutput | null;
     tilt: TiltOutput | null;
-    posture: PostureOutput | null;
+    pointing: PointingOutput | null;
     fps: number;
     inferenceMs: number;
     now: number;
@@ -161,12 +161,16 @@ export class DebugPanel {
         ? `spread line ${info.tilt.line ? n(info.tilt.line.tilt) : '    -'}° bend ${info.tilt.line ? info.tilt.line.bend.toFixed(2) : '-'}` +
           `  ${info.tilt.spread ? `HOVER ${info.tilt.hold.toFixed(2)}` : info.tilt.spreadPose ? 'pose' : 'no'}`
         : '',
-      info.posture
-        ? `posture L ${info.posture.left === null ? '    -' : n(info.posture.left)}° R ${info.posture.right === null ? '    -' : n(info.posture.right)}°` +
-          (info.posture.intent
-            ? `  ${info.posture.intent.mode.toUpperCase()} speed ${info.posture.intent.speed.toFixed(2)} dir ${info.posture.intent.dir} at ${n(info.posture.intent.angle)}°`
+      info.pointing
+        ? `pointing L ${info.pointing.left === null ? '    -' : n(info.pointing.left)}° R ${info.pointing.right === null ? '    -' : n(info.pointing.right)}°` +
+          `  ${info.pointing.candidate?.mode ?? '?'}` +
+          (info.pointing.intent
+            ? ` → ${info.pointing.intent.mode.toUpperCase()}` +
+              (info.pointing.intent.mode === 'fly' || info.pointing.intent.mode === 'drift'
+                ? ` at ${n((Math.atan2(info.pointing.intent.dy, info.pointing.intent.dx) * 180) / Math.PI)}°`
+                : '')
             : '') +
-          (config.posture.flapping ? '  (off)' : '')
+          (config.pointing.flapping ? '  (off)' : '')
         : '',
       '',
       vis ? 'parts ' + PART_NAMES.map((p) => `${p}:${vis.parts[p].visible ? '✓' : '✗'}`).join(' ') : '',

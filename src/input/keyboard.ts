@@ -40,8 +40,8 @@ export class Keyboard {
       hover: hover || side ? 1 : base.hover,
       wingPhase: flap ? null : base.wingPhase,
       flapping: flap || base.flapping,
-      // ← → and Shift are the keyboard's own sideways flight and hover, so they take over from the posture
-      posture: side || hover ? null : base.posture,
+      // the keys are the keyboard's own flap, sideways flight and hover, so they take over from pointing
+      pointing: null,
     };
   }
 }
