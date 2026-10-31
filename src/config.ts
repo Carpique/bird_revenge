@@ -179,7 +179,7 @@ export const config = {
   },
 
   /**
-   * "pointing" control, the alternative to the default flapping + tilt + hover (`flapping` off). Arm directions are
+   * "pointing" control, the default (`flapping` off); the alternative is flapping + tilt + hover. Arm directions are
    * shoulder → wrist, as seen on the screen:
    * - both arms hanging down → no force: the bird rests, or falls freely with its momentum fading
    * - both arms pointing the same way → the bird flies that way at `cruiseSpeed` (almost any direction)
@@ -188,8 +188,8 @@ export const config = {
    * Pooping is the same as in flapping mode (`shoot`).
    */
   pointing: {
-    /** on (default): flapping + tilt + hover. off: pointing control */
-    flapping: true,
+    /** off (default): pointing control. on: flapping + tilt + hover */
+    flapping: false,
     /** EMA factor for the arm directions per pose frame (lower = steadier, laggier) */
     smoothing: 0.4,
     /** arms within this (deg) of straight down are hanging: rest */

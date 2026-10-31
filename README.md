@@ -1,6 +1,6 @@
 # Bird Revenge
 
-A browser game controlled by your body: flap your arms to fly, raise a leg sideways (the "shoot" pose) to drop a poo on the villain.
+A browser game controlled by your body: point your arms to fly (or flap them, in flapping mode), raise a leg sideways (the "shoot" pose) to drop a poo on the villain.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design.
 
 ## Run
@@ -15,14 +15,7 @@ your arms are visible, raised ones included, down to the elbows plus a bit of th
 
 ## Controls
 
-| Action | Body | Keyboard |
-|---|---|---|
-| Flap / fly up | flap both arms (faster, bigger = more lift); right after the last flap the bird falls gently at first | ↑ |
-| Hover | spread both arms out in a T, or raised into a V (up to ~45°), held still: the bird keeps its altitude; lowering both arms evenly below horizontal lets it sink, faster the lower they go (free fall at ~60° down) | Shift |
-| Fly sideways | tilt the arms (one hand lower than the other): the bird flies sideways towards the lower hand, faster the more you tilt; arms held out (a tilted T) keep its altitude, flapping tilted climbs (a little slower than flapping level) | ← → |
-| Poo | shoot: raise either leg sideways (the poo drops straight down) | ↓ |
-
-The controls above are the default (flapping mode). **Pointing control** is the alternative: untick "Flapping (off: pointing)" in the tuning panel (**G**, section *pointing*). It replaces flapping, tilt and hover (pooping stays the same), and the arms work like this:
+By default the arms steer the bird by **pointing** (directions as seen on screen, shoulder → wrist):
 
 | Arms | Bird |
 |---|---|
@@ -30,6 +23,16 @@ The controls above are the default (flapping mode). **Pointing control** is the 
 | both straight, pointing the same way | flies that way at a fixed cruising speed (almost any direction, up, sideways, diagonally, down) |
 | spread out in a T (a sloppy T, slightly raised or drooping, counts) | hovers in place |
 | a tilted T (one hand clearly lower) | moves slowly sideways towards the lower hand, keeping its altitude: for precise positioning |
+| a leg raised sideways (the shoot pose) | poos (the poo drops straight down) |
+
+**Flapping mode** is the alternative: tick "Flapping (off: pointing)" in the tuning panel (**G**, section *pointing*). It replaces pointing with flapping, tilt and hover (pooping stays the same). The keyboard works the same in both modes:
+
+| Action | Body (flapping mode) | Keyboard |
+|---|---|---|
+| Flap / fly up | flap both arms (faster, bigger = more lift); right after the last flap the bird falls gently at first | ↑ |
+| Hover | spread both arms out in a T, or raised into a V (up to ~45°), held still: the bird keeps its altitude; lowering both arms evenly below horizontal lets it sink, faster the lower they go (free fall at ~60° down) | Shift |
+| Fly sideways | tilt the arms (one hand lower than the other): the bird flies sideways towards the lower hand, faster the more you tilt; arms held out (a tilted T) keep its altitude, flapping tilted climbs (a little slower than flapping level) | ← → |
+| Poo | shoot: raise either leg sideways (the poo drops straight down) | ↓ |
 
 Hotkeys: **D** debug panel · **G** tuning panel · **Esc** keyboard-only mode · **C** recalibrate ·
 **Space** / **P** pause in game (also automatic when the window loses focus; camera and pose tracking are switched off while paused or unfocused) · **R** start/stop recording landmarks to a JSON file.
