@@ -91,15 +91,15 @@ describe('Tiled levels', () => {
     expect(() => parseTiledMap('t', mapOf([{ type: 'Friend', width: 10, height: 10 }]))).toThrow('must be a point');
   });
 
-  it('reads coins: points, and tiles from the coin tileset (centred on the image)', () => {
+  it('reads coins: points, and tiles from the icons tileset (centred on the image)', () => {
     const map = mapOf([
       { type: 'Coin', x: 10, y: 20, point: true },
-      // bottom-left aligned (the default): the image spans x 100..140, y 160..200
-      { gid: 1, x: 100, y: 200, width: 40, height: 40 },
+      // bottom-centre aligned: the image spans x 100..140, y 160..200
+      { gid: 1, x: 120, y: 200, width: 40, height: 40 },
       // flipped horizontally: still a coin
-      { gid: (1 + 0x80000000) >>> 0, x: 300, y: 300, width: 40, height: 40 },
+      { gid: (1 + 0x80000000) >>> 0, x: 320, y: 300, width: 40, height: 40 },
     ]);
-    map.tilesets = [{ firstgid: 1, source: 'coin.tsj' }];
+    map.tilesets = [{ firstgid: 1, source: 'icons.tsj' }];
     expect(parseTiledMap('t', map, tilesets).coins).toEqual([
       { x: 10, y: 20 },
       { x: 120, y: 180 },
@@ -108,17 +108,21 @@ describe('Tiled levels', () => {
   });
 
   it('reads tile objects of embedded tilesets, by their alignment', () => {
-    const map = mapOf([{ gid: 11, x: 100, y: 100, width: 40, height: 40 }]);
-    map.tilesets = [{ firstgid: 10, objectalignment: 'center', tiles: [{ id: 1, type: 'Coin' }] }];
-    expect(parseTiledMap('t', map).coins).toEqual([{ x: 100, y: 100 }]);
+    const map = mapOf([{ gid: 11, x: 100, y: 100, width: 40, height: 40 }, { gid: 21, x: 100, y: 200, width: 40, height: 40 }]);
+    map.tilesets = [
+      { firstgid: 10, objectalignment: 'center', tiles: [{ id: 1, type: 'Coin' }] },
+      // unspecified: bottom left
+      { firstgid: 20, tiles: [{ id: 1, type: 'Coin' }] },
+    ];
+    expect(parseTiledMap('t', map).coins).toEqual([{ x: 100, y: 100 }, { x: 120, y: 180 }]);
   });
 
   it('rejects coins that are not points or tiles, and tiles of classes that are not actors', () => {
     expect(() => parseTiledMap('t', mapOf([{ type: 'Coin', width: 10, height: 10 }]))).toThrow('must be a point');
     const map = mapOf([{ gid: 1, type: 'Terrain', width: 40, height: 40 }]);
-    map.tilesets = [{ firstgid: 1, source: 'coin.tsj' }];
+    map.tilesets = [{ firstgid: 1, source: 'icons.tsj' }];
     expect(() => parseTiledMap('t', map, tilesets)).toThrow('only a Coin, Villain, Bat, Friend, BirdStart can be a tile');
-    expect(() => parseTiledMap('t', map)).toThrow('tileset "coin.tsj" isn\'t loaded');
+    expect(() => parseTiledMap('t', map)).toThrow('tileset "icons.tsj" isn\'t loaded');
   });
 
   it('reads each villain\'s throw delay, 0 for one who never throws', () => {
@@ -163,20 +167,20 @@ describe('Tiled levels', () => {
     expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', polyline: [{ x: 0, y: 0 }, { x: 9, y: 0 }], properties: [prop('pooDelay', 'float', -1)] }]))).toThrow("can't be negative");
   });
 
-  describe('actor tiles (actors.tsj, bottom-centre aligned)', () => {
-    /** a map with the actors tileset (gid: villain 1, bat 2, bunny 3, bird 4) and `objects` */
+  describe('actor tiles (icons.tsj, bottom-centre aligned)', () => {
+    /** a map with the icons tileset (gid: coin 1, villain 2, bat 3, bunny 4, bird 5) and `objects` */
     const actorMap = (objects: Partial<TiledObject>[]) => {
       const map = mapOf(objects);
-      map.tilesets = [{ firstgid: 1, source: 'actors.tsj' }];
+      map.tilesets = [{ firstgid: 1, source: 'icons.tsj' }];
       return map;
     };
     const size = (id: number) => {
-      const tile = (tilesets['actors.tsj'] as { tiles: { id: number; imagewidth: number; imageheight: number }[] }).tiles[id];
+      const tile = (tilesets['icons.tsj'] as { tiles: { id: number; imagewidth: number; imageheight: number }[] }).tiles[id];
       return { width: tile.imagewidth, height: tile.imageheight };
     };
-    const villain = { gid: 1, ...size(0) }, bat = { gid: 2, ...size(1) }, bunny = { gid: 3, ...size(2) }, bird = { gid: 4, ...size(3) };
+    const villain = { gid: 2, ...size(1) }, bat = { gid: 3, ...size(2) }, bunny = { gid: 4, ...size(3) }, bird = { gid: 5, ...size(4) };
 
-    it('has icons at the actors\' sizes in the game (else: npm run tiled-icons, and fix actors.tsj)', () => {
+    it('has icons at the actors\' sizes in the game (else: npm run tiled-icons, and fix icons.tsj)', () => {
       // the villain's is cut at his feet
       expect(villain.height).toBe(Math.round(villainDef.displayHeight * villainDef.anchor.y));
       expect(bat.height).toBe(batDef.displayHeight);

@@ -1,6 +1,6 @@
-// Draws the actors' icons for Tiled (`src/levels/tiles/*.png`, the tiles of `src/levels/actors.tsj`): each actor's first
+// Draws the actors' icons for Tiled (`src/levels/tiles/*.png`, the tiles of `src/levels/icons.tsj`): each actor's first
 // frame at its size in the game, so it shows in Tiled as it will in the game. Run `npm run tiled-icons` after changing
-// an actor's art or `displayHeight` (src/characters/), then fix the image sizes in actors.tsj if they changed.
+// an actor's art or `displayHeight` (src/characters/), then fix the image sizes in icons.tsj if they changed.
 // Uses headless Chrome (puppeteer), as the level thumbnails do.
 import { readFile, writeFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';

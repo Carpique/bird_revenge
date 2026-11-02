@@ -67,9 +67,9 @@ see `src/level/tiled.ts`). Saving all the Friends (standing on the ground or a s
 numbered levels (`001.tmj`, `002.tmj`, …) are played in number order, round and round; `training.tmj` is the
 base of the title screen's "Training": it is played once per letter, `training-A` to `training-Z` (A to Z and round, until quit
 from the Esc menu), each with its letter spelled in coins (`src/level/letters.ts`) and completed by collecting them all. Coins are extra points, counted next to the score: place them
-from the `coin` tileset (`coin.tsj`, in the Project view) with the Insert Tile tool (T) on an object layer, and they show
+from the `icons` tileset (`icons.tsj`, in the Project view) with the Insert Tile tool (T) on an object layer, and they show
 as coins in Tiled too; a point of class Coin works as well (its centre). The actors — Villain, Bat, Friend (bunny) and the
-bird's start — come from the `actors` tileset (`actors.tsj`) the same way and show as their sprites, placed by their feet (villain, bunny)
+bird's start — come from the same tileset and show as their sprites, placed by their feet (villain, bunny)
 or where they are drawn (bat, bird). A villain or bat also needs its `path` property set to a polyline without a class (a bat's can be a
 polygon, flown round and round): the villain walks its x range, the bat flies it from the point nearest the icon. Its icons are drawn from the
 sprites by `npm run tiled-icons` (redo it after changing an actor's art or size). To test a level, open `?level=<file name>` (without `.tmj`): it

@@ -6,29 +6,36 @@
      "width":1
     },
  "margin":0,
- "name":"actors",
+ "name":"icons",
  "objectalignment":"bottom",
  "spacing":0,
- "tilecount":4,
+ "tilecount":5,
  "tiledversion":"1.12.2",
  "tileheight":127,
  "tiles":[
         {
          "id":0,
+         "image":"tiles\/coin.png",
+         "imageheight":40,
+         "imagewidth":40,
+         "type":"Coin"
+        }, 
+        {
+         "id":1,
          "image":"tiles\/villain.png",
          "imageheight":127,
          "imagewidth":80,
          "type":"Villain"
-        },
+        }, 
         {
-         "id":1,
+         "id":2,
          "image":"tiles\/bat.png",
          "imageheight":64,
          "imagewidth":100,
          "type":"Bat"
-        },
+        }, 
         {
-         "id":2,
+         "id":3,
          "image":"tiles\/bunny.png",
          "imageheight":64,
          "imagewidth":48,
@@ -40,9 +47,9 @@
                  "value":"bunny"
                 }],
          "type":"Friend"
-        },
+        }, 
         {
-         "id":3,
+         "id":4,
          "image":"tiles\/bird.png",
          "imageheight":90,
          "imagewidth":98,

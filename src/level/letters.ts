@@ -6,7 +6,7 @@ import type { CoinDef, LevelDef } from './types';
  * its coins drawn as the letter, one coin per pixel of a fat 7×7 arcade-style bitmap font.
  */
 
-/** A coin's size (px), as in `coin.tsj`; coins are a coin apart, so one every 2 sizes. */
+/** A coin's size (px), as in `icons.tsj`; coins are a coin apart, so one every 2 sizes. */
 const COIN = 40;
 const PITCH = 2 * COIN;
 /** the free space between the HUD counters (14 px from the top, 40 tall) and the ground */

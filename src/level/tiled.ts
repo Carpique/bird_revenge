@@ -25,8 +25,7 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  *
  * Objects without a class are ignored (handy for notes and guides, and the paths of tiles); hidden layers and objects are skipped
  * (but a `path` can be on any layer).
- * The tiles are in `coin.tsj` and `actors.tsj`: the game's sprites at their size in the game, so things show in Tiled as they
- * will in the game. A tile (image) object takes its tile's class and properties unless it has its own.
+ * The tiles are in `icons.tsj`: the game's sprites at their size in the game, so things show in Tiled as they will in the game. A tile (image) object takes its tile's class and properties unless it has its own.
  */
 
 export interface TiledProperty {

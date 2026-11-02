@@ -12,7 +12,7 @@ import { LETTERS, letterLevels } from '../level/letters';
 const TRAINING_BASE = 'training';
 
 const files = import.meta.glob<string>('./*.tmj', { query: '?raw', import: 'default', eager: true });
-/** the tilesets the maps use (`coin.tsj`), by file name; editing one reloads the levels too */
+/** the tilesets the maps use (`icons.tsj`), by file name; editing one reloads the levels too */
 const tilesetFiles = import.meta.glob<string>('./*.tsj', { query: '?raw', import: 'default', eager: true });
 
 function parseAll(): Map<string, LevelDef> {
