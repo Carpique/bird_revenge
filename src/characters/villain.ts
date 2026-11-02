@@ -1,6 +1,9 @@
 import type { CharacterDef } from './types';
 
-/** Villain walking along the ground. Hitting him with a poo scores plus points. */
+/**
+ * Villain walking along the ground. Hitting him with a poo scores plus points.
+ * Tiled shows `src/levels/tiles/villain.png`, `walk_0` at this size (`npm run tiled-icons`).
+ */
 export const villainDef = {
   id: 'villain',
   displayHeight: 130,

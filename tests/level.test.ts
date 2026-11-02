@@ -7,6 +7,10 @@ import { WORLD } from '../src/config';
 import { CLASS_DEFAULTS, LevelError, parseTiledMap, type TiledMap, type TiledObject, type TiledTileset } from '../src/level/tiled';
 import projectText from '../src/levels/bird-revenge.tiled-project?raw';
 import { Button } from '../src/game/Button';
+import { birdDef } from '../src/characters/bird';
+import { batDef } from '../src/characters/bat';
+import { friendDefs } from '../src/characters/friend';
+import { villainDef } from '../src/characters/villain';
 
 const levelFiles = import.meta.glob<string>('../src/levels/*.tmj', { query: '?raw', import: 'default', eager: true });
 const tilesetFiles = import.meta.glob<string>('../src/levels/*.tsj', { query: '?raw', import: 'default', eager: true });
@@ -109,11 +113,11 @@ describe('Tiled levels', () => {
     expect(parseTiledMap('t', map).coins).toEqual([{ x: 100, y: 100 }]);
   });
 
-  it('rejects coins that are not points or tiles, and tiles that are not coins', () => {
+  it('rejects coins that are not points or tiles, and tiles of classes that are not actors', () => {
     expect(() => parseTiledMap('t', mapOf([{ type: 'Coin', width: 10, height: 10 }]))).toThrow('must be a point');
     const map = mapOf([{ gid: 1, type: 'Terrain', width: 40, height: 40 }]);
     map.tilesets = [{ firstgid: 1, source: 'coin.tsj' }];
-    expect(() => parseTiledMap('t', map, tilesets)).toThrow('only a Coin can be a tile');
+    expect(() => parseTiledMap('t', map, tilesets)).toThrow('only a Coin, Villain, Bat, Friend, BirdStart can be a tile');
     expect(() => parseTiledMap('t', map)).toThrow('tileset "coin.tsj" isn\'t loaded');
   });
 
@@ -150,13 +154,80 @@ describe('Tiled levels', () => {
       ]),
     );
     expect(level.bats).toEqual([
-      { route: [[100, 200], [400, 250]], loop: false, speed: 2, pooDelay: 3 },
-      { route: [[500, 100], [600, 100], [550, 180]], loop: true, speed: 3.5, pooDelay: 0 },
+      { route: [[100, 200], [400, 250]], loop: false, start: [100, 200], target: 1, speed: 2, pooDelay: 3 },
+      { route: [[500, 100], [600, 100], [550, 180]], loop: true, start: [500, 100], target: 1, speed: 3.5, pooDelay: 0 },
     ]);
     expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', point: true }]))).toThrow('must be a polyline or polygon');
     expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', polyline: [{ x: 0, y: 0 }, { x: 0, y: 0 }] }]))).toThrow('needs some length');
     expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', polyline: [{ x: 0, y: 0 }, { x: 9, y: 0 }], properties: [prop('speed', 'float', 0)] }]))).toThrow('"speed"');
     expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', polyline: [{ x: 0, y: 0 }, { x: 9, y: 0 }], properties: [prop('pooDelay', 'float', -1)] }]))).toThrow("can't be negative");
+  });
+
+  describe('actor tiles (actors.tsj, bottom-centre aligned)', () => {
+    /** a map with the actors tileset (gid: villain 1, bat 2, bunny 3, bird 4) and `objects` */
+    const actorMap = (objects: Partial<TiledObject>[]) => {
+      const map = mapOf(objects);
+      map.tilesets = [{ firstgid: 1, source: 'actors.tsj' }];
+      return map;
+    };
+    const size = (id: number) => {
+      const tile = (tilesets['actors.tsj'] as { tiles: { id: number; imagewidth: number; imageheight: number }[] }).tiles[id];
+      return { width: tile.imagewidth, height: tile.imageheight };
+    };
+    const villain = { gid: 1, ...size(0) }, bat = { gid: 2, ...size(1) }, bunny = { gid: 3, ...size(2) }, bird = { gid: 4, ...size(3) };
+
+    it('has icons at the actors\' sizes in the game (else: npm run tiled-icons, and fix actors.tsj)', () => {
+      // the villain's is cut at his feet
+      expect(villain.height).toBe(Math.round(villainDef.displayHeight * villainDef.anchor.y));
+      expect(bat.height).toBe(batDef.displayHeight);
+      expect(bunny.height).toBe(friendDefs.bunny.displayHeight);
+      expect(bird.height).toBe(birdDef.displayHeight);
+    });
+
+    it('places friends by their feet and the bird by its centre', () => {
+      const level = parseTiledMap('t', actorMap([{ ...bunny, x: 200, y: 600 }, { ...bird, x: 300, y: 400 }]), tilesets);
+      expect(level.friends).toEqual([{ kind: 'bunny', x: 200, y: 600 }]);
+      expect(level.birdStart).toEqual({ x: 300, y: 400 - bird.height * (1 - birdDef.anchor.y) });
+    });
+
+    it('starts a villain at his feet, walking his path\'s x range', () => {
+      const level = parseTiledMap(
+        't',
+        actorMap([
+          // the path is anywhere, on any layer, even a hidden one; only its x range counts
+          { id: 1, x: 100, y: 50, polyline: [{ x: 0, y: 0 }, { x: 400, y: 30 }], visible: false },
+          { id: 2, ...villain, x: 250, y: 640, properties: [prop('path', 'object', 1), prop('throwDelay', 'float', 0)] },
+        ]),
+        tilesets,
+      );
+      expect(level.villains).toEqual([{ x: 250, y: 640, path: { x0: 100, x1: 500 }, throwDelay: 0 }]);
+      expect(() => parseTiledMap('t', actorMap([{ ...villain }]), tilesets)).toThrow('its "path" must be a polyline');
+      expect(() =>
+        parseTiledMap('t', actorMap([{ id: 1, polygon: [{ x: 0, y: 0 }, { x: 9, y: 0 }, { x: 0, y: 9 }] }, { id: 2, ...villain, properties: [prop('path', 'object', 1)] }]), tilesets),
+      ).toThrow('its "path" must be a polyline');
+    });
+
+    it('starts a bat on its route, at the point nearest its centre', () => {
+      const square = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }];
+      const at = (x: number, y: number) => ({ ...bat, x, y: y + bat.height / 2 });
+      const level = parseTiledMap(
+        't',
+        actorMap([
+          { id: 1, x: 500, y: 100, polygon: square },
+          { id: 2, x: 500, y: 300, polyline: square },
+          // just below the bottom of the square: flies to its bottom-left corner first
+          { id: 3, ...at(550, 210), properties: [prop('path', 'object', 1), prop('speed', 'float', 3)] },
+          // on the open route's last point
+          { id: 4, ...at(500, 400), properties: [prop('path', 'object', 2)] },
+        ]),
+        tilesets,
+      );
+      const route = (y: number) => square.map(({ x, y: dy }) => [500 + x, y + dy]);
+      expect(level.bats).toEqual([
+        { route: route(100), loop: true, start: [550, 200], target: 3, speed: 3, pooDelay: 3 },
+        { route: route(300), loop: false, start: [500, 400], target: 3, speed: 2, pooDelay: 3 },
+      ]);
+    });
   });
 
   it('reads buttons and checks their targets', () => {

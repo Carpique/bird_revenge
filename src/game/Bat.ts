@@ -15,7 +15,7 @@ const LEAN = 0.04, MAX_LEAN = 0.3;
 const randomBetween = (lo: number, hi: number) => lo + Math.random() * Math.max(0, hi - lo);
 
 /**
- * Flies along its route at a steady speed, from the route's first point: there and back again along an open polyline,
+ * Flies along its route at a steady speed, from its start: there and back again along an open polyline,
  * round and round a closed one. Every `pooDelay` seconds or so (± `bat.intervalSpread`) it poos straight down,
  * wherever it is; its poo hurts only the bird (see Game).
  * Hit by the bird's poo, it hangs in the air for a moment in its "hit" pose, then tumbles off the bottom of the screen,
@@ -36,14 +36,15 @@ export class Bat {
   private vy = 0;
   private timer = 0;
   /** index of the route point it's flying to */
-  private target = 1;
+  private target: number;
   /** which way along the route it goes: forward (1) or back (-1); only an open route turns back */
   private dir: 1 | -1 = 1;
   /** ms until it poos next */
   private pooIn: number;
 
   constructor(private def: BatDef) {
-    [this.x, this.y] = def.route[0];
+    [this.x, this.y] = def.start;
+    this.target = def.target;
     this.pooIn = this.nextPooDelay();
     this.body = Bodies.circle(this.x, this.y, batRadius, { label: 'bat', isStatic: true, isSensor: true });
   }

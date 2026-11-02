@@ -71,18 +71,6 @@
                  "y":352
                 }, 
                 {
-                 "height":0,
-                 "id":28,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":0,
-                 "x":864,
-                 "y":-64
-                }, 
-                {
                  "gid":1,
                  "height":40,
                  "id":35,
@@ -483,22 +471,22 @@
          "name":"actors",
          "objects":[
                 {
-                 "height":0,
+                 "gid":5,
+                 "height":90,
                  "id":3,
                  "name":"ptak",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"BirdStart",
+                 "type":"",
                  "visible":true,
-                 "width":0,
-                 "x":1248,
-                 "y":80
+                 "width":98,
+                 "x":1216,
+                 "y":128
                 }, 
                 {
                  "height":0,
                  "id":4,
-                 "name":"zbir",
+                 "name":"zbir path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -509,36 +497,54 @@
                          "x":800,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":240,
                  "y":640
                 }, 
                 {
-                 "height":0,
+                 "gid":2,
+                 "height":127,
+                 "id":75,
+                 "name":"zbir",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":4
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":528,
+                 "y":640
+                }, 
+                {
+                 "gid":4,
+                 "height":64,
                  "id":6,
                  "name":"kr\u00f3lik",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"Friend",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":48,
                  "x":640,
                  "y":416
                 }, 
                 {
                  "height":0,
                  "id":30,
-                 "name":"zbir",
+                 "name":"zbir path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -549,23 +555,41 @@
                          "x":-777.142857142857,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":1280,
                  "y":640
                 }, 
                 {
+                 "gid":2,
+                 "height":127,
+                 "id":76,
+                 "name":"zbir",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":30
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":928,
+                 "y":640
+                }, 
+                {
                  "height":0,
                  "id":33,
-                 "name":"zbir",
+                 "name":"zbir path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -576,36 +600,54 @@
                          "x":-480,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":832,
                  "y":224
                 }, 
                 {
-                 "height":0,
+                 "gid":2,
+                 "height":127,
+                 "id":77,
+                 "name":"zbir",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":33
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":704,
+                 "y":224
+                }, 
+                {
+                 "gid":4,
+                 "height":64,
                  "id":42,
                  "name":"kr\u00f3lik",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"Friend",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":48,
                  "x":464,
                  "y":224
                 }, 
                 {
                  "height":0,
                  "id":43,
-                 "name":"zbir",
+                 "name":"zbir path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -616,23 +658,41 @@
                          "x":-288,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":800,
                  "y":416
                 }, 
                 {
+                 "gid":2,
+                 "height":127,
+                 "id":78,
+                 "name":"zbir",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":43
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":720,
+                 "y":416
+                }, 
+                {
                  "height":0,
                  "id":46,
-                 "name":"zbir",
+                 "name":"zbir path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -643,23 +703,41 @@
                          "x":-464,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":816,
                  "y":224
                 }, 
                 {
+                 "gid":2,
+                 "height":127,
+                 "id":79,
+                 "name":"zbir",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":46
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":608,
+                 "y":224
+                }, 
+                {
                  "height":0,
                  "id":59,
-                 "name":"zbir",
+                 "name":"zbir path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -670,62 +748,80 @@
                          "x":-1088,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":1280,
                  "y":640
                 }, 
                 {
-                 "height":0,
+                 "gid":2,
+                 "height":127,
+                 "id":80,
+                 "name":"zbir",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":59
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":720,
+                 "y":640
+                }, 
+                {
+                 "gid":4,
+                 "height":64,
                  "id":61,
                  "name":"kr\u00f3lik",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"Friend",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":48,
                  "x":416,
                  "y":640
                 }, 
                 {
-                 "height":0,
+                 "gid":4,
+                 "height":64,
                  "id":62,
                  "name":"kr\u00f3lik",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"Friend",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":48,
                  "x":784,
                  "y":640
                 }, 
                 {
-                 "height":0,
+                 "gid":4,
+                 "height":64,
                  "id":63,
                  "name":"kr\u00f3lik",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"Friend",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":48,
                  "x":752,
                  "y":224
                 }, 
                 {
                  "height":0,
                  "id":68,
-                 "name":"zbir",
+                 "name":"zbir path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -736,17 +832,35 @@
                          "x":-240,
                          "y":0
                         }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":1104,
+                 "y":352
+                }, 
+                {
+                 "gid":2,
+                 "height":127,
+                 "id":81,
+                 "name":"zbir",
+                 "opacity":1,
                  "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":68
+                        }, 
                         {
                          "name":"throwDelay",
                          "type":"float",
                          "value":0
                         }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
-                 "width":0,
-                 "x":1104,
+                 "width":80,
+                 "x":1008,
                  "y":352
                 }, 
                 {
@@ -771,18 +885,6 @@
                  "width":192,
                  "x":0,
                  "y":224
-                }, 
-                {
-                 "height":0,
-                 "id":72,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":0,
-                 "x":352,
-                 "y":-48
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -791,7 +893,7 @@
          "y":0
         }],
  "nextlayerid":8,
- "nextobjectid":75,
+ "nextobjectid":82,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",
@@ -800,6 +902,10 @@
         {
          "firstgid":1,
          "source":"coin.tsj"
+        }, 
+        {
+         "firstgid":2,
+         "source":"actors.tsj"
         }],
  "tilewidth":16,
  "type":"map",

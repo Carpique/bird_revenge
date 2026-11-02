@@ -87,17 +87,17 @@
          "name":"actors",
          "objects":[
                 {
-                 "height":0,
+                 "gid":5,
+                 "height":90,
                  "id":3,
                  "name":"bird",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"BirdStart",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":98,
                  "x":1228,
-                 "y":612
+                 "y":652.5
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -115,6 +115,10 @@
         {
          "firstgid":1,
          "source":"coin.tsj"
+        }, 
+        {
+         "firstgid":2,
+         "source":"actors.tsj"
         }],
  "tilewidth":16,
  "type":"map",

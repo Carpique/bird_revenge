@@ -144,6 +144,11 @@
             "id": 7,
             "members": [
                 {
+                    "name": "path",
+                    "type": "object",
+                    "value": 0
+                },
+                {
                     "name": "throwDelay",
                     "type": "float",
                     "value": 4
@@ -152,7 +157,8 @@
             "name": "Villain",
             "type": "class",
             "useAs": [
-                "object"
+                "object",
+                "tile"
             ]
         },
         {
@@ -164,7 +170,8 @@
             "name": "BirdStart",
             "type": "class",
             "useAs": [
-                "object"
+                "object",
+                "tile"
             ]
         },
         {
@@ -192,7 +199,8 @@
             "name": "Friend",
             "type": "class",
             "useAs": [
-                "object"
+                "object",
+                "tile"
             ]
         },
         {
@@ -253,6 +261,11 @@
             "id": 14,
             "members": [
                 {
+                    "name": "path",
+                    "type": "object",
+                    "value": 0
+                },
+                {
                     "name": "pooDelay",
                     "type": "float",
                     "value": 3
@@ -266,7 +279,8 @@
             "name": "Bat",
             "type": "class",
             "useAs": [
-                "object"
+                "object",
+                "tile"
             ]
         }
     ]

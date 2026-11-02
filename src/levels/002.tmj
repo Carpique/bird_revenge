@@ -71,16 +71,16 @@
                  "y":112
                 }, 
                 {
-                 "height":0,
+                 "gid":4,
+                 "height":64,
                  "id":28,
                  "name":"bunny",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"Friend",
+                 "type":"",
                  "visible":true,
-                 "width":0,
-                 "x":16,
+                 "width":48,
+                 "x":32,
                  "y":640
                 }],
          "opacity":1,
@@ -172,7 +172,7 @@
                 {
                  "height":0,
                  "id":36,
-                 "name":"villain on the shelf",
+                 "name":"villain on the shelf path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -183,17 +183,35 @@
                          "x":-160,
                          "y":0
                         }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":1280,
+                 "y":432
+                }, 
+                {
+                 "gid":2,
+                 "height":127,
+                 "id":53,
+                 "name":"villain on the shelf",
+                 "opacity":1,
                  "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":36
+                        }, 
                         {
                          "name":"throwDelay",
                          "type":"float",
                          "value":0
                         }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
-                 "width":0,
-                 "x":1280,
+                 "width":80,
+                 "x":1200,
                  "y":432
                 }, 
                 {
@@ -423,22 +441,22 @@
          "name":"actors",
          "objects":[
                 {
-                 "height":0,
+                 "gid":5,
+                 "height":90,
                  "id":3,
                  "name":"bird",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"BirdStart",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":98,
                  "x":640,
-                 "y":128
+                 "y":168.5
                 }, 
                 {
                  "height":0,
                  "id":4,
-                 "name":"villain",
+                 "name":"villain path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -449,23 +467,41 @@
                          "x":544,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":0,
                  "y":640
                 }, 
                 {
+                 "gid":2,
+                 "height":127,
+                 "id":54,
+                 "name":"villain",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":4
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":240,
+                 "y":640
+                }, 
+                {
                  "height":0,
                  "id":7,
-                 "name":"villain on the shelf",
+                 "name":"villain on the shelf path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -476,23 +512,41 @@
                          "x":-160,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":160,
                  "y":432
                 }, 
                 {
+                 "gid":2,
+                 "height":127,
+                 "id":55,
+                 "name":"villain on the shelf",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":7
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":112,
+                 "y":432
+                }, 
+                {
                  "height":0,
                  "id":29,
-                 "name":"villain",
+                 "name":"villain path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -503,17 +557,35 @@
                          "x":544,
                          "y":0
                         }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":736,
+                 "y":640
+                }, 
+                {
+                 "gid":2,
+                 "height":127,
+                 "id":56,
+                 "name":"villain",
+                 "opacity":1,
                  "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":29
+                        }, 
                         {
                          "name":"throwDelay",
                          "type":"float",
                          "value":0
                         }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
-                 "width":0,
-                 "x":736,
+                 "width":80,
+                 "x":976,
                  "y":640
                 }],
          "opacity":1,
@@ -523,7 +595,7 @@
          "y":0
         }],
  "nextlayerid":8,
- "nextobjectid":53,
+ "nextobjectid":57,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",
@@ -532,6 +604,10 @@
         {
          "firstgid":1,
          "source":"coin.tsj"
+        }, 
+        {
+         "firstgid":2,
+         "source":"actors.tsj"
         }],
  "tilewidth":16,
  "type":"map",

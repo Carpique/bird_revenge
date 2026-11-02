@@ -1,4 +1,7 @@
-import type { Branch, ButtonAction, CoinDef, FriendKind, JointDef, LevelDef, Material, Shape } from './types';
+import { batDef } from '../characters/bat';
+import { birdDef } from '../characters/bird';
+import { coinDef } from '../characters/coin';
+import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Shape } from './types';
 
 /**
  * Loads a map saved by the Tiled editor (JSON, `.tmj`) into a `LevelDef`.
@@ -11,15 +14,19 @@ import type { Branch, ButtonAction, CoinDef, FriendKind, JointDef, LevelDef, Mat
  * | Branch    | polyline                       | one-way platform, one per segment         |
  * | Rope      | point                          | rope from the point to `body`             |
  * | Hinge     | point                          | `body` pinned at the point                |
- * | Villain   | polyline                       | a villain walking its x range, on what's under its first point, starting there |
- * | Bat       | polyline, polygon              | a bat flying along it from its first point: there and back (polyline), round and round (polygon) |
- * | Friend    | point                          | a friend to save, standing on the point   |
- * | Coin      | point, or a tile from coin.tsj | a coin to collect, centred on the point / the tile's image |
- * | BirdStart | point                          | where the bird starts                     |
+ * | Villain   | tile, `path` a polyline        | a villain walking the `path`'s x range, starting where the tile's feet are, on what's under them |
+ * |           | or a polyline                  | the same, the polyline being the path, starting on its first point |
+ * | Bat       | tile, `path` a polyline or polygon | a bat flying along `path`: there and back (polyline), round and round (polygon), from its point nearest the tile's centre |
+ * |           | or a polyline, polygon         | the same, from its first point            |
+ * | Friend    | point, or a tile               | a friend to save, standing on the point / where the tile's feet are |
+ * | Coin      | point, or a tile               | a coin to collect, centred on the point / the tile's image |
+ * | BirdStart | point, or a tile               | where the bird starts: its centre / where the tile shows it |
  * | Button    | rectangle (unrotated)          | a button on the surface under its bottom edge, switching the Terrain `target` |
  *
- * Objects without a class are ignored (handy for notes and guides); hidden layers and objects are skipped.
- * A tile (image) object takes its tile's class unless it has its own; only a Coin can be one.
+ * Objects without a class are ignored (handy for notes and guides, and the paths of tiles); hidden layers and objects are skipped
+ * (but a `path` can be on any layer).
+ * The tiles are in `coin.tsj` and `actors.tsj`: the game's sprites at their size in the game, so things show in Tiled as they
+ * will in the game. A tile (image) object takes its tile's class and properties unless it has its own.
  */
 
 export interface TiledProperty {
@@ -64,7 +71,7 @@ export interface TiledTileset {
   /** where a tile object's position is on its image; `unspecified` = bottom left (for orthogonal maps) */
   objectalignment?: string;
   /** only the tiles that have something set, like a class */
-  tiles?: { id: number; type?: string; class?: string }[];
+  tiles?: { id: number; type?: string; class?: string; properties?: TiledProperty[] }[];
 }
 
 export interface TiledTilesetRef extends TiledTileset {
@@ -95,8 +102,8 @@ export const CLASS_DEFAULTS = {
   Branch: {},
   Rope: { body: 0, to: 0, length: 0, stiffness: 1 },
   Hinge: { body: 0, to: 0, stiffness: 1 },
-  Villain: { throwDelay: 4 },
-  Bat: { speed: 2, pooDelay: 3 },
+  Villain: { path: 0, throwDelay: 4 },
+  Bat: { path: 0, speed: 2, pooDelay: 3 },
   Friend: { kind: 'bunny' },
   BirdStart: {},
   Coin: {},
@@ -107,6 +114,18 @@ type ClassName = keyof typeof CLASS_DEFAULTS;
 const MATERIALS: readonly Material[] = ['wood', 'stone', 'rubber', 'ice'];
 const FRIEND_KINDS: readonly FriendKind[] = ['bunny'];
 const BUTTON_ACTIONS: readonly ButtonAction[] = ['open', 'close'];
+
+/**
+ * The classes a tile object can have, and the point of the tile's image (as a fraction of its size) that is where the thing is.
+ * The ones placed by their feet have their images cut at the feet (`tools/tiled-icons.mjs`).
+ */
+const TILE_POSITIONS: Partial<Record<ClassName, { x: number; y: number }>> = {
+  Coin: coinDef.anchor,
+  Villain: { x: 0.5, y: 1 },
+  Bat: batDef.anchor,
+  Friend: { x: 0.5, y: 1 },
+  BirdStart: birdDef.anchor,
+};
 
 export class LevelError extends Error {}
 
@@ -132,6 +151,7 @@ export function parseTiledMap(name: string, map: TiledMap, tilesets: Record<stri
   };
 
   const tiles = tileLookup(map, tilesets);
+  const objects = allObjects(map.layers);
   const visit = (layers: TiledLayer[], ox: number, oy: number) => {
     for (const layer of layers) {
       if (!layer.visible) continue;
@@ -141,7 +161,7 @@ export function parseTiledMap(name: string, map: TiledMap, tilesets: Record<stri
       for (const o of layer.objects ?? []) {
         if (!o.visible) continue;
         try {
-          addObject(level, { ...o, x: o.x + lx, y: o.y + ly }, tiles);
+          addObject(level, { ...o, x: o.x + lx, y: o.y + ly }, tiles, objects);
         } catch (e) {
           problems.push(`${describe(o)} on layer "${layer.name}": ${(e as Error).message}`);
         }
@@ -167,13 +187,16 @@ export function parseTiledMap(name: string, map: TiledMap, tilesets: Record<stri
   return level;
 }
 
-function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup) {
+function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup, objects: Map<number, TiledObject>) {
   const tile = o.gid !== undefined ? tiles(o.gid) : null;
   const cls = o.type || o.class || tile?.cls;
   if (!cls) return;
   if (!(cls in CLASS_DEFAULTS)) throw new Error(`unknown class "${cls}"`);
-  if (tile && cls !== 'Coin') throw new Error('only a Coin can be a tile (image) object; draw a shape');
-  const p = props(cls as ClassName, o);
+  const at = TILE_POSITIONS[cls as ClassName];
+  if (tile && !at) throw new Error(`only a ${Object.keys(TILE_POSITIONS).join(', ')} can be a tile (image) object; draw a shape`);
+  const p = props(cls as ClassName, o, tile?.properties);
+  /** where the thing is, for a tile object */
+  const tilePos = () => tilePoint(o, tile!.alignment, at!);
 
   switch (cls as ClassName) {
     case 'Terrain':
@@ -207,30 +230,34 @@ function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup) {
     case 'Villain': {
       const throwDelay = num(p.throwDelay);
       if (throwDelay < 0) throw new Error('"throwDelay" can\'t be negative (0 = never throws)');
-      if (!o.polyline) throw new Error('a Villain must be a polyline: his path');
-      const pts = pointsOf(o, o.polyline);
+      const pts = tile ? pathOf(objects, p.path, false).points : o.polyline && pointsOf(o, o.polyline);
+      if (!pts) throw new Error('a Villain must be a polyline (his path), or a tile with a "path"');
       const xs = pts.map(([x]) => x);
       const x0 = Math.min(...xs), x1 = Math.max(...xs);
       if (x0 === x1) throw new Error('a Villain path needs some width');
-      level.villains.push({ x: pts[0][0], y: pts[0][1], path: { x0, x1 }, throwDelay });
+      const [x, y] = tile ? tilePos() : pts[0];
+      level.villains.push({ x, y, path: { x0, x1 }, throwDelay });
       break;
     }
     case 'Bat': {
       const speed = num(p.speed), pooDelay = num(p.pooDelay);
       if (speed <= 0) throw new Error('"speed" must be more than 0');
       if (pooDelay < 0) throw new Error('"pooDelay" can\'t be negative (0 = never poos)');
-      const line = o.polyline ?? o.polygon;
-      if (!line || line.length < 2) throw new Error('a Bat must be a polyline or polygon: its route');
-      const route = pointsOf(o, line);
+      const own = o.polyline ?? o.polygon;
+      const path = tile ? pathOf(objects, p.path, true) : own && { points: pointsOf(o, own), loop: !o.polyline };
+      if (!path || path.points.length < 2) throw new Error('a Bat must be a polyline or polygon (its route), or a tile with a "path"');
+      const route = path.points;
       if (route.every(([x, y]) => x === route[0][0] && y === route[0][1])) throw new Error('a Bat route needs some length');
-      level.bats.push({ route, loop: !o.polyline, speed, pooDelay });
+      const { start, target } = tile ? nearestOnRoute(route, path.loop, tilePos()) : { start: route[0], target: 1 };
+      level.bats.push({ route, loop: path.loop, start, target, speed, pooDelay });
       break;
     }
     case 'Friend': {
-      requirePoint(o);
+      if (!tile) requirePoint(o);
       const kind = String(p.kind) as FriendKind;
       if (!FRIEND_KINDS.includes(kind)) throw new Error(`unknown friend kind "${kind}"`);
-      level.friends.push({ kind, x: o.x, y: o.y });
+      const [x, y] = tile ? tilePos() : [o.x, o.y];
+      level.friends.push({ kind, x, y });
       break;
     }
     case 'Button': {
@@ -245,24 +272,28 @@ function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup) {
       break;
     }
     case 'Coin':
-      if (tile) level.coins.push(tileCentre(o, tile.alignment));
-      else {
+      if (tile) {
+        const [x, y] = tilePos();
+        level.coins.push({ x, y });
+      } else {
         requirePoint(o);
         level.coins.push({ x: o.x, y: o.y });
       }
       break;
-    case 'BirdStart':
-      requirePoint(o);
+    case 'BirdStart': {
+      if (!tile) requirePoint(o);
       if (level.birdStart) throw new Error('there is more than one BirdStart');
-      level.birdStart = { x: o.x, y: o.y };
+      const [x, y] = tile ? tilePos() : [o.x, o.y];
+      level.birdStart = { x, y };
       break;
+    }
   }
 }
 
-/** The class's defaults overridden by the object's own properties. */
-function props(cls: ClassName, o: TiledObject): Record<string, unknown> {
+/** The class's defaults overridden by its tile's properties (a tile object), then by the object's own. */
+function props(cls: ClassName, o: TiledObject, tileProps: TiledProperty[] = []): Record<string, unknown> {
   const out: Record<string, unknown> = { ...CLASS_DEFAULTS[cls] };
-  for (const prop of o.properties ?? []) out[prop.name] = prop.value;
+  for (const prop of [...tileProps, ...(o.properties ?? [])]) out[prop.name] = prop.value;
   return out;
 }
 
@@ -297,6 +328,39 @@ function pointsOf(o: TiledObject, pts: { x: number; y: number }[]): [number, num
   return pts.map((v) => add(o, rotate(v.x, v.y, a)));
 }
 
+/** Every object on the map, hidden or not, by id, in world coordinates: what object properties refer to. */
+function allObjects(layers: TiledLayer[], ox = 0, oy = 0, out = new Map<number, TiledObject>()): Map<number, TiledObject> {
+  for (const layer of layers) {
+    const lx = ox + (layer.offsetx ?? 0), ly = oy + (layer.offsety ?? 0);
+    if (layer.type === 'group') allObjects(layer.layers ?? [], lx, ly, out);
+    for (const o of layer.objects ?? []) out.set(o.id, { ...o, x: o.x + lx, y: o.y + ly });
+  }
+  return out;
+}
+
+/** The points of the polyline (or polygon, if `polygonToo`) that `ref` (a `path` property) refers to; `loop`: it's a polygon. */
+function pathOf(objects: Map<number, TiledObject>, ref: unknown, polygonToo: boolean) {
+  const path = objects.get(num(ref));
+  const line = path && (path.polyline ?? (polygonToo ? path.polygon : undefined));
+  if (!path || !line) throw new Error(`its "path" must be a polyline${polygonToo ? ' or polygon' : ''}`);
+  return { points: pointsOf(path, line), loop: !path.polyline };
+}
+
+/** The point of a route nearest to `p`, and the index of the route point after it: where a bat there flies first. */
+function nearestOnRoute(route: [number, number][], loop: boolean, [px, py]: [number, number]) {
+  const n = route.length;
+  let best = { start: route[0], target: 1, d: Infinity };
+  for (let i = 0; i < (loop ? n : n - 1); i++) {
+    const [ax, ay] = route[i], [bx, by] = route[(i + 1) % n];
+    const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+    const q: [number, number] = [ax + t * dx, ay + t * dy];
+    const d = (q[0] - px) ** 2 + (q[1] - py) ** 2;
+    if (d < best.d) best = { start: q, target: (i + 1) % n, d };
+  }
+  return { start: best.start, target: best.target };
+}
+
 function branchesOf(o: TiledObject): Branch[] {
   const pts = pointsOf(o, o.polyline!);
   const out: Branch[] = [];
@@ -307,9 +371,9 @@ function branchesOf(o: TiledObject): Branch[] {
   return out;
 }
 
-type TileLookup = (gid: number) => { cls: string | undefined; alignment: string };
+type TileLookup = (gid: number) => { cls: string | undefined; properties: TiledProperty[] | undefined; alignment: string };
 
-/** Finds a tile object's tile: its class, and its tileset's object alignment. */
+/** Finds a tile object's tile: its class and properties, and its tileset's object alignment. */
 function tileLookup(map: TiledMap, tilesets: Record<string, TiledTileset>): TileLookup {
   const refs = [...(map.tilesets ?? [])].sort((a, b) => b.firstgid - a.firstgid);
   return (gid) => {
@@ -319,7 +383,7 @@ function tileLookup(map: TiledMap, tilesets: Record<string, TiledTileset>): Tile
     const set = ref.source === undefined ? ref : tilesets[ref.source];
     if (!set) throw new Error(`its tileset "${ref.source}" isn't loaded; keep tilesets next to the maps, as .tsj`);
     const tile = set.tiles?.find((t) => t.id === id - ref.firstgid);
-    return { cls: tile?.type || tile?.class, alignment: set.objectalignment ?? 'unspecified' };
+    return { cls: tile?.type || tile?.class, properties: tile?.properties, alignment: set.objectalignment ?? 'unspecified' };
   };
 }
 
@@ -330,12 +394,11 @@ const ALIGNMENTS: Record<string, [number, number]> = {
   bottomleft: [0, 1], bottom: [0.5, 1], bottomright: [1, 1],
 };
 
-/** The centre of a tile object's image; it's rotated around the object's position. */
-function tileCentre(o: TiledObject, alignment: string): CoinDef {
+/** The point `at` (a fraction of its size) of a tile object's image; it's rotated around the object's position. */
+function tilePoint(o: TiledObject, alignment: string, at: { x: number; y: number }): [number, number] {
   const [ax, ay] = ALIGNMENTS[alignment] ?? ALIGNMENTS.bottomleft;
   const a = ((o.rotation ?? 0) * Math.PI) / 180;
-  const [x, y] = add(o, rotate(o.width * (0.5 - ax), o.height * (0.5 - ay), a));
-  return { x, y };
+  return add(o, rotate(o.width * (at.x - ax), o.height * (at.y - ay), a));
 }
 
 function requirePoint(o: TiledObject) {

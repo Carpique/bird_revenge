@@ -92,10 +92,14 @@ export interface VillainDef {
 
 /** A bat flying along its route, pooing straight down now and then. */
 export interface BatDef {
-  /** the route's points, in order; it starts at the first */
+  /** the route's points, in order */
   route: [number, number][];
   /** true: round and round (a closed polygon); false: there and back again (an open polyline) */
   loop: boolean;
+  /** where it starts: on the route */
+  start: [number, number];
+  /** the index of the route point it flies to first, forward along the route */
+  target: number;
   /** px per physics step */
   speed: number;
   /** average time between its poos (s); 0 = it never poos */

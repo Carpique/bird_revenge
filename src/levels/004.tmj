@@ -549,22 +549,22 @@
          "name":"actors",
          "objects":[
                 {
-                 "height":0,
+                 "gid":5,
+                 "height":90,
                  "id":3,
                  "name":"bird",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"BirdStart",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":98,
                  "x":1200,
-                 "y":128
+                 "y":144
                 }, 
                 {
                  "height":0,
                  "id":4,
-                 "name":"villain",
+                 "name":"villain path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -575,36 +575,54 @@
                          "x":1264,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":0,
                  "y":640
                 }, 
                 {
-                 "height":0,
+                 "gid":2,
+                 "height":127,
+                 "id":87,
+                 "name":"villain",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":4
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":400,
+                 "y":640
+                }, 
+                {
+                 "gid":4,
+                 "height":64,
                  "id":6,
                  "name":"bunny",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"Friend",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":48,
                  "x":48,
                  "y":640
                 }, 
                 {
                  "height":0,
                  "id":7,
-                 "name":"villain",
+                 "name":"villain path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -615,23 +633,41 @@
                          "x":-480,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":20
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":640,
                  "y":304
                 }, 
                 {
+                 "gid":2,
+                 "height":127,
+                 "id":88,
+                 "name":"villain",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":7
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":20
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":512,
+                 "y":304
+                }, 
+                {
                  "height":0,
                  "id":61,
-                 "name":"villain",
+                 "name":"villain path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -642,23 +678,41 @@
                          "x":1280,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":0,
                  "y":640
                 }, 
                 {
+                 "gid":2,
+                 "height":127,
+                 "id":89,
+                 "name":"villain",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":61
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":816,
+                 "y":640
+                }, 
+                {
                  "height":0,
                  "id":63,
-                 "name":"villain",
+                 "name":"villain path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -669,29 +723,47 @@
                          "x":464,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":816,
                  "y":464
                 }, 
                 {
-                 "height":0,
+                 "gid":2,
+                 "height":127,
+                 "id":90,
+                 "name":"villain",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":63
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":816,
+                 "y":464
+                }, 
+                {
+                 "gid":4,
+                 "height":64,
                  "id":84,
                  "name":"bunny",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"Friend",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":48,
                  "x":1232,
                  "y":640
                 }],
@@ -702,7 +774,7 @@
          "y":0
         }],
  "nextlayerid":8,
- "nextobjectid":87,
+ "nextobjectid":91,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",
@@ -711,6 +783,10 @@
         {
          "firstgid":1,
          "source":"coin.tsj"
+        }, 
+        {
+         "firstgid":2,
+         "source":"actors.tsj"
         }],
  "tilewidth":16,
  "type":"map",

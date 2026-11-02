@@ -326,15 +326,15 @@
                  "y":528
                 }, 
                 {
-                 "height":0,
+                 "gid":4,
+                 "height":64,
                  "id":44,
                  "name":"bunny",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"Friend",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":48,
                  "x":400,
                  "y":640
                 }, 
@@ -500,15 +500,15 @@
                  "y":448
                 }, 
                 {
-                 "height":0,
+                 "gid":4,
+                 "height":64,
                  "id":61,
                  "name":"bunny",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"Friend",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":48,
                  "x":1232,
                  "y":640
                 }, 
@@ -654,22 +654,22 @@
          "name":"actors",
          "objects":[
                 {
-                 "height":0,
+                 "gid":5,
+                 "height":90,
                  "id":6,
                  "name":"",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"BirdStart",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":98,
                  "x":64,
-                 "y":64
+                 "y":112
                 }, 
                 {
                  "height":0,
                  "id":37,
-                 "name":"villain-1",
+                 "name":"villain-1 path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -680,77 +680,131 @@
                          "x":-304,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":304,
                  "y":640
                 }, 
                 {
-                 "height":0,
-                 "id":50,
+                 "gid":2,
+                 "height":127,
+                 "id":72,
                  "name":"villain-1",
                  "opacity":1,
-                 "polyline":[
-                        {
-                         "x":0,
-                         "y":0
-                        }, 
-                        {
-                         "x":-272,
-                         "y":0
-                        }],
                  "properties":[
                         {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":15
-                        }],
-                 "rotation":0,
-                 "type":"Villain",
-                 "visible":true,
-                 "width":0,
-                 "x":704,
-                 "y":640
-                }, 
-                {
-                 "height":0,
-                 "id":59,
-                 "name":"villain-1",
-                 "opacity":1,
-                 "polyline":[
-                        {
-                         "x":0,
-                         "y":0
+                         "name":"path",
+                         "type":"object",
+                         "value":37
                         }, 
-                        {
-                         "x":-272,
-                         "y":0
-                        }],
-                 "properties":[
                         {
                          "name":"throwDelay",
                          "type":"float",
                          "value":0
                         }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":128,
+                 "y":640
+                }, 
+                {
+                 "height":0,
+                 "id":50,
+                 "name":"villain-1 path",
+                 "opacity":1,
+                 "polyline":[
+                        {
+                         "x":0,
+                         "y":0
+                        }, 
+                        {
+                         "x":-272,
+                         "y":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":704,
+                 "y":640
+                }, 
+                {
+                 "gid":2,
+                 "height":127,
+                 "id":73,
+                 "name":"villain-1",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":50
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":15
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":592,
+                 "y":640
+                }, 
+                {
+                 "height":0,
+                 "id":59,
+                 "name":"villain-1 path",
+                 "opacity":1,
+                 "polyline":[
+                        {
+                         "x":0,
+                         "y":0
+                        }, 
+                        {
+                         "x":-272,
+                         "y":0
+                        }],
+                 "rotation":0,
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":1280,
                  "y":448
                 }, 
                 {
+                 "gid":2,
+                 "height":127,
+                 "id":74,
+                 "name":"villain-1",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":59
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":1232,
+                 "y":448
+                }, 
+                {
                  "height":0,
                  "id":60,
-                 "name":"villain-1",
+                 "name":"villain-1 path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -761,17 +815,35 @@
                          "x":-400,
                          "y":0
                         }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":1264,
+                 "y":640
+                }, 
+                {
+                 "gid":2,
+                 "height":127,
+                 "id":75,
+                 "name":"villain-1",
+                 "opacity":1,
                  "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":60
+                        }, 
                         {
                          "name":"throwDelay",
                          "type":"float",
                          "value":0
                         }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
-                 "width":0,
-                 "x":1264,
+                 "width":80,
+                 "x":1088,
                  "y":640
                 }],
          "opacity":1,
@@ -781,7 +853,7 @@
          "y":0
         }],
  "nextlayerid":4,
- "nextobjectid":72,
+ "nextobjectid":76,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",
@@ -790,6 +862,10 @@
         {
          "firstgid":1,
          "source":"coin.tsj"
+        }, 
+        {
+         "firstgid":2,
+         "source":"actors.tsj"
         }],
  "tilewidth":16,
  "type":"map",

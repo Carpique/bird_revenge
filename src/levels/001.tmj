@@ -177,22 +177,22 @@
          "name":"actors",
          "objects":[
                 {
-                 "height":0,
+                 "gid":5,
+                 "height":90,
                  "id":3,
                  "name":"bird",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"BirdStart",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":98,
                  "x":1136,
-                 "y":160
+                 "y":200.5
                 }, 
                 {
                  "height":0,
                  "id":4,
-                 "name":"villain",
+                 "name":"villain path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -203,36 +203,54 @@
                          "x":800,
                          "y":0
                         }],
-                 "properties":[
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
                  "width":0,
                  "x":240,
                  "y":640
                 }, 
                 {
-                 "height":0,
+                 "gid":2,
+                 "height":127,
+                 "id":27,
+                 "name":"villain",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":4
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":240,
+                 "y":640
+                }, 
+                {
+                 "gid":4,
+                 "height":64,
                  "id":6,
                  "name":"bunny under the shelf",
                  "opacity":1,
-                 "point":true,
                  "rotation":0,
-                 "type":"Friend",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":48,
                  "x":640,
                  "y":640
                 }, 
                 {
                  "height":0,
                  "id":7,
-                 "name":"villain on the shelf",
+                 "name":"villain on the shelf path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -243,16 +261,34 @@
                          "x":-320,
                          "y":0
                         }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":800,
+                 "y":384
+                }, 
+                {
+                 "gid":2,
+                 "height":127,
+                 "id":28,
+                 "name":"villain on the shelf",
+                 "opacity":1,
                  "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":7
+                        }, 
                         {
                          "name":"throwDelay",
                          "type":"float",
                          "value":20
                         }],
                  "rotation":0,
-                 "type":"Villain",
+                 "type":"",
                  "visible":true,
-                 "width":0,
+                 "width":80,
                  "x":800,
                  "y":384
                 }],
@@ -263,7 +299,7 @@
          "y":0
         }],
  "nextlayerid":8,
- "nextobjectid":27,
+ "nextobjectid":29,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",
@@ -272,6 +308,10 @@
         {
          "firstgid":1,
          "source":"coin.tsj"
+        }, 
+        {
+         "firstgid":2,
+         "source":"actors.tsj"
         }],
  "tilewidth":16,
  "type":"map",
