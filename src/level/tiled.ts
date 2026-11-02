@@ -12,6 +12,7 @@ import type { Branch, ButtonAction, CoinDef, FriendKind, JointDef, LevelDef, Mat
  * | Rope      | point                          | rope from the point to `body`             |
  * | Hinge     | point                          | `body` pinned at the point                |
  * | Villain   | polyline                       | a villain walking its x range, on what's under its first point, starting there |
+ * | Bat       | polyline, polygon              | a bat flying along it from its first point: there and back (polyline), round and round (polygon) |
  * | Friend    | point                          | a friend to save, standing on the point   |
  * | Coin      | point, or a tile from coin.tsj | a coin to collect, centred on the point / the tile's image |
  * | BirdStart | point                          | where the bird starts                     |
@@ -95,6 +96,7 @@ export const CLASS_DEFAULTS = {
   Rope: { body: 0, to: 0, length: 0, stiffness: 1 },
   Hinge: { body: 0, to: 0, stiffness: 1 },
   Villain: { throwDelay: 4 },
+  Bat: { speed: 2, pooDelay: 3 },
   Friend: { kind: 'bunny' },
   BirdStart: {},
   Coin: {},
@@ -120,6 +122,7 @@ export function parseTiledMap(name: string, map: TiledMap, tilesets: Record<stri
     height: map.height * map.tileheight,
     birdStart: null,
     villains: [],
+    bats: [],
     friends: [],
     coins: [],
     bodies: [],
@@ -210,6 +213,17 @@ function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup) {
       const x0 = Math.min(...xs), x1 = Math.max(...xs);
       if (x0 === x1) throw new Error('a Villain path needs some width');
       level.villains.push({ x: pts[0][0], y: pts[0][1], path: { x0, x1 }, throwDelay });
+      break;
+    }
+    case 'Bat': {
+      const speed = num(p.speed), pooDelay = num(p.pooDelay);
+      if (speed <= 0) throw new Error('"speed" must be more than 0');
+      if (pooDelay < 0) throw new Error('"pooDelay" can\'t be negative (0 = never poos)');
+      const line = o.polyline ?? o.polygon;
+      if (!line || line.length < 2) throw new Error('a Bat must be a polyline or polygon: its route');
+      const route = pointsOf(o, line);
+      if (route.every(([x, y]) => x === route[0][0] && y === route[0][1])) throw new Error('a Bat route needs some length');
+      level.bats.push({ route, loop: !o.polyline, speed, pooDelay });
       break;
     }
     case 'Friend': {

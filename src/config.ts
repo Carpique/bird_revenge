@@ -287,6 +287,22 @@ export const config = {
     poopedFallAfterMs: 500,
   },
 
+  /** bats fly along their routes and poo straight down; their poo hurts only the bird */
+  bat: {
+    /** time between poos is random within ± this fraction of the bat's `pooDelay` (set per bat in Tiled) */
+    intervalSpread: 0.4,
+    /** the bat's poo: collision radius (px), smaller than the bird's (physics.pooRadius) */
+    pooRadius: 5,
+    /** the bat's poo leaves it falling this fast (px per physics step), then gravity takes over */
+    pooSpeed: 1,
+    /** hit by the bird's poo: it hangs in the air in its "hit" pose this long... */
+    hitShowMs: 300,
+    /** ...then drops off the screen with this gravity (px per physics step²)... */
+    fallGravity: 0.45,
+    /** ...tumbling this many turns per second */
+    fallSpin: 1.2,
+  },
+
   player: {
     lives: 3,
     /** after coming back from losing a life the bird blinks and can't be hurt for this long */
@@ -322,7 +338,7 @@ export const config = {
     fallMs: 1200,
   },
 
-  score: { villain: 1, pedestrian: -1 },
+  score: { villain: 1, bat: 1, pedestrian: -1 },
 
   /** a saved friend grows to this many times its size while fading out, in this long */
   friend: { savedScale: 4, savedMs: 1000 },

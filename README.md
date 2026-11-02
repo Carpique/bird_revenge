@@ -53,7 +53,8 @@ To use real drawings, replace those files (SVG or PNG) and/or edit the paths in:
 
 - `src/characters/bird.ts` — idle frame, flap frames (ordered wings **down → up**), squash amounts
 - `src/characters/villain.ts` — walk cycle, hit frame, hitbox
-- `src/characters/poo.ts` — falling and splat frames
+- `src/characters/bat.ts` — wingbeat, hit frame, hitbox
+- `src/characters/poo.ts` — falling and splat frames (the bat's poo uses them too, smaller)
 - `src/characters/friend.ts` — the friends to save (the bunny: idle, blink and ear-twitch frames; how often they fidget)
 - `src/characters/coin.ts` — the spinning coin (credits in `public/assets/coin/CREDITS.md`)
 - `src/scenery/scenery.ts` — sky colour, sun, clouds, ground
@@ -61,7 +62,7 @@ To use real drawings, replace those files (SVG or PNG) and/or edit the paths in:
 ## Levels
 
 Levels are [Tiled](https://www.mapeditor.org/) maps in `src/levels/` (`*.tmj`). Open `src/levels/bird-revenge.tiled-project`
-in Tiled first: it defines the object classes the game understands (Terrain, Body, Branch, Rope, Hinge, Villain, Friend, Coin, BirdStart, Button —
+in Tiled first: it defines the object classes the game understands (Terrain, Body, Branch, Rope, Hinge, Villain, Bat, Friend, Coin, BirdStart, Button —
 see `src/level/tiled.ts`). Saving all the Friends (points, standing on the ground or a shelf) completes a level; the
 numbered levels (`001.tmj`, `002.tmj`, …) are played in number order, round and round; `training.tmj` is the
 base of the title screen's "Training": it is played once per letter, `training-A` to `training-Z` (A to Z and round, until quit

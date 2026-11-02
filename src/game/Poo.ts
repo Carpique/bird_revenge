@@ -1,4 +1,4 @@
-import { pooDef, splatLifetimeMs } from '../characters/poo';
+import { batPooDef, pooDef, splatLifetimeMs } from '../characters/poo';
 import { config, WORLD } from '../config';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { Knockout } from './Knockout';
@@ -6,17 +6,25 @@ import { BIRD_GROUP, Bodies, Body, type MBody } from './physics';
 
 type PooAnim = keyof typeof pooDef.animations;
 
+/** whose poo it is: the bird's hits villains, bats and apples and presses buttons; a bat's only hurts the bird */
+export type PooOwner = 'bird' | 'bat';
+
 export class Poo {
   readonly body: MBody;
-  readonly view = new CharacterSprite<PooAnim>(pooDef);
+  readonly view: CharacterSprite<PooAnim>;
+  /** collision radius (px) */
+  readonly radius: number;
   state: 'falling' | 'splat' | 'hit' | 'done' = 'falling';
   /** stops the falling sound; called when the poo lands or is removed */
   stopSound: () => void = () => {};
   private splatT = 0;
   private knockout: Knockout | null = null;
 
-  constructor(x: number, y: number, vx: number, vy: number) {
-    this.body = Bodies.circle(x, y, config.physics.pooRadius, {
+  constructor(x: number, y: number, vx: number, vy: number, readonly owner: PooOwner = 'bird') {
+    this.view = new CharacterSprite<PooAnim>(owner === 'bat' ? batPooDef : pooDef);
+    this.radius = owner === 'bat' ? config.bat.pooRadius : config.physics.pooRadius;
+    // in the bird's group: it never bumps into the bird (a bat's poo hits it by distance, see Game) or other poos
+    this.body = Bodies.circle(x, y, this.radius, {
       label: 'poo',
       restitution: 0,
       frictionAir: 0.01,

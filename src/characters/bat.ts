@@ -1,0 +1,24 @@
+import type { CharacterDef } from './types';
+
+/**
+ * A bat flying along its route, pooing straight down. Seen from the front, so it looks the same either way it flies.
+ * The anchor is the image's centre: the bat's position, the centre of its hitbox.
+ */
+export const batDef = {
+  id: 'bat',
+  displayHeight: 64,
+  anchor: { x: 0.5, y: 0.5 },
+  facing: 'right',
+  animations: {
+    fly: {
+      frames: ['assets/bat/fly_0.svg', 'assets/bat/fly_1.svg', 'assets/bat/fly_2.svg', 'assets/bat/fly_3.svg'],
+      fps: 10,
+      loop: true,
+    },
+    hit: { frames: ['assets/bat/hit.svg'], fps: 1 },
+  },
+  defaultAnimation: 'fly',
+} satisfies CharacterDef<'fly' | 'hit'>;
+
+/** Radius (px) of the bat's round hitbox: the body and the inner wings, not the wing tips. */
+export const batRadius = 22;

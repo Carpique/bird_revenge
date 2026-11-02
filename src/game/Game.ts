@@ -16,6 +16,7 @@ import { GlowText } from '../ui/GlowText';
 import { i18n, t } from '../ui/i18n';
 import { Apple } from './Apple';
 import { Background } from './Background';
+import { Bat } from './Bat';
 import { Bird } from './Bird';
 import { Button } from './Button';
 import { Coin } from './Coin';
@@ -65,7 +66,7 @@ export class Game {
 
   private engine: MEngine;
   private world = new Container();
-  /** the walking villains */
+  /** the walking villains, and the bats in front of them */
   private actors = new Container();
   /** the friends to save: behind the villain */
   private friendLayer = new Container();
@@ -93,6 +94,8 @@ export class Game {
   private bird: Bird;
   /** the level's villains; a knocked-off one stays (gone) until the level restarts */
   private villains: Villain[] = [];
+  /** the level's bats; a knocked-off one stays (gone) until the level restarts */
+  private bats: Bat[] = [];
   private poos: Poo[] = [];
   private apples: Apple[] = [];
   private friends: Friend[] = [];
@@ -277,6 +280,17 @@ export class Game {
       this.actors.addChildAt(v.view, 0);
       return v;
     });
+    for (const b of this.bats) {
+      Composite.remove(this.engine.world, b.body);
+      b.view.destroy();
+    }
+    this.bats = this.level.bats.map((def) => {
+      const b = new Bat(def);
+      b.onPoo = (x, y) => this.dropBatPoo(x, y);
+      Composite.add(this.engine.world, b.body);
+      this.actors.addChild(b.view);
+      return b;
+    });
     for (const p of this.poos) {
       p.stopSound();
       Composite.remove(this.engine.world, p.body);
@@ -361,6 +375,7 @@ export class Game {
     const bp = this.bird.body.position;
     const bird = this.bird.dying ? null : { x: bp.x, y: bp.y };
     for (const v of this.villains) v.step(STEP_MS, { bird, obstacles: this.villainObstacles(v.feet) });
+    for (const b of this.bats) b.step(STEP_MS);
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
     for (const f of this.friends) f.step(STEP_MS);
@@ -380,9 +395,21 @@ export class Game {
     this.saveFriends();
     this.collectCoins();
     if (this.allSavedT !== null && (this.allSavedT += STEP_MS) >= config.levelComplete.graceMs) this.completeLevel();
-    // bird touching a walking villain costs a life
+    // bird touching a walking villain or a flying bat costs a life
     const b = this.bird.body;
-    if (!this.bird.dying && !this.bird.invulnerable && this.villains.some((v) => v.touches(b.position.x, b.position.y, config.physics.birdRadius))) {
+    const birdR = config.physics.birdRadius;
+    const touches = (a: Villain | Bat) => a.touches(b.position.x, b.position.y, birdR);
+    if (!this.bird.dying && !this.bird.invulnerable && (this.villains.some(touches) || this.bats.some(touches))) {
+      this.loseLife();
+    }
+    // ...and so does a bat's poo falling on it
+    for (const p of this.poos) {
+      if (p.owner !== 'bat' || p.state !== 'falling' || this.bird.dying || this.bird.invulnerable) continue;
+      const pp = p.body.position, hitR = birdR + p.radius;
+      if ((pp.x - b.position.x) ** 2 + (pp.y - b.position.y) ** 2 >= hitR * hitR) continue;
+      Composite.remove(this.engine.world, p.body);
+      p.state = 'done';
+      audio.play('splat');
       this.loseLife();
     }
     // ...and so does an apple
@@ -396,10 +423,10 @@ export class Game {
     }
     // an apple stops at whatever of the level is in its way
     for (const a of this.apples) if (a.state === 'flying' && Query.point(this.levelBodies, { x: a.x, y: a.y }).length) a.hit();
-    // a falling poo knocks an apple out of the air: both blink out
+    // a falling poo of the bird's knocks an apple out of the air: both blink out
     const hitR = config.physics.pooRadius + config.apple.radius;
     for (const p of this.poos) {
-      if (p.state !== 'falling') continue;
+      if (p.state !== 'falling' || p.owner !== 'bird') continue;
       const pp = p.body.position;
       const a = this.apples.find((a) => a.state === 'flying' && (a.x - pp.x) ** 2 + (a.y - pp.y) ** 2 < hitR * hitR);
       if (!a) continue;
@@ -442,6 +469,7 @@ export class Game {
     this.allSavedT = 0;
     this.bird.makeInvulnerable(config.levelComplete.graceMs);
     for (const v of this.villains) v.frozen = true;
+    for (const b of this.bats) b.frozen = true;
     audio.duckMusic(config.levelComplete.graceMs);
   }
 
@@ -459,7 +487,7 @@ export class Game {
     if (this.level.goal === 'coins' && this.coins.length && this.coins.every((c) => c.state !== 'waiting')) this.goalReached();
   }
 
-  /** A button is pressed by the bird's feet on it, a poo falling into it or a splat lying on it; the doors follow. */
+  /** A button is pressed by the bird's feet on it, a poo of the bird's falling into it or its splat lying on it; the doors follow. */
   private pressButtons() {
     const b = this.bird.body.position;
     const r = config.physics.birdRadius;
@@ -468,8 +496,9 @@ export class Game {
         (!this.bird.dying && button.under(b.x, b.y + r)) ||
         this.poos.some(
           (p) =>
-            (p.state === 'falling' && button.touches(p.body.position.x, p.body.position.y, config.physics.pooRadius)) ||
-            (p.state === 'splat' && button.under(p.view.x, p.view.y)),
+            p.owner === 'bird' &&
+            ((p.state === 'falling' && button.touches(p.body.position.x, p.body.position.y, p.radius)) ||
+              (p.state === 'splat' && button.under(p.view.x, p.view.y))),
         );
       if (button.step(pressed, STEP_MS)) audio.play('button');
       this.levelView?.setPressed(button.def.id, button.pressed);
@@ -526,18 +555,18 @@ export class Game {
       const prevY = prevYs.get(p);
       if (p.state !== 'falling' || prevY === undefined || p.body.velocity.y < 0) continue;
       const pos = p.body.position;
-      const landing = landingBranch(this.branches, pos.x, prevY, pos.y, config.physics.pooRadius);
+      const landing = landingBranch(this.branches, pos.x, prevY, pos.y, p.radius);
       if (!landing) continue;
       const [x0, y0] = landing.branch.from, [x1, y1] = landing.branch.to;
       Composite.remove(this.engine.world, p.body);
       p.splat(landing.top, Math.atan((y1 - y0) / (x1 - x0)));
-      audio.play('splat');
+      if (p.owner === 'bird') audio.play('splat');
     }
   }
 
   /** Stretches of ground sheltered from above right now. Static for now; moving obstacles would recompute them here each step. */
   /**
-   * What a villain with his feet at `feetY` won't walk into (crates move, so every step): the poo splats he'd step in,
+   * What a villain with his feet at `feetY` won't walk into (crates move, so every step): the bird's poo splats he'd step in,
    * the level's bodies reaching into his height, and wherever there's nothing to stand on at his feet
    * (all but the ground's or his shelf's top).
    */
@@ -545,7 +574,7 @@ export class Game {
     const near = (y: number) => Math.abs(y - feetY) <= SURFACE_TOLERANCE;
     const head = feetY - villainHitbox.height;
     const splats = this.poos
-      .filter((p) => p.state === 'splat' && near(p.view.y))
+      .filter((p) => p.owner === 'bird' && p.state === 'splat' && near(p.view.y))
       .map((p) => ({ x0: p.view.x - splatHalfWidth, x1: p.view.x + splatHalfWidth }));
     const bodies = this.levelBodies
       .filter((b) => b.bounds.max.y > head && b.bounds.min.y < feetY - SURFACE_TOLERANCE)
@@ -598,6 +627,15 @@ export class Game {
     this.fx.addChild(poo.view);
   }
 
+  /** A bat poos at (x, y): a small poo dropping straight down. Quiet, unlike the bird's: there may be a lot of them. */
+  private dropBatPoo(x: number, y: number) {
+    const poo = new Poo(x, y, 0, config.bat.pooSpeed, 'bat');
+    this.poos.push(poo);
+    Composite.add(this.engine.world, poo.body);
+    this.fx.addChild(poo.view);
+  }
+
+  /** What a falling poo hit: the bird's knocks villains and bats off, a bat's goes through them; either splats on the ground and terrain. */
   private onCollision(pair: MPair) {
     const { bodyA: a, bodyB: b } = pair;
     const labels = [a.label, b.label];
@@ -607,8 +645,23 @@ export class Game {
     const poo = this.poos.find((p) => p.body === pooBody);
     if (!poo || poo.state !== 'falling') return;
 
-    const villain = this.villains.find((v) => v.body === other);
-    if (villain?.hittable) {
+    const bird = poo.owner === 'bird';
+    const villain = bird ? this.villains.find((v) => v.body === other) : undefined;
+    const bat = bird ? this.bats.find((b) => b.body === other) : undefined;
+    if (bat?.hittable) {
+      this.pending.push(() => {
+        if (poo.state !== 'falling') return;
+        poo.stopSound();
+        audio.play('splat');
+        if (bat.hit()) {
+          this.addScore(config.score.bat, pooBody.position.x, pooBody.position.y);
+          audio.play('bad-guy-dies');
+          this.after(1000, () => audio.play('score'));
+        }
+        Composite.remove(this.engine.world, pooBody);
+        poo.state = 'done';
+      });
+    } else if (villain?.hittable) {
       this.pending.push(() => {
         if (poo.state !== 'falling') return;
         poo.stopSound();
@@ -626,24 +679,24 @@ export class Game {
         if (poo.state !== 'falling') return;
         Composite.remove(this.engine.world, pooBody);
         poo.splat();
-        audio.play('splat');
+        if (bird) audio.play('splat');
       });
     } else if (other.label === 'terrain') {
       // lies along the surface it hit, where it touched (read now: Matter reuses the collision object)
-      const y = surfaceY(other, pooBody, pair.collision.supports[0], pair.collision.normal);
+      const y = surfaceY(other, pooBody, poo.radius, pair.collision.supports[0], pair.collision.normal);
       const angle = surfaceAngle(pair.collision.normal);
       this.pending.push(() => {
         if (poo.state !== 'falling') return;
         Composite.remove(this.engine.world, pooBody);
         poo.splat(y, angle);
-        audio.play('splat');
+        if (bird) audio.play('splat');
       });
     } else if (other.label === 'body') {
       // a splat wouldn't stay on a moving thing: the poo just goes
       this.pending.push(() => {
         if (poo.state !== 'falling') return;
         poo.stopSound();
-        audio.play('splat');
+        if (bird) audio.play('splat');
         Composite.remove(this.engine.world, pooBody);
         poo.state = 'done';
       });
@@ -744,6 +797,11 @@ export class Game {
       if (villain.falling && v.parent !== this.front) this.front.addChild(v);
       else if (!villain.falling && v.parent !== this.actors) this.actors.addChildAt(v, 0);
     }
+    for (const bat of this.bats) {
+      bat.sync();
+      // a knocked-off bat tumbles down in front of everything
+      if (!bat.hittable && bat.view.parent !== this.front) this.front.addChild(bat.view);
+    }
     for (const p of this.poos) p.sync();
     for (const a of this.apples) a.sync();
     for (const f of this.friends) f.sync();
@@ -775,14 +833,14 @@ function slideThrough(sign: GlowText, ms: number, slideMs: number, totalMs: numb
 }
 
 /**
- * y of the surface of `terrain` where the poo hit it. The contact point Matter reports is the deepest point of the overlap,
+ * y of the surface of `terrain` where the poo (of radius `r`) hit it. The contact point Matter reports is the deepest point of the overlap,
  * so a fast poo's can lie well inside the terrain: walk it back out along the normal (towards the poo) to the surface.
  */
-function surfaceY(terrain: MBody, poo: MBody, support: { x: number; y: number } | undefined, n: { x: number; y: number }): number {
-  if (!support) return poo.position.y + config.physics.pooRadius;
+function surfaceY(terrain: MBody, poo: MBody, r: number, support: { x: number; y: number } | undefined, n: { x: number; y: number }): number {
+  if (!support) return poo.position.y + r;
   const dir = n.x * (poo.position.x - support.x) + n.y * (poo.position.y - support.y) < 0 ? -1 : 1;
   const p = { x: support.x, y: support.y };
-  for (let i = 0; i < 4 * config.physics.pooRadius && Query.point([terrain], p).length; i++) {
+  for (let i = 0; i < 4 * r && Query.point([terrain], p).length; i++) {
     p.x += dir * n.x;
     p.y += dir * n.y;
   }

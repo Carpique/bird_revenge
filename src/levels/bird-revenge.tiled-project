@@ -246,6 +246,28 @@
                 "object",
                 "tile"
             ]
+        },
+        {
+            "color": "#ff4a3a5c",
+            "drawFill": true,
+            "id": 14,
+            "members": [
+                {
+                    "name": "pooDelay",
+                    "type": "float",
+                    "value": 3
+                },
+                {
+                    "name": "speed",
+                    "type": "float",
+                    "value": 2
+                }
+            ],
+            "name": "Bat",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
         }
     ]
 }

@@ -101,6 +101,12 @@ const RANGES: Record<string, [number, number, number]> = {
   'apple.radius': [2, 40, 1],
   'apple.poopedMs': [100, 3000, 50],
   'apple.poopedFallAfterMs': [0, 3000, 50],
+  'bat.intervalSpread': [0, 1, 0.05],
+  'bat.pooRadius': [2, 20, 1],
+  'bat.pooSpeed': [0, 10, 0.25],
+  'bat.hitShowMs': [0, 2000, 50],
+  'bat.fallGravity': [0.05, 2, 0.05],
+  'bat.fallSpin': [0, 5, 0.1],
   'player.lives': [1, 9, 1],
   'player.invulnerableMs': [0, 5000, 100],
   'player.dieJumpSpeed': [0, 30, 0.5],
@@ -120,7 +126,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'audio.fallMs': [100, 5000, 50],
 };
 
-const SECTIONS = ['pointing', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'friend', 'coin', 'player', 'audio'] as const;
+const SECTIONS = ['pointing', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'bat', 'friend', 'coin', 'player', 'audio'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {

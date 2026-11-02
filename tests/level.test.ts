@@ -141,6 +141,24 @@ describe('Tiled levels', () => {
     expect(() => parseTiledMap('t', mapOf([{ type: 'Villain', point: true }]))).toThrow('must be a polyline');
   });
 
+  it('reads bats: a polyline flown there and back, a polygon round and round', () => {
+    const level = parseTiledMap(
+      't',
+      mapOf([
+        { type: 'Bat', x: 100, y: 200, polyline: [{ x: 0, y: 0 }, { x: 300, y: 50 }] },
+        { type: 'Bat', x: 500, y: 100, polygon: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 80 }], properties: [prop('speed', 'float', 3.5), prop('pooDelay', 'float', 0)] },
+      ]),
+    );
+    expect(level.bats).toEqual([
+      { route: [[100, 200], [400, 250]], loop: false, speed: 2, pooDelay: 3 },
+      { route: [[500, 100], [600, 100], [550, 180]], loop: true, speed: 3.5, pooDelay: 0 },
+    ]);
+    expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', point: true }]))).toThrow('must be a polyline or polygon');
+    expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', polyline: [{ x: 0, y: 0 }, { x: 0, y: 0 }] }]))).toThrow('needs some length');
+    expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', polyline: [{ x: 0, y: 0 }, { x: 9, y: 0 }], properties: [prop('speed', 'float', 0)] }]))).toThrow('"speed"');
+    expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', polyline: [{ x: 0, y: 0 }, { x: 9, y: 0 }], properties: [prop('pooDelay', 'float', -1)] }]))).toThrow("can't be negative");
+  });
+
   it('reads buttons and checks their targets', () => {
     const level = parseTiledMap(
       't',

@@ -90,6 +90,18 @@ export interface VillainDef {
   throwDelay: number;
 }
 
+/** A bat flying along its route, pooing straight down now and then. */
+export interface BatDef {
+  /** the route's points, in order; it starts at the first */
+  route: [number, number][];
+  /** true: round and round (a closed polygon); false: there and back again (an open polyline) */
+  loop: boolean;
+  /** px per physics step */
+  speed: number;
+  /** average time between its poos (s); 0 = it never poos */
+  pooDelay: number;
+}
+
 export type ButtonAction = 'open' | 'close';
 
 /**
@@ -118,6 +130,7 @@ export interface LevelDef {
   /** where the bird starts (its centre), or null for the default spot */
   birdStart: { x: number; y: number } | null;
   villains: VillainDef[];
+  bats: BatDef[];
   /** saving all of them completes the level (a level without any never ends) */
   friends: FriendDef[];
   coins: CoinDef[];

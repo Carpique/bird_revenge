@@ -53,7 +53,7 @@ const isNumbered = (name: string) => /^\d+$/.test(name);
 export const gameLevels = (all: Map<string, LevelDef>): LevelDef[] => [...all.values()].filter((l) => isNumbered(l.name));
 
 /** An empty screen, played when no level loads. */
-const EMPTY: LevelDef = { name: 'empty', width: 1280, height: 720, birdStart: null, villains: [], friends: [], coins: [], bodies: [], branches: [], joints: [], buttons: [] };
+const EMPTY: LevelDef = { name: 'empty', width: 1280, height: 720, birdStart: null, villains: [], bats: [], friends: [], coins: [], bodies: [], branches: [], joints: [], buttons: [] };
 
 /** The level the URL asks for (`?level=<name>`), for testing it: the game skips the menu and plays just this level. */
 export const testLevelName = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('level');

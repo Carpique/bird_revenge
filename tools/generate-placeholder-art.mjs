@@ -140,6 +140,49 @@ const walk = [
 walk.forEach((p, i) => write(`villain/walk_${i}.svg`, villain({ ...p, seed: 100 + i * 31 })));
 write('villain/hit.svg', villain({ legA: 10, legB: -10, armA: 150, armB: -150, seed: 300, splat: true }));
 
+// ---------------------------------------------------------------- bat (seen from the front, centre at the middle)
+const BAT_W = 140, BAT_H = 90;
+const batFur = '#4a3a5c', batWing = '#6b5a80';
+
+/** `wing`: how far the wings are raised (deg, + = up); `hit`: wings folded, dazed, a poo on its head */
+function bat({ wing, seed, hit = false }) {
+  const d = [];
+  const cx = BAT_W / 2, cy = 50;
+  // one wing, drawn for the right side and mirrored: from the shoulder out to the tip, scalloped along the bottom
+  const wingShape = [[0, -8], [22, -16], [46, -14], [60, -4], [50, 2], [44, 12], [34, 6], [26, 16], [16, 8], [6, 12], [0, 8]];
+  for (const side of [1, -1]) {
+    const pts = rot(wingShape.map(([x, y]) => [x * (hit ? 0.45 : 1), y]), wing, [0, 0]).map(([x, y]) => [cx + side * (12 + x), cy - 6 + y]);
+    d.push(gen.polygon(pts, o(seed + (side > 0 ? 1 : 2), { fill: batWing, fillStyle: 'cross-hatch', hachureGap: 5, fillWeight: 1.1 })));
+  }
+  // body, head, ears
+  d.push(gen.ellipse(cx, cy + 4, 28, 36, o(seed + 3, { fill: batFur, fillStyle: 'hachure', hachureGap: 3.5, fillWeight: 1.5 })));
+  d.push(gen.polygon([[cx - 12, cy - 22], [cx - 14, cy - 38], [cx - 3, cy - 26]], o(seed + 4, { fill: batFur, fillStyle: 'solid' })));
+  d.push(gen.polygon([[cx + 12, cy - 22], [cx + 14, cy - 38], [cx + 3, cy - 26]], o(seed + 5, { fill: batFur, fillStyle: 'solid' })));
+  d.push(gen.circle(cx, cy - 18, 26, o(seed + 6, { fill: batFur, fillStyle: 'hachure', hachureGap: 3.5, fillWeight: 1.5 })));
+  if (hit) {
+    // dazed: x eyes, an open mouth, and the bird's poo on top
+    for (const ex of [cx - 6, cx + 6]) {
+      d.push(gen.line(ex - 3, cy - 23, ex + 3, cy - 17, o(seed + 7, { stroke: '#fff', strokeWidth: 2 })));
+      d.push(gen.line(ex + 3, cy - 23, ex - 3, cy - 17, o(seed + 8, { stroke: '#fff', strokeWidth: 2 })));
+    }
+    d.push(gen.circle(cx, cy - 9, 5, o(seed + 9, { fill: '#c0392b', fillStyle: 'solid', strokeWidth: 1 })));
+    const poo = '#7a5230';
+    d.push(gen.ellipse(cx, cy - 32, 30, 12, o(seed + 10, { fill: poo, fillStyle: 'solid' })));
+    d.push(gen.polygon([[cx - 12, cy - 30], [cx - 14, cy - 18], [cx - 9, cy - 29]], o(seed + 11, { fill: poo, fillStyle: 'solid' })));
+  } else {
+    // glowing eyes, little fangs
+    d.push(gen.circle(cx - 6, cy - 20, 6, o(seed + 7, { fill: '#f7d35a', fillStyle: 'solid', strokeWidth: 1 })));
+    d.push(gen.circle(cx + 6, cy - 20, 6, o(seed + 8, { fill: '#f7d35a', fillStyle: 'solid', strokeWidth: 1 })));
+    d.push(gen.polygon([[cx - 5, cy - 10], [cx - 3, cy - 5], [cx - 1, cy - 10]], o(seed + 9, { fill: '#fff', fillStyle: 'solid', strokeWidth: 1 })));
+    d.push(gen.polygon([[cx + 1, cy - 10], [cx + 3, cy - 5], [cx + 5, cy - 10]], o(seed + 10, { fill: '#fff', fillStyle: 'solid', strokeWidth: 1 })));
+  }
+  return svg(BAT_W, BAT_H, d);
+}
+
+// fly frames: a full wingbeat, wings up -> down -> back up (the animation loops)
+[30, 5, -25, 5].forEach((wing, i) => write(`bat/fly_${i}.svg`, bat({ wing, seed: 900 + i * 17 })));
+write('bat/hit.svg', bat({ wing: 60, seed: 980, hit: true }));
+
 // ---------------------------------------------------------------- poo
 const pooC = '#7a5230';
 write('poo/falling.svg', svg(34, 36, [
