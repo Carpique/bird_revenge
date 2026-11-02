@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 import { levelThumbnails } from './tools/level-thumbnails';
+import { tutorialRecordings } from './tools/tutorial-recordings';
 
 const AUDIO_DIR = 'public/assets/audio';
 
@@ -39,7 +40,7 @@ export default defineConfig(({ mode }) => {
   const lan = mode === 'lan';
   return {
     base: './',
-    plugins: lan ? [audioFiles(), levelThumbnails(), basicSsl()] : [audioFiles(), levelThumbnails()],
+    plugins: [audioFiles(), levelThumbnails(), tutorialRecordings(), ...(lan ? [basicSsl()] : [])],
     server: { port: 5173, open: !lan, host: lan },
   };
 });

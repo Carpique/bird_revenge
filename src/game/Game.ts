@@ -63,6 +63,11 @@ export class Game {
   }
   /** latest controls; set by main from pose + keyboard */
   controls: Controls = noControls();
+  /**
+   * called before every physics step, so `controls` can be set step by step (a recorded pose stream played back
+   * the same way every time, whatever the frame rate)
+   */
+  onStep: (() => void) | null = null;
 
   private engine: MEngine;
   private world = new Container();
@@ -78,7 +83,8 @@ export class Game {
   private top = new Container();
   /** in front of everything: the knocked-off villain flying towards the camera, a saved friend growing */
   private front = new Container();
-  private hud = new Container();
+  /** score, coins, lives and the big signs; the instructions' demonstration hides it */
+  readonly hud = new Container();
   private background = new Background();
   /** the level's shelves, crates, ropes: in front of the background, behind the villain */
   private levelLayer = new Container();
@@ -366,6 +372,7 @@ export class Game {
   }
 
   private step() {
+    this.onStep?.();
     this.engine.gravity.y = config.physics.gravity;
     if (this.pooQueued && !this.bird.dying) {
       this.bird.squat();

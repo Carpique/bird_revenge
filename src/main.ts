@@ -6,13 +6,14 @@ import { firstLevel, gameLevels, levels, nextLevel, onLevelEdited, testLevelName
 import { markCompleted, unlockedLevels } from './levels/progress';
 import { Thumbnails } from './level/thumbnails';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
-import { FlapDetector, type FlapOutput } from './gestures/FlapDetector';
-import { PointingDetector, type PointingOutput } from './gestures/PointingDetector';
-import { TiltDetector, type TiltOutput } from './gestures/TiltDetector';
-import { ShootDetector, type ShootOutput } from './gestures/ShootDetector';
-import { VisibilityMonitor, type VisibilityOutput } from './gestures/VisibilityMonitor';
+import type { FlapOutput } from './gestures/FlapDetector';
+import type { PointingOutput } from './gestures/PointingDetector';
+import type { TiltOutput } from './gestures/TiltDetector';
+import type { ShootOutput } from './gestures/ShootDetector';
+import type { VisibilityOutput } from './gestures/VisibilityMonitor';
 import { noControls, type Controls } from './input/controls';
 import { Keyboard } from './input/keyboard';
+import { controlsFrom, POSE_STALE_MS, PoseDetectors } from './input/poseControls';
 import { startCamera, stopCamera } from './pose/camera';
 import { PoseTracker } from './pose/PoseTracker';
 import type { PoseFrame } from './pose/types';
@@ -26,6 +27,9 @@ import { t, type Msg } from './ui/i18n';
 import { LanguageButton } from './ui/LanguageButton';
 import { PauseMenu } from './ui/PauseMenu';
 import { Recorder } from './ui/Recorder';
+import { loadRecording } from './tutorial';
+import { PoseReplay } from './tutorial/PoseReplay';
+import { TUTORIAL_LEVEL } from './tutorial/recording';
 import { SplashScreen } from './ui/SplashScreen';
 import { Tuning } from './ui/Tuning';
 import { VolumeButton } from './ui/VolumeButton';
@@ -94,6 +98,9 @@ async function main() {
 
   /** the window is unfocused / hidden, or the game is paused: nothing runs */
   let suspended = false;
+  /** the instructions page is open: its demonstration plays (set up below) */
+  let demoOn = false;
+  let replay: PoseReplay | null = null;
 
   // the guide is drawn every animation frame, also while loading (not while suspended)
   let guideRunning = true;
@@ -123,6 +130,8 @@ async function main() {
         message: cameraError ? t('{error} – reconnecting…', { error: t(cameraError) }) : (vis?.hint ?? t('Get into view')),
       });
     else if (state === 'countdown') Object.assign(gs, { mode: 'countdown', countdown: (countdownEnd - now) / 1000 });
+    else if (state === 'menu' && demoOn && replay?.recording)
+      Object.assign(gs, { mode: 'demo', frame: replay.frame, vis: replay.vis, aspect: replay.recording.aspect });
     guide.draw(gs, now);
     requestAnimationFrame(drawGuide);
   };
@@ -133,6 +142,13 @@ async function main() {
 
   const game = new Game(app, firstLevel());
   let allLevels = levels;
+  // the instructions' demonstration: the tutorial level, its bird flown by a recorded pose stream (`src/tutorial/`),
+  // drawn over the game and under the title screen, which makes way for it
+  const tutorialLevel = () => allLevels.get(TUTORIAL_LEVEL) ?? firstLevel();
+  const demo = new Game(app, tutorialLevel());
+  demo.hud.visible = false;
+  replay = new PoseReplay(demo, tutorialLevel);
+  const demoReplay = replay;
   // all friends saved: remembered (it opens the next one in the level select), and on to the next level, keeping score,
   // lives back to full (training, or testing a level from the URL: that level again, not remembered)
   game.onLevelComplete = () => {
@@ -155,6 +171,14 @@ async function main() {
   };
   const splash = new SplashScreen(app, new Thumbnails(app), levelChoice, levels.has(TRAINING));
   app.stage.addChild(splash);
+  splash.onInstructions = async (open) => {
+    demoOn = open;
+    if (!open) return demoReplay.stop();
+    // the level as it is, the bird standing, until the recording loads (none recorded: just that)
+    demo.loadLevel(tutorialLevel());
+    const rec = await loadRecording(TUTORIAL_LEVEL);
+    if (rec && demoOn) demoReplay.play(rec);
+  };
   const pauseMenu = new PauseMenu(app);
   app.stage.addChild(pauseMenu);
   const status = document.getElementById('status')!;
@@ -166,11 +190,7 @@ async function main() {
   const volume = new VolumeButton(corner);
   const language = new LanguageButton();
   const keyboard = new Keyboard();
-  const visibility = new VisibilityMonitor();
-  const flap = new FlapDetector();
-  const shoot = new ShootDetector();
-  const tilt = new TiltDetector();
-  const pointing = new PointingDetector();
+  const detectors = new PoseDetectors();
   const calibration = new Calibration();
 
   const startCountdown = () => {
@@ -364,22 +384,20 @@ async function main() {
   const onPose = (f: PoseFrame | null) => {
     const now = performance.now();
     frame = f;
-    vis = visibility.update(f, now);
-    recorder.add(f, now);
     // always run the detectors so their state stays continuous; only *apply* them while playing
-    if (f) {
-      flapOut = flap.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible);
-      shootOut = shoot.update(f, vis.parts.torso.visible);
-      tiltOut = tilt.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible, flapOut);
-      pointingOut = pointing.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible);
-      debug.record(now, flapOut, shootOut);
+    const reading = detectors.update(f, now);
+    vis = reading.vis;
+    recorder.add(f, now);
+    if (reading.flap && reading.shoot && reading.tilt && reading.pointing) {
+      ({ flap: flapOut, shoot: shootOut, tilt: tiltOut, pointing: pointingOut } = reading);
+      debug.record(now, reading.flap, reading.shoot);
     }
 
     switch (state) {
       case 'calibrating':
         calibStatus = calibration.update(f, vis);
         if (calibStatus.done) {
-          shoot.calibrate(calibStatus.done);
+          detectors.shoot.calibrate(calibStatus.done);
           startCountdown();
         }
         break;
@@ -394,19 +412,12 @@ async function main() {
           state = 'outOfFrame';
           break;
         }
-        if (f && flapOut && shootOut && tiltOut && pointingOut) {
-          // pointing control replaces flapping, tilt and hover; the wings still follow the arms
-          const byPointing = !config.pointing.flapping;
-          poseControls = {
-            lift: byPointing ? 0 : flapOut.lift,
-            tilt: byPointing ? 0 : tiltOut.tilt,
-            hover: byPointing ? 0 : tiltOut.hold,
-            wingPhase: flapOut.wingPhase,
-            flapping: false,
-            pointing: byPointing ? pointingOut.intent : null,
-          };
+        {
+          const controls = controlsFrom(reading);
+          if (!controls) break;
+          poseControls = controls;
           lastPoseT = now;
-          if (shootOut.triggered) game.requestPoo();
+          if (reading.shoot?.triggered) game.requestPoo();
         }
         break;
     }
@@ -433,7 +444,7 @@ async function main() {
     }
     updateCamera();
 
-    const poseFresh = state === 'playing' && now - lastPoseT < 300;
+    const poseFresh = state === 'playing' && now - lastPoseT < POSE_STALE_MS;
     game.controls = keyboard.apply(poseFresh ? poseControls : noControls());
     // during gameOver the game runs only to slide the "Game Over" sign through
     game.paused = manualPause || menuOpen || !(state === 'playing' || state === 'keyboard' || state === 'gameOver');
@@ -445,10 +456,13 @@ async function main() {
     if (splash.visible && !menuShown) audio.playTheme();
     if (!splash.visible && menuShown) audio.stopTheme(config.audio.themeFadeMs);
     menuShown = splash.visible;
-    language.visible = splash.visible;
+    // not over the instructions' demonstration
+    language.visible = splash.visible && !demoOn;
     // only the title screen lets Esc leave full screen; in the game it opens the pause menu
     fullscreen.lockEscape = !splash.visible;
     game.root.visible = !splash.visible;
+    demo.root.visible = splash.visible && demoOn;
+    demoReplay.update(app.ticker.deltaMS);
 
     const mode = state === 'keyboard' || poseError ? 'keyboard' : 'pose';
     const rec = recorder.recording ? `  ● REC ${recorder.seconds.toFixed(0)}s` : '';

@@ -1,7 +1,7 @@
 import type { Container } from 'pixi.js';
 import rough from 'roughjs';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
-import { PART_NAMES, REQUIRED_PARTS, SKELETON, type PartName } from '../pose/landmarks';
+import { L, PART_NAMES, REQUIRED_PARTS, SKELETON, type PartName } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
 import { scenery } from '../scenery/scenery';
 import { WORLD } from '../config';
@@ -9,7 +9,7 @@ import { BIG_FILL, BIG_OUTLINE, bigTextStyle, GLOW, INK, TEXT_FONT as FONT } fro
 import { GlowText } from './GlowText';
 import { t } from './i18n';
 
-export type GuideMode = 'hidden' | 'loading' | 'calibrate' | 'outOfFrame' | 'countdown';
+export type GuideMode = 'hidden' | 'loading' | 'calibrate' | 'outOfFrame' | 'countdown' | 'demo';
 
 export interface GuideState {
   mode: GuideMode;
@@ -25,6 +25,8 @@ export interface GuideState {
   countdown?: number;
   frame: PoseFrame | null;
   vis: VisibilityOutput | null;
+  /** the camera image's width / height, when `frame` isn't from the live camera (a recording) */
+  aspect?: number;
 }
 
 type P = [number, number];
@@ -53,6 +55,12 @@ const PANEL = {
   pose: { outlineWidth: 7, skeletonWidth: 3, skeletonColor: 'rgba(43,43,43,0.75)', belly: BIG_FILL },
   /** the hold-still progress bar: height, and width as a fraction of the panel's */
   bar: { height: 12, width: 0.6, border: 3, color: GREEN, borderColor: INK, emptyColor: MUTED },
+  /**
+   * the instructions' demonstration panel, playing a recorded pose in the left half of the screen, no text: its height
+   * as a fraction of the sky's (the screen's top to the ground), centred in it, so it hovers as far above the ground as
+   * it is below the top. The calibration's target figure moves with the pose, instead of a skeleton over it.
+   */
+  demo: { height: 0.85 },
 };
 
 /** Calibration dialog height, title included, as a fraction of the screen's height... */
@@ -74,7 +82,8 @@ const MINI_SCALE = 0.5;
  * The player's left side is on the screen's left (like a mirror). Arms lowered, a bit away
  * from the body.
  */
-const OUTLINE: Record<PartName, { kind: 'circle'; c: P; r: number } | { kind: 'path' | 'polygon'; pts: P[] }> = {
+type Figure = Record<PartName, { kind: 'circle'; c: P; r: number } | { kind: 'path' | 'polygon'; pts: P[] }>;
+const OUTLINE: Figure = {
   head: { kind: 'circle', c: [0.5, 0.2], r: 0.055 },
   torso: { kind: 'polygon', pts: [[0.455, 0.3], [0.545, 0.3], [0.535, 0.56], [0.465, 0.56]] },
   leftArm: { kind: 'path', pts: [[0.455, 0.3], [0.425, 0.43], [0.4, 0.55]] },
@@ -82,6 +91,33 @@ const OUTLINE: Record<PartName, { kind: 'circle'; c: P; r: number } | { kind: 'p
   leftLeg: { kind: 'path', pts: [[0.47, 0.56], [0.455, 0.73], [0.44, 0.9]] },
   rightLeg: { kind: 'path', pts: [[0.53, 0.56], [0.545, 0.73], [0.56, 0.9]] },
 };
+
+/** the head's radius in `OUTLINE`, relative to its torso's length (shoulders to hips) */
+const HEAD_PER_TORSO = 0.055 / 0.26;
+
+/**
+ * `OUTLINE`'s figure in the pose of `f`: the torso between the shoulders and hips, the limbs along the arms and legs,
+ * the head round the face, as big for the body as the outline's. `cam`: the camera rectangle it's drawn in, for the
+ * head's size (its radius is in camera heights, the points in mirrored display coordinates).
+ */
+function posedFigure(f: PoseFrame, cam: Rect): Figure {
+  const p = (i: number): P => [1 - f.lm[i].x, f.lm[i].y];
+  const mid = (a: P, b: P): P => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const ls = p(L.leftShoulder), rs = p(L.rightShoulder), lh = p(L.leftHip), rh = p(L.rightHip);
+  const sc = mid(ls, rs), hc = mid(lh, rh);
+  const torso = Math.hypot((sc[0] - hc[0]) * cam.w, (sc[1] - hc[1]) * cam.h) / cam.h;
+  // the face's landmarks sit low in the head: its centre a little above them
+  const face = mid(p(L.nose), mid(p(L.leftEye), p(L.rightEye)));
+  const r = HEAD_PER_TORSO * torso;
+  return {
+    head: { kind: 'circle', c: [face[0], face[1] - r * 0.25], r },
+    torso: { kind: 'polygon', pts: [ls, rs, rh, lh] },
+    leftArm: { kind: 'path', pts: [ls, p(L.leftElbow), p(L.leftWrist)] },
+    rightArm: { kind: 'path', pts: [rs, p(L.rightElbow), p(L.rightWrist)] },
+    leftLeg: { kind: 'path', pts: [lh, p(L.leftKnee), p(L.leftAnkle)] },
+    rightLeg: { kind: 'path', pts: [rh, p(L.rightKnee), p(L.rightAnkle)] },
+  };
+}
 
 /**
  * Full-screen 2D-canvas overlay: loading screen, the "get in position" calibration dialog,
@@ -137,6 +173,9 @@ export class FrameGuide {
       case 'outOfFrame':
         this.drawOutOfFrameBox(s, W, H, now);
         break;
+      case 'demo':
+        this.drawDemoPanel(s, W, H, now);
+        break;
     }
   }
 
@@ -144,8 +183,8 @@ export class FrameGuide {
    * Rectangle with the camera image's proportions, centred in `r`: fitted inside it, or with `cover`
    * filling it (overflowing on one axis; the caller clips to `r`).
    */
-  private fitCamera(r: Rect, cover = false): Rect {
-    const vw = this.video.videoWidth || 1280, vh = this.video.videoHeight || 720;
+  private fitCamera(r: Rect, cover = false, aspect?: number): Rect {
+    const vw = aspect ?? (this.video.videoWidth || 1280), vh = aspect ? 1 : this.video.videoHeight || 720;
     const scale = (cover ? Math.max : Math.min)(r.w / vw, r.h / vh);
     const w = vw * scale, h = vh * scale;
     return { x: r.x + (r.w - w) / 2, y: r.y + (r.h - h) / 2, w, h };
@@ -186,9 +225,27 @@ export class FrameGuide {
   }
 
   /**
+   * The instructions' demonstration: the dialog's panel, no text, in the left half of the screen (the bird flies in the
+   * right half), centred between the top and the ground.
+   */
+  private drawDemoPanel(s: GuideState, W: number, H: number, now: number) {
+    const half = W / 2;
+    // the ground's top on screen, the world scaled and centred as the game is (`fitWorld`)
+    const k = Math.min(W / WORLD.width, H / WORLD.height);
+    const sky = (H - WORLD.height * k) / 2 + WORLD.groundY * k;
+    let h = sky * PANEL.demo.height, w = h * DIALOG_ASPECT;
+    if (w > half * 0.9) {
+      w = half * 0.9;
+      h = w / DIALOG_ASPECT;
+    }
+    const box: Rect = { x: (half - w) / 2, y: (sky - h) / 2, w, h };
+    this.drawPanel(box, 1, s, now, { message: '' }, true);
+  }
+
+  /**
    * A pose panel (`PANEL`) filling `box`, its sizes scaled like the game and then by `scale`: the schematic, the messages (wrapped)
    * and, with `progress` (0..1), the hold-still bar. Portrait: the schematic shows only the middle
-   * strip of the (landscape) camera view, where the player stands.
+   * strip of the (landscape) camera view, where the player stands. Without any text or bar, the pose fills it all.
    */
   private drawPanel(
     box: Rect,
@@ -196,6 +253,7 @@ export class FrameGuide {
     s: GuideState,
     now: number,
     c: { message: string; hint?: string; error?: boolean; progress?: number },
+    posed = false,
   ) {
     const ctx = this.ctx;
     const { border, text, bar } = PANEL;
@@ -225,13 +283,15 @@ export class FrameGuide {
     const hintLines = c.hint ? this.wrap(c.hint, inner) : [];
     const barH = c.progress !== undefined ? bar.height * k : 0;
 
-    const footer = lines.length * lineH + hintLines.length * hintH + (barH ? barH + pad * 0.6 : 0) + pad * 1.3;
+    const footer = lines.length || hintLines.length || barH
+      ? lines.length * lineH + hintLines.length * hintH + (barH ? barH + pad * 0.6 : 0) + pad * 1.3
+      : pad;
     const poseArea: Rect = { x: box.x + pad, y: box.y + pad, w: inner, h: box.h - footer - pad };
     ctx.save();
     ctx.beginPath();
     ctx.rect(poseArea.x, poseArea.y, poseArea.w, poseArea.h);
     ctx.clip();
-    this.drawPose(s, this.fitCamera(poseArea, true), now, k);
+    this.drawPose(s, this.fitCamera(poseArea, true, s.aspect), now, k, posed);
     ctx.restore();
 
     let y = poseArea.y + poseArea.h + pad * 0.3 + lineH / 2;
@@ -282,9 +342,10 @@ export class FrameGuide {
    * Target outline with a yellow belly (each part green when visible; a lost required part blinks red, a lost optional
    * part such as the lower legs is grey; the thighs follow the torso, which includes the hips) plus the player's live
    * skeleton, both mapped into the camera rectangle `cam` (mirrored). Line widths: `PANEL.pose`'s, scaled
-   * by `k`. Without visibility data (still loading) the outline is grey.
+   * by `k`. Without visibility data (still loading) the outline is grey. `posed`: the outline's figure moves with the
+   * pose instead (`posedFigure`; the target outline while nobody's in view), no skeleton.
    */
-  private drawPose(s: GuideState, cam: Rect, now: number, k: number) {
+  private drawPose(s: GuideState, cam: Rect, now: number, k: number, posed = false) {
     const ctx = this.ctx;
     const { pose } = PANEL;
     const outlineWidth = Math.max(1.5, pose.outlineWidth * k);
@@ -301,13 +362,14 @@ export class FrameGuide {
       return !s.vis ? MUTED : ok ? GREEN : required ? RED : MUTED;
     };
     // the belly filled yellow, like the big text's letters; it stays while the outline blinks
-    const torso = OUTLINE.torso;
+    const figure = posed && s.frame ? posedFigure(s.frame, cam) : OUTLINE;
+    const torso = figure.torso;
     if (torso.kind === 'polygon') {
       const seed = 40 + PART_NAMES.indexOf('torso');
       this.rc.polygon(torso.pts.map(toScreen), { stroke: 'none', fill: pose.belly, fillStyle: 'solid', roughness: 1.6, bowing: 1.5, seed });
     }
     PART_NAMES.forEach((name, i) => {
-      const shape = OUTLINE[name];
+      const shape = figure[name];
       const style = (color: string) => ({ stroke: color, strokeWidth: outlineWidth, roughness: 1.6, bowing: 1.5, seed: 40 + i });
       if (shape.kind === 'path' && (name === 'leftLeg' || name === 'rightLeg')) {
         // the thighs show the hips, which must be in view (they count with the torso); the rest of the leg is optional
@@ -330,7 +392,7 @@ export class FrameGuide {
       }
     });
 
-    if (s.frame) {
+    if (s.frame && !posed) {
       const lm = s.frame.lm;
       ctx.lineWidth = skeletonWidth;
       ctx.lineCap = 'round';

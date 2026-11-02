@@ -27,6 +27,8 @@ export class Menu extends Container {
   private cursors: CharacterSprite<keyof typeof birdDef.animations>[] = [];
   private t = 0;
   selected = 0;
+  /** the small flapping birds beside the selected item */
+  cursorsShown = true;
 
   constructor(private glow = false) {
     super();
@@ -40,15 +42,15 @@ export class Menu extends Container {
     this.addChild(this.list, ...this.cursors);
   }
 
-  /** Show `items`, the first one at y = `top`, with item `selected` highlighted. */
-  setItems(items: MenuItem[], top: number, selected = 0) {
+  /** Show `items`, the first one at y = `top`, centred on `x`, with item `selected` highlighted. */
+  setItems(items: MenuItem[], top: number, selected = 0, x = WORLD.width / 2) {
     this.items = items;
     for (const c of this.list.removeChildren()) c.destroy();
     items.forEach((item, i) => {
       const label = t(item.label);
       const text = this.glow ? new GlowText(label, ITEM_STYLE) : new Text({ text: label, style: ITEM_STYLE });
       if (text instanceof Text) text.anchor.set(0.5);
-      text.position.set(WORLD.width / 2, top + i * 82);
+      text.position.set(x, top + i * 82);
       text.eventMode = 'static';
       text.cursor = 'pointer';
       text.on('pointerover', () => this.select(i));
@@ -61,7 +63,7 @@ export class Menu extends Container {
   /** Highlight item `i` (wrapping round); none for -1 (the level select's grid has the keys instead). */
   select(i: number) {
     this.selected = i === -1 ? -1 : (i + this.items.length) % this.items.length;
-    for (const c of this.cursors) c.visible = this.selected !== -1;
+    for (const c of this.cursors) c.visible = this.cursorsShown && this.selected !== -1;
     this.list.children.forEach((c, j) => {
       const text = c as Text | GlowText;
       const on = j === this.selected;

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tutorial Recorder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Luckiest+Guy&family=Peralta&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="./recorder.css" />
+  </head>
+  <body>
+    <div id="game"></div>
+    <canvas id="guide"></canvas>
+    <div id="countdown" hidden></div>
+    <div id="rec-badge" hidden></div>
+    <div id="recorder">
+      <div class="rec-row">
+        <button id="btn-record" title="R">● Record</button>
+        <button id="btn-play" title="Space">▶ Play clip</button>
+        <button id="btn-save" title="S">Save</button>
+        <button id="btn-live" title="L">Live</button>
+        <button id="btn-calibrate" title="C">Recalibrate</button>
+        <span id="rec-status"></span>
+      </div>
+      <canvas id="timeline"></canvas>
+      <div class="rec-help">
+        R record · Esc stop recording · Space play / stop the clip · drag the green / red handles to trim, ← → nudge the last one
+        by a frame (Shift: 10) · click the strip to scrub · S save · L live · C recalibrate · H hide this bar
+      </div>
+    </div>
+    <video id="camera" playsinline muted></video>
+    <script type="module" src="./tutorialRecorder.ts"></script>
+  </body>
+</html>

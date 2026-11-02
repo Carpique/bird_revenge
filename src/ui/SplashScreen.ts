@@ -5,9 +5,9 @@ import { Ground } from '../game/Ground';
 import type { Thumbnails } from '../level/thumbnails';
 import type { LevelDef } from '../level/types';
 import { fitWorld } from '../render/fitWorld';
-import { bigTextStyle, INK, TEXT_FONT } from './fonts';
+import { bigTextStyle } from './fonts';
 import { GlowText } from './GlowText';
-import { i18n, t, type Msg } from './i18n';
+import { i18n, t } from './i18n';
 import { LevelSelect } from './LevelSelect';
 import { Menu, type MenuItem } from './Menu';
 import { PooRain } from './PooRain';
@@ -19,17 +19,8 @@ interface PageItem extends MenuItem {
   page?: Page;
 }
 
-const INSTRUCTIONS: (Msg | '')[] = [
-  'Flap both arms to fly up.',
-  'Tilt your arms to fly sideways — flap them tilted to climb that way.',
-  'Spread your arms in a T to float down slowly.',
-  'Shoot: raise a leg sideways to drop a poo.',
-  'Fly into the little animals to save them — save them all to finish the level!',
-  'Hit the villain to score!',
-  "Don't touch him — it costs you one of your 3 lives.",
-  'Stand back so your arms and hips are in view.',
-  'Keyboard: ↑ flap · ← → fly sideways · Shift float · ↓ poo · Space pause',
-];
+/** The instructions page's "Return": in the middle, on the ground below the demonstration (world px). */
+const INSTRUCTIONS_BACK = { x: WORLD.width / 2, y: 685 };
 
 /** The level select's list: the game's levels in play order, which can be picked, and which to select first. */
 export interface LevelChoice {
@@ -41,19 +32,23 @@ export interface LevelChoice {
 /**
  * Title screen drawn in the game world (1280x720): sky, the game's ground, the title and the
  * main menu; "Start" opens the level select. Arrow keys / W S to move, Enter or Space to choose, Esc to go back;
- * mouse works too.
+ * mouse works too. "Instructions" shows no text: the title screen makes way for a demonstration (`onInstructions`),
+ * leaving only "Return".
  */
 export class SplashScreen extends Container {
   /** a level was picked to play (`levels` is empty: straight from "Start", without a level) */
   onStart: (level?: LevelDef) => void = () => {};
   onTraining: () => void = () => {};
+  /** the instructions page opened (true) or closed: show the demonstration, which this screen leaves uncovered meanwhile */
+  onInstructions: (open: boolean) => void = () => {};
 
   private page: Page = 'main';
   private items: PageItem[] = [];
   private menu = new Menu(true);
   private title: GlowText;
-  private pageText: GlowText;
   private levelSelect: LevelSelect;
+  /** the poo rain, the ground and the dimming over them: hidden for the instructions' demonstration */
+  private backdrop = new Container();
 
   /** `levels`: the level select's list, asked for each time it opens; `hasTraining`: show "Training" as the last item (the training level loaded) */
   constructor(
@@ -70,13 +65,11 @@ export class SplashScreen extends Container {
     // dimmed like the game behind the in-game menu, with the text glowing over it
     const dim = new Graphics().rect(-WORLD.width * 5, -WORLD.height * 5, WORLD.width * 11, WORLD.height * 11).fill('#000');
     dim.alpha = config.signDim;
-    root.addChild(rain, new Ground(), dim);
+    this.backdrop.addChild(rain, new Ground(), dim);
+    root.addChild(this.backdrop);
 
     const title = new GlowText('', bigTextStyle(150));
     title.position.set(WORLD.width / 2, 170);
-
-    this.pageText = new GlowText('', { fontFamily: TEXT_FONT, fontSize: 28, fill: INK, align: 'center', lineHeight: 32 });
-    this.pageText.x = WORLD.width / 2;
 
     this.levelSelect = new LevelSelect(thumbnails);
     // back on the main page (with "Start" selected) for when the game is quit; the list is made afresh next time
@@ -87,7 +80,7 @@ export class SplashScreen extends Container {
     this.levelSelect.onBack = () => this.showPage('main');
     this.levelSelect.visible = false;
 
-    root.addChild(title, this.pageText, this.menu, this.levelSelect);
+    root.addChild(title, this.menu, this.levelSelect);
     this.title = title;
 
     window.addEventListener('keydown', (e) => this.onKey(e));
@@ -96,7 +89,7 @@ export class SplashScreen extends Container {
       if (!this.visible) return;
       if (this.levelSelect.visible) this.levelSelect.update(ticker.deltaMS);
       else this.menu.animate(ticker.deltaMS);
-      rain.update(ticker.deltaMS);
+      if (this.backdrop.visible) rain.update(ticker.deltaMS);
     });
     const relabel = () => {
       title.text = t('Bird Revenge');
@@ -111,10 +104,13 @@ export class SplashScreen extends Container {
     this.page = page;
     // the level select has its own title and "Back" (and re-labels itself)
     const select = page === 'levels';
-    this.title.visible = this.menu.visible = !select;
+    const instructions = page === 'instructions';
+    this.menu.visible = !select;
+    this.title.visible = !select && !instructions;
+    this.backdrop.visible = !instructions;
     this.levelSelect.visible = select;
+    if (instructions !== (from === 'instructions')) this.onInstructions(instructions);
     if (select) {
-      this.pageText.text = '';
       if (from !== 'levels') {
         const { levels, unlocked, current } = this.levels();
         this.levelSelect.open(levels, unlocked, current);
@@ -122,21 +118,20 @@ export class SplashScreen extends Container {
       return;
     }
     if (page === 'main') {
-      this.pageText.text = '';
       this.items = [
         { page: 'levels', label: 'Start', action: () => (this.levels().levels.length ? this.showPage('levels') : this.onStart()) },
       ];
       if (this.hasTraining) this.items.push({ label: 'Training', action: () => this.onTraining() });
       this.items.push({ page: 'instructions', label: 'Instructions', action: () => this.showPage('instructions') });
     } else {
-      this.pageText.text = INSTRUCTIONS.map((line) => line && t(line)).join('\n');
-      // the instructions start under the title (top at y = 258), so they end above the Back button
-      this.pageText.y = 258 + this.pageText.textHeight / 2;
-      this.items = [{ label: 'Back', action: () => this.showPage('main') }];
+      this.items = [{ label: 'Return', action: () => this.showPage('main') }];
     }
     // coming back to the main menu, keep the item we came from selected (also when re-labelled)
     const keep = from === page ? this.menu.selected : this.items.findIndex((it) => it.page === from);
-    this.menu.setItems(this.items, page === 'main' ? 370 : 590, Math.max(0, keep));
+    // the instructions' one item goes without the flying birds
+    this.menu.cursorsShown = !instructions;
+    if (instructions) this.menu.setItems(this.items, INSTRUCTIONS_BACK.y, 0, INSTRUCTIONS_BACK.x);
+    else this.menu.setItems(this.items, 370, Math.max(0, keep));
   }
 
   private onKey(e: KeyboardEvent) {
