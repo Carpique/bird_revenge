@@ -9,7 +9,7 @@ import { buildLevel, type BuiltLevel } from '../level/build';
 import { LevelView } from '../level/LevelView';
 import type { Branch, LevelDef } from '../level/types';
 import { tex } from '../render/assets';
-import { fitWorld } from '../render/fitWorld';
+import { fitWorld, view } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
 import { bigTextStyle, TEXT_FONT as FONT } from '../ui/fonts';
 import { GlowText } from '../ui/GlowText';
@@ -341,6 +341,9 @@ export class Game {
 
   private update(dtMs: number) {
     fitWorld(this.app, this.root);
+    this.background.fit();
+    // the score and lives at the top of the screen, which may be above the world's (`view`)
+    this.scoreBox.y = this.coinBox.y = this.hearts.y = view.top + 14;
     this.pausedText.visible = this.paused && this.showPausedText && !this.showingSign;
     // pausing stops the render loop right after this frame, so "Pause" darkens at once; a dialog fades it in
     const fade = dtMs / Math.max(1, config.dimFadeMs);
@@ -787,8 +790,7 @@ export class Game {
       h.visible = i < this.lives || (i === this.lives && deathMs !== null && Math.floor(deathMs / 120) % 2 === 0);
     });
     // the screen's left and right edges in world coordinates (wider than the world when letterboxed)
-    const left = -this.root.x / this.root.scale.x;
-    const right = (this.app.screen.width - this.root.x) / this.root.scale.x;
+    const { left, right } = view;
     const { slideMs, showMs } = config.gameOver;
     const { slideMs: completeSlideMs, nextMs } = config.levelComplete;
     let shade = 0;

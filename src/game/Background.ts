@@ -1,6 +1,7 @@
 import { Container, Sprite } from 'pixi.js';
 import { WORLD } from '../config';
 import { tex } from '../render/assets';
+import { view } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
 import { Ground } from './Ground';
 
@@ -14,6 +15,7 @@ const spriteAt = (image: string, x: number, y: number, height: number) => {
 
 export class Background extends Container {
   private clouds: { sprite: Sprite; speed: number }[] = [];
+  private ground = new Ground();
 
   constructor() {
     super();
@@ -24,14 +26,21 @@ export class Background extends Container {
       this.clouds.push({ sprite, speed: c.driftSpeed });
       this.addChild(sprite);
     }
-    this.addChild(new Ground());
+    this.addChild(this.ground);
+  }
+
+  /** Extend the ground to the screen's edges (`view`); call after `fitWorld`. */
+  fit() {
+    this.ground.fit();
   }
 
   update(dtMs: number) {
+    // the clouds drift across the whole screen, also where it's wider than the world
+    const left = Math.min(0, view.left), right = Math.max(WORLD.width, view.right);
     for (const c of this.clouds) {
       c.sprite.x += (c.speed * dtMs) / 1000;
       const half = c.sprite.width / 2;
-      if (c.sprite.x - half > WORLD.width) c.sprite.x = -half;
+      if (c.sprite.x - half > right) c.sprite.x = left - half;
     }
   }
 }

@@ -2,6 +2,7 @@ import { Container, Graphics, Sprite } from 'pixi.js';
 import { pooDef } from '../characters/poo';
 import { WORLD } from '../config';
 import { tex } from '../render/assets';
+import { view } from '../render/fitWorld';
 
 /** depth planes, nearest first: the nearest is full poo size and already half-transparent */
 const PLANES = [
@@ -32,16 +33,19 @@ interface Drop {
 /**
  * Background rain of poo for the title screen: several depth planes, further ones smaller, slower
  * and dimmer. Every poo falls all the way down and sinks behind the ground line (the rain is clipped
- * there), then starts again at the top.
+ * there), then starts again at the top. It fills the whole screen above the ground (`view`), not just the world.
  */
 export class PooRain extends Container {
   private drops: Drop[] = [];
+  private clip = new Graphics();
+  /** the screen (`view`) the clip was drawn for */
+  private clipped = { left: 0, top: 0, right: 0 };
 
   constructor() {
     super();
-    const clip = new Graphics().rect(0, 0, WORLD.width, WORLD.groundY).fill(0xffffff);
-    this.addChild(clip);
-    this.mask = clip;
+    this.addChild(this.clip);
+    this.mask = this.clip;
+    this.fitClip();
     // the furthest plane first, so the nearer ones draw over it
     for (const plane of [...PLANES].reverse()) {
       for (let i = 0; i < plane.count; i++) {
@@ -62,11 +66,20 @@ export class PooRain extends Container {
 
   /** Back to falling, at height `y`, a random x and a slightly random speed (it keeps its spin). */
   private respawn(drop: Drop, y: number) {
-    drop.sprite.position.set(Math.random() * WORLD.width, y);
+    drop.sprite.position.set(view.left + Math.random() * (view.right - view.left), y);
     drop.speed = drop.plane.speed * (1 + (Math.random() * 2 - 1) * SPEED_SPREAD);
   }
 
+  /** Clip to the screen above the ground line. */
+  private fitClip() {
+    const { left, top, right } = view, c = this.clipped;
+    if (left === c.left && top === c.top && right === c.right) return;
+    this.clipped = { left, top, right };
+    this.clip.clear().rect(left, top, right - left, WORLD.groundY - top).fill(0xffffff);
+  }
+
   update(dtMs: number) {
+    this.fitClip();
     const dt = Math.min(dtMs, MAX_DT_MS);
     for (const drop of this.drops) {
       const { sprite } = drop;
@@ -78,7 +91,7 @@ export class PooRain extends Container {
         Math.max(sprite.anchor.x, 1 - sprite.anchor.x) * sprite.width,
         Math.max(sprite.anchor.y, 1 - sprite.anchor.y) * sprite.height,
       );
-      if (sprite.y - reach >= WORLD.groundY) this.respawn(drop, -sprite.height - Math.random() * WORLD.groundY * 0.5);
+      if (sprite.y - reach >= WORLD.groundY) this.respawn(drop, view.top - sprite.height - Math.random() * WORLD.groundY * 0.5);
     }
   }
 }

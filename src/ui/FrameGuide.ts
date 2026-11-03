@@ -3,6 +3,7 @@ import rough from 'roughjs';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { L, PART_NAMES, REQUIRED_PARTS, SKELETON, type PartName } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
+import { worldFit } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
 import { WORLD } from '../config';
 import { BIG_FILL, BIG_OUTLINE, bigTextStyle, GLOW, INK, TEXT_FONT as FONT } from './fonts';
@@ -196,7 +197,7 @@ export class FrameGuide {
    */
   private drawCalibrateDialog(s: GuideState, W: number, H: number, now: number) {
     // world px -> screen px, as the game is scaled
-    const k = Math.min(W / WORLD.width, H / WORLD.height);
+    const k = worldFit(W, H).scale;
 
     // the title above the panel, the two centred together; scaled like the game, a long one (a camera error) shrinks to fit
     const title = this.title;
@@ -218,7 +219,7 @@ export class FrameGuide {
 
   /** The small "get back in frame" box in the lower right corner during the game: the dialog's panel, smaller. */
   private drawOutOfFrameBox(s: GuideState, W: number, H: number, now: number) {
-    const k = Math.min(W / WORLD.width, H / WORLD.height);
+    const k = worldFit(W, H).scale;
     const h = MINI_HEIGHT * k, w = h * MINI_ASPECT, margin = MINI_MARGIN * k;
     const box: Rect = { x: W - w - margin, y: H - h - margin, w, h };
     this.drawPanel(box, MINI_SCALE, s, now, { message: s.message ?? t('Get back in frame!') });
@@ -230,9 +231,9 @@ export class FrameGuide {
    */
   private drawDemoPanel(s: GuideState, W: number, H: number, now: number) {
     const half = W / 2;
-    // the ground's top on screen, the world scaled and centred as the game is (`fitWorld`)
-    const k = Math.min(W / WORLD.width, H / WORLD.height);
-    const sky = (H - WORLD.height * k) / 2 + WORLD.groundY * k;
+    // the ground's top on screen, the world placed as the game is (`fitWorld`)
+    const fit = worldFit(W, H);
+    const sky = fit.y + WORLD.groundY * fit.scale;
     let h = sky * PANEL.demo.height, w = h * DIALOG_ASPECT;
     if (w > half * 0.9) {
       w = half * 0.9;
@@ -258,7 +259,7 @@ export class FrameGuide {
     const ctx = this.ctx;
     const { border, text, bar } = PANEL;
     // world px -> screen px
-    const k = Math.min(window.innerWidth / WORLD.width, window.innerHeight / WORLD.height) * scale;
+    const k = worldFit(window.innerWidth, window.innerHeight).scale * scale;
     ctx.beginPath();
     ctx.roundRect(box.x, box.y, box.w, box.h, border.radius * k);
     ctx.fillStyle = PANEL.background;

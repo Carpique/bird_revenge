@@ -92,7 +92,8 @@ export class SplashScreen extends Container {
     // dimmed like the game behind the in-game menu, with the text glowing over it
     const dim = new Graphics().rect(-WORLD.width * 5, -WORLD.height * 5, WORLD.width * 11, WORLD.height * 11).fill('#000');
     dim.alpha = config.signDim;
-    this.backdrop.addChild(rain, new Ground());
+    const ground = new Ground();
+    this.backdrop.addChild(rain, ground);
     root.addChild(this.backdrop, dim);
     this.dim = dim;
 
@@ -120,6 +121,7 @@ export class SplashScreen extends Container {
     app.ticker.add((ticker) => {
       fitWorld(app, root);
       if (!this.visible) return;
+      ground.fit();
       if (this.levelSelect.visible) this.levelSelect.update(ticker.deltaMS);
       else this.menu.animate(ticker.deltaMS);
       if (this.backdrop.visible) rain.update(ticker.deltaMS);
