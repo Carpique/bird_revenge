@@ -8,7 +8,7 @@ import { i18n, t } from './i18n';
 import { Menu } from './Menu';
 
 /**
- * Esc during a game: "What now?" — keep playing, restart the level or quit to the title screen.
+ * Esc during a game: "What now?" — keep playing, start over from the level select or quit to the title screen.
  * Drawn over the game (which dims itself behind it). While open it takes the keys it uses — and Esc,
  * which closes it — before anything else sees them.
  */

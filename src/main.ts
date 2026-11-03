@@ -45,7 +45,7 @@ import { wakeLock } from './ui/wakeLock';
  *   outOfFrame pauses the game (no "Pause" sign, just the small pose box) until the player is back
  *   calibrating → keyboard (Esc; pose is ignored)
  *   Esc in a game (countdown, playing, outOfFrame, keyboard) opens the pause menu over the frozen game:
- *   keep playing, restart the level, or quit to the menu
+ *   keep playing, start over from the level select, or quit to the menu
  *   playing / outOfFrame / keyboard → gameOver (last life lost) → new game: countdown, or keyboard again
  * Pausing (Space / P in game, or the window losing focus during a game) freezes the game and shows "Pause";
  * not while "Game Over" or "Hooray" is on screen (losing focus then just suspends, without the sign).
@@ -222,13 +222,24 @@ async function main() {
     state = 'calibrating';
   };
 
+  // left for the level select by "Start over": how the game was being played, to carry on the same way, without
+  // calibrating again (still calibrating then: null, calibrate as usual)
+  let startOverMode: 'pose' | 'keyboard' | null = null;
+
   // a game from the level select starts on the level picked (none to pick: the first level)
   splash.onStart = (level) => {
     if (level) game.reset(level);
-    recalibrate();
+    const mode = startOverMode;
+    startOverMode = null;
+    if (mode === 'pose') startCountdown();
+    else if (mode === 'keyboard') {
+      state = 'keyboard';
+      audio.startMusic();
+    } else recalibrate();
   };
   // the training letters, A to Z and round, until quit from the pause menu (which goes back to the first level)
   splash.onTraining = () => {
+    startOverMode = null;
     game.reset(allLevels.get(TRAINING) ?? levels.get(TRAINING));
     recalibrate();
   };
@@ -346,13 +357,17 @@ async function main() {
     menuOpen = false;
     countdownEnd += performance.now() - menuOpenedAt; // the countdown carries on where it was
   };
+  // "Start over": back to the level select, the level being played selected
   pauseMenu.onRestart = () => {
-    menuOpen = false;
-    game.retryLevel();
-    if (state !== 'keyboard') startCountdown();
+    const current = game.level.name;
+    const mode = state === 'keyboard' ? 'keyboard' : state === 'calibrating' ? null : 'pose';
+    pauseMenu.onQuit();
+    startOverMode = mode;
+    splash.showLevels(current);
   };
   pauseMenu.onQuit = () => {
     menuOpen = false;
+    startOverMode = null;
     // a new game from the menu starts from the first level (the latest version of it, if edited meanwhile)
     const first = firstLevel();
     game.reset(allLevels.get(first.name) ?? first);

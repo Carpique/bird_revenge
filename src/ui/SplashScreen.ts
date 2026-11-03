@@ -144,7 +144,13 @@ export class SplashScreen extends Container {
     relabel();
   }
 
-  private showPage(page: Page) {
+  /** Open straight on the level select, with `current` selected (if it's in the list; otherwise as from "Start"). */
+  showLevels(current?: string) {
+    this.showPage('main');
+    this.showPage('levels', current);
+  }
+
+  private showPage(page: Page, current?: string) {
     const from = this.page;
     this.page = page;
     // the level select has its own title and "Back" (and re-labels itself)
@@ -161,8 +167,9 @@ export class SplashScreen extends Container {
     this.showWatch();
     if (select) {
       if (from !== 'levels') {
-        const { levels, unlocked, current } = this.levels();
-        this.levelSelect.open(levels, unlocked, current);
+        const choice = this.levels();
+        const selected = current && choice.levels.some((l) => l.name === current) ? current : choice.current;
+        this.levelSelect.open(choice.levels, choice.unlocked, selected);
       }
       return;
     }
