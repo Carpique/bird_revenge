@@ -29,7 +29,7 @@ import { PauseMenu } from './ui/PauseMenu';
 import { Recorder } from './ui/Recorder';
 import { loadRecording } from './tutorial';
 import { PoseReplay } from './tutorial/PoseReplay';
-import { TUTORIAL_LEVEL } from './tutorial/recording';
+import { TUTORIAL_LEVEL, type PoseRecording } from './tutorial/recording';
 import { SplashScreen } from './ui/SplashScreen';
 import { Tuning } from './ui/Tuning';
 import { VolumeButton } from './ui/VolumeButton';
@@ -169,15 +169,32 @@ async function main() {
     const unlocked = unlockedLevels(list.map((l) => l.name));
     return { levels: list, unlocked, current: list.filter((l) => unlocked.has(l.name)).at(-1)?.name };
   };
-  const splash = new SplashScreen(app, new Thumbnails(app), levelChoice, levels.has(TRAINING));
+  const splash = new SplashScreen(app, new Thumbnails(app), levelChoice, document.getElementById('guide') as HTMLCanvasElement, levels.has(TRAINING));
   app.stage.addChild(splash);
+  // under "Watch", the clip's first moment, frozen; then the world runs on, the bird uncontrolled, while the panel
+  // fades in; then the clip plays
+  let demoStage: 'frozen' | 'world' | 'playing' = 'frozen';
+  // the recording loaded: as far on as the page is
+  const playDemo = (rec: PoseRecording) => {
+    demoReplay.play(rec, demoStage !== 'playing');
+    if (demoStage === 'world') demoReplay.runWorld();
+  };
   splash.onInstructions = async (open) => {
     demoOn = open;
     if (!open) return demoReplay.stop();
+    demoStage = 'frozen';
     // the level as it is, the bird standing, until the recording loads (none recorded: just that)
     demo.loadLevel(tutorialLevel());
     const rec = await loadRecording(TUTORIAL_LEVEL);
-    if (rec && demoOn) demoReplay.play(rec);
+    if (rec && demoOn && !demoReplay.recording) playDemo(rec);
+  };
+  splash.onWorldStart = () => {
+    demoStage = 'world';
+    demoReplay.runWorld();
+  };
+  splash.onDemoStart = () => {
+    demoStage = 'playing';
+    demoReplay.resume();
   };
   const pauseMenu = new PauseMenu(app);
   app.stage.addChild(pauseMenu);

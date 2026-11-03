@@ -9,6 +9,8 @@ import { t, type Msg } from './i18n';
 
 /** Plain black items; the selected one in the big-text colours swapped (red, yellow outline, black shadow). */
 const ITEM_STYLE: TextStyleOptions = { fontFamily: TEXT_FONT, fontSize: 54, fill: INK };
+/** Like the title: yellow, red outline, black shadow (for `titleColours`). */
+const TITLE_STYLE = bigTextStyle(54, TEXT_FONT);
 const SELECTED_STYLE = bigTextStyle(54, TEXT_FONT, BIG_OUTLINE, BIG_FILL);
 
 export interface MenuItem {
@@ -29,6 +31,12 @@ export class Menu extends Container {
   selected = 0;
   /** the small flapping birds beside the selected item */
   cursorsShown = true;
+  /** the selected item in the big-text colours (else all plain; Enter / Space still choose it) */
+  highlight = true;
+  /** the items not highlighted in the title's colours instead of black */
+  titleColours = false;
+  /** the items' size, 1 = full */
+  itemScale = 1;
 
   constructor(private glow = false) {
     super();
@@ -48,7 +56,7 @@ export class Menu extends Container {
     for (const c of this.list.removeChildren()) c.destroy();
     items.forEach((item, i) => {
       const label = t(item.label);
-      const text = this.glow ? new GlowText(label, ITEM_STYLE) : new Text({ text: label, style: ITEM_STYLE });
+      const text = this.glow ? new GlowText(label, this.plainStyle) : new Text({ text: label, style: this.plainStyle });
       if (text instanceof Text) text.anchor.set(0.5);
       text.position.set(x, top + i * 82);
       text.eventMode = 'static';
@@ -66,14 +74,18 @@ export class Menu extends Container {
     for (const c of this.cursors) c.visible = this.cursorsShown && this.selected !== -1;
     this.list.children.forEach((c, j) => {
       const text = c as Text | GlowText;
-      const on = j === this.selected;
+      const on = this.highlight && j === this.selected;
       if (text instanceof GlowText) {
-        text.setStyle(on ? SELECTED_STYLE : ITEM_STYLE);
+        text.setStyle(on ? SELECTED_STYLE : this.plainStyle);
         // the selected item's outline already makes it stand out
         text.glow = on ? 0.75 : 1; // halo opacity 0.6 instead of 0.8
-      } else text.style = on ? SELECTED_STYLE : ITEM_STYLE;
-      text.scale.set(on ? 1.08 : 1);
+      } else text.style = on ? SELECTED_STYLE : this.plainStyle;
+      text.scale.set((on ? 1.08 : 1) * this.itemScale);
     });
+  }
+
+  private get plainStyle() {
+    return this.titleColours ? TITLE_STYLE : ITEM_STYLE;
   }
 
   /** Arrow keys / W S move, Enter or Space chooses. Returns whether the key was used. */

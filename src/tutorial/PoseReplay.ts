@@ -31,6 +31,8 @@ export class PoseReplay {
   private lastPoseT = -Infinity;
   /** ms left of the pause after a loop; 0 while playing */
   private holdMs = 0;
+  /** held at the clip's start until `resume()`: no controls, the game paused unless `runWorld()` */
+  private held = false;
 
   /** `level`: the level to play in, asked for on every loop (it may be edited meanwhile) */
   constructor(
@@ -42,17 +44,32 @@ export class PoseReplay {
     return this.rec;
   }
 
-  /** Play `rec`'s clip, from its start. */
-  play(rec: PoseRecording) {
+  /** Play `rec`'s clip, from its start; `held`: frozen on its first moment until `resume()`. */
+  play(rec: PoseRecording, held = false) {
     this.rec = rec;
     this.frames = rec.frames.map((f) => toPoseFrame(f, rec.aspect));
     this.game.onStep = () => this.step();
     this.restart();
+    this.held = held;
+    if (held) this.game.paused = true;
+  }
+
+  /** A clip held by `play(rec, true)`: the game runs on, the bird left uncontrolled, the clip still at its start. */
+  runWorld() {
+    if (this.rec && this.held) this.game.paused = false;
+  }
+
+  /** Start playing a clip held by `play(rec, true)`. */
+  resume() {
+    if (!this.rec || !this.held) return;
+    this.held = false;
+    this.game.paused = false;
   }
 
   /** Stop playing; the game is left paused. */
   stop() {
     this.rec = null;
+    this.held = false;
     this.game.onStep = null;
     this.game.controls = noControls();
     this.game.paused = true;
@@ -60,7 +77,7 @@ export class PoseReplay {
 
   /** Per render frame: the pause between loops. */
   update(dtMs: number) {
-    if (!this.rec || this.holdMs <= 0) return;
+    if (!this.rec || this.held || this.holdMs <= 0) return;
     this.holdMs -= dtMs;
     if (this.holdMs <= 0) this.restart();
   }
@@ -83,7 +100,7 @@ export class PoseReplay {
   /** Before each physics step: the frames up to the step's time go through the detectors, and their controls apply. */
   private step() {
     const rec = this.rec;
-    if (!rec || this.holdMs > 0) return;
+    if (!rec || this.held || this.holdMs > 0) return;
     this.time += STEP_MS;
     if (this.time > rec.endMs) {
       this.holdMs = LOOP_PAUSE_MS;

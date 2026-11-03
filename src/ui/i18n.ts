@@ -11,7 +11,7 @@ const PL = {
   Instructions: 'Instrukcje',
   Training: 'Trening',
   Back: 'Wróć',
-  Return: 'Powrót',
+  Watch: 'Obserwuj',
   'Select level': 'Wybierz Poziom',
 
   // game
