@@ -20,5 +20,10 @@ export const batDef = {
   defaultAnimation: 'fly',
 } satisfies CharacterDef<'fly' | 'hit'>;
 
-/** Radius (px) of the bat's round hitbox: the body and the inner wings, not the wing tips. */
+/** Radius (px) of the bat's round body, for the bird bumping into it: the body and the inner wings, not the wing tips. */
 export const batRadius = 22;
+
+/** the sprite's width (px) on screen: its SVGs are 140×90 */
+const batDisplayWidth = (batDef.displayHeight * 140) / 90;
+/** Size (px) of the pill-shaped hitbox the bird's poo hits: 80% of the wingspan, so poo can't slip through the wings. */
+export const batHitbox = { width: Math.round(batDisplayWidth * 0.8), height: 40 };

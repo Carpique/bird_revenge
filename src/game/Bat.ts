@@ -1,4 +1,4 @@
-import { batDef, batRadius } from '../characters/bat';
+import { batDef, batHitbox, batRadius } from '../characters/bat';
 import { config, WORLD } from '../config';
 import type { BatDef } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
@@ -46,7 +46,13 @@ export class Bat {
     [this.x, this.y] = def.start;
     this.target = def.target;
     this.pooIn = this.nextPooDelay();
-    this.body = Bodies.circle(this.x, this.y, batRadius, { label: 'bat', isStatic: true, isSensor: true });
+    const { width, height } = batHitbox;
+    this.body = Bodies.rectangle(this.x, this.y, width, height, {
+      label: 'bat',
+      isStatic: true,
+      isSensor: true,
+      chamfer: { radius: height / 2 },
+    });
   }
 
   get hittable() {
@@ -65,6 +71,11 @@ export class Bat {
     if (!this.hittable) return false;
     this.enter('hit');
     return true;
+  }
+
+  /** how far it leans (radians) with its sideways speed */
+  private get lean() {
+    return Math.max(-MAX_LEAN, Math.min(this.vx * LEAN, MAX_LEAN));
   }
 
   /** where it is: its centre */
@@ -104,12 +115,14 @@ export class Bat {
     }
     // only a flying bat can be hit, so the body just parks off-screen otherwise
     Body.setPosition(this.body, this.state === 'flying' ? { x: this.x, y: this.y } : { x: -1000, y: -1000 });
+    // the wide hitbox leans with the wings
+    if (this.state === 'flying') Body.setAngle(this.body, this.lean);
   }
 
   sync() {
     this.view.visible = this.state !== 'gone';
     this.view.position.set(this.x, this.y);
-    if (this.state === 'flying') this.view.rotation = Math.max(-MAX_LEAN, Math.min(this.vx * LEAN, MAX_LEAN));
+    if (this.state === 'flying') this.view.rotation = this.lean;
     if (this.frozen && this.state === 'flying') this.view.anim.stop();
     else this.view.play(this.state === 'flying' ? 'fly' : 'hit');
   }
