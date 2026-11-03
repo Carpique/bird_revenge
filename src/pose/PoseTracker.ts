@@ -1,4 +1,4 @@
-import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
+import { FilesetResolver, PoseLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { config } from '../config';
 import { OneEuroFilter } from './OneEuroFilter';
 import type { Landmark, PoseFrame } from './types';
@@ -18,6 +18,8 @@ export class PoseTracker {
   fps = 0;
   /** ms spent in the last detect call */
   inferenceMs = 0;
+  /** MediaPipe's own landmarks for the frame `onFrame` gets, before smoothing (with z and visibility); null: nobody */
+  raw: NormalizedLandmark[] | null = null;
 
   private filters: OneEuroFilter[] = [];
   private lastTs = 0;
@@ -91,6 +93,7 @@ export class PoseTracker {
     }
 
     const raw = result.landmarks?.[0];
+    this.raw = raw && raw.length >= N ? raw : null;
     if (!raw || raw.length < N) {
       this.filters.forEach((f) => f.reset());
       this.onFrame(null);

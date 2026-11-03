@@ -7,6 +7,8 @@ import { isVisible } from './geometry';
 export interface PartStatus {
   /** raw: visible in this frame */
   raw: boolean;
+  /** why it isn't (e.g. `leftElbow v=0.42`, `rightWrist off-frame`), null when it is */
+  problem: string | null;
   /** smoothed 0..1 */
   score: number;
   /** debounced decision used by the game */
@@ -45,7 +47,7 @@ export class VisibilityMonitor {
 
   reset() {
     for (const p of PART_NAMES) {
-      this.parts[p] = { status: { raw: false, score: 0, visible: false }, belowSince: null, aboveSince: null };
+      this.parts[p] = { status: { raw: false, problem: 'no person', score: 0, visible: false }, belowSince: null, aboveSince: null };
     }
     this.personDetected = false;
   }
@@ -62,12 +64,8 @@ export class VisibilityMonitor {
     for (const name of PART_NAMES) {
       const timer = this.parts[name];
       const st = timer.status;
-      st.raw =
-        !!f &&
-        PART_LANDMARKS[name].every((i) => isVisible(f.lm[i], cfg.minLandmarkVisibility, cfg.frameMargin)) &&
-        (name === 'leftArm' ? forearmInFrame(f, L.leftElbow, L.leftWrist)
-          : name === 'rightArm' ? forearmInFrame(f, L.rightElbow, L.rightWrist)
-          : true);
+      st.problem = partProblem(f, name);
+      st.raw = st.problem === null;
       st.score = cfg.emaAlpha * (st.raw ? 1 : 0) + (1 - cfg.emaAlpha) * st.score;
 
       if (st.score < cfg.lostBelow) {
@@ -91,6 +89,22 @@ export class VisibilityMonitor {
     return { personDetected: this.personDetected, parts, inFrame, box, hint: makeHint(this.personDetected, parts, box, f) };
   }
 }
+
+/** Why `name` doesn't count as visible in `f`, or null if it does. */
+function partProblem(f: PoseFrame | null, name: PartName): string | null {
+  if (!f) return 'no person';
+  const cfg = config.visibility;
+  for (const i of PART_LANDMARKS[name]) {
+    const p = f.lm[i];
+    if (p.v < cfg.minLandmarkVisibility) return `${LANDMARK_NAMES[i]} v=${p.v.toFixed(2)}`;
+    if (!isVisible(p, cfg.minLandmarkVisibility, cfg.frameMargin)) return `${LANDMARK_NAMES[i]} off-frame`;
+  }
+  if (name === 'leftArm' && !forearmInFrame(f, L.leftElbow, L.leftWrist)) return 'left forearm off-frame';
+  if (name === 'rightArm' && !forearmInFrame(f, L.rightElbow, L.rightWrist)) return 'right forearm off-frame';
+  return null;
+}
+
+const LANDMARK_NAMES: Record<number, string> = Object.fromEntries(Object.entries(L).map(([k, i]) => [i, k]));
 
 /** The first `visibility.forearmInFrame` of the forearm (elbow → estimated wrist) lies inside the frame. */
 function forearmInFrame(f: PoseFrame, elbow: number, wrist: number): boolean {

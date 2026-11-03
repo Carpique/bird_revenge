@@ -18,6 +18,7 @@ import { toPoseFrame, toRecordedFrame, TUTORIAL_LEVEL, type PoseRecording, type 
 import { BIG_FILL, BIG_FONT, BIG_OUTLINE, loadFonts } from '../ui/fonts';
 import { FrameGuide, type GuideState } from '../ui/FrameGuide';
 import { ClipTimeline, MOTION_POINTS } from './ClipTimeline';
+import { serializeTrace, TraceLog, type DebugTrace } from './debugTrace';
 
 /**
  * Dev-only tool (`npm run dev`, then /src/dev/tutorial-recorder.html; `?level=<name>` for another level than
@@ -25,6 +26,9 @@ import { ClipTimeline, MOTION_POINTS } from './ClipTimeline';
  * level, the bird flown by the live pose, the pose panel on the left. Record counts down, records until the player
  * stands still, then the clip can be trimmed, played back as the instructions page will play it, and saved to
  * `src/tutorial/<level>.json`, or recorded anew.
+ * With "Debug trace" on (`?trace=<file>` turns it on with that file name), a take is a debug trace instead
+ * (`debugTrace.ts`): it doesn't stop on standing still (Esc ends it), and is saved whole, as soon as it ends, to
+ * `traces/<file>.json` — not to the tutorial.
  */
 
 /** s of countdown before recording starts */
@@ -74,6 +78,21 @@ async function main() {
     calibrate: $<HTMLButtonElement>('btn-calibrate'),
   };
   const timeline = new ClipTimeline($<HTMLCanvasElement>('timeline'));
+  const traceOn = $<HTMLInputElement>('trace-on'), traceName = $<HTMLInputElement>('trace-name');
+  const traceParam = new URLSearchParams(location.search).get('trace');
+  if (traceParam !== null) {
+    traceOn.checked = true;
+    traceName.value = traceParam;
+  }
+  traceName.disabled = !traceOn.checked;
+  traceOn.onchange = () => {
+    traceName.disabled = !traceOn.checked;
+    traceOn.blur();
+  };
+  // Enter / Esc in the file name: back to the shortcuts
+  traceName.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === 'Escape') traceName.blur();
+  });
 
   let mode: Mode = 'live';
   let message = '';
@@ -90,6 +109,7 @@ async function main() {
   let lastPoseT = -Infinity;
   let aspect = 16 / 9;
   let cameraError: string | null = null;
+  let tracker: PoseTracker | null = null;
 
   // the take: frames from the countdown's start (the countdown's are the clip's warm-up), the recording from `recStartMs`
   let take: RecordedFrame[] = [];
@@ -101,10 +121,15 @@ async function main() {
   let moved = false;
   /** when the player last moved, and where to: standing still is measured from here */
   let anchor: { t: number; pts: [number, number][] } | null = null;
+  /** the take is a debug trace (the switch as it was when it started): its frames are `TraceFrame`s */
+  let tracing = false;
+  const traceLog = new TraceLog();
 
   // reviewing: the recording being trimmed, whether it's saved as it is, and the frame shown while scrubbing
   let current: PoseRecording | null = null;
   let saved = false;
+  /** the take reviewed is a debug trace, saved to `traces/<file>.json` */
+  let currentTrace: { file: string; trace: DebugTrace } | null = null;
   let scrubFrame: PoseFrame | null = null;
 
   const setLevel = (next: typeof level) => {
@@ -124,6 +149,12 @@ async function main() {
 
   const startCountdown = () => {
     if (!cameraOk()) return;
+    tracing = traceOn.checked;
+    if (tracing && !traceFile()) {
+      message = 'Debug trace: the file name may only have letters, digits, - _ and .';
+      return;
+    }
+    traceLog.reset();
     replay.stop();
     mode = 'countdown';
     game.loadLevel(level!);
@@ -154,7 +185,7 @@ async function main() {
       message = 'Too short — nothing recorded';
       return goLive();
     }
-    review({
+    const rec: PoseRecording = {
       version: 1,
       level: levelName,
       aspect,
@@ -163,11 +194,15 @@ async function main() {
       startMs: recStartMs,
       endMs: last,
       frames: take,
-    }, false);
+    };
+    const file = tracing && traceFile();
+    review(rec, false, file ? { file, trace: { ...rec, kind: 'debug-trace', recordedAt: new Date().toISOString(), config, frames: take as DebugTrace['frames'], events: traceLog.events } } : null);
+    if (currentTrace) save();
   };
 
-  const review = (rec: PoseRecording, isSaved: boolean) => {
+  const review = (rec: PoseRecording, isSaved: boolean, trace: typeof currentTrace = null) => {
     current = rec;
+    currentTrace = trace;
     saved = isSaved;
     mode = 'review';
     timeline.set(rec.frames, rec.aspect, rec.startMs, rec.endMs);
@@ -200,14 +235,23 @@ async function main() {
     scrubFrame = toPoseFrame(f, current.aspect);
   };
 
+  /** the debug trace's file name as typed (".json" optional), null if it isn't one the dev server takes */
+  const traceFile = () => {
+    const name = traceName.value.trim().replace(/\.json$/i, '') || `trace-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    return /^[\w-][\w.-]*$/.test(name) ? name : null;
+  };
+
   const save = async () => {
     if (mode !== 'review' || !current) return;
-    const rec = crop(current);
+    // a debug trace: the whole take, the clip as trimmed only marked by its start and end
+    const [route, name, body, where] = currentTrace
+      ? ['__trace', currentTrace.file, serializeTrace({ ...currentTrace.trace, startMs: timeline.startMs, endMs: timeline.endMs }), `traces/${currentTrace.file}.json`]
+      : ['__tutorial', levelName, serialize(crop(current)), `src/tutorial/${levelName}.json`];
     try {
-      const res = await fetch(`/__tutorial?name=${encodeURIComponent(levelName)}`, { method: 'POST', body: serialize(rec) });
+      const res = await fetch(`/${route}?name=${encodeURIComponent(name)}`, { method: 'POST', body });
       if (!res.ok) throw new Error(await res.text());
       saved = true;
-      message = `Saved to src/tutorial/${levelName}.json`;
+      message = `Saved to ${where}`;
       audio.play('friend');
     } catch (e) {
       message = `Save failed: ${e instanceof Error ? e.message : e}`;
@@ -233,6 +277,8 @@ async function main() {
   for (const b of Object.values(buttons)) b.addEventListener('mouseup', () => b.blur());
 
   window.addEventListener('keydown', (e) => {
+    // typing the trace's file name
+    if (e.target === traceName) return;
     if (e.repeat && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (k === 'Escape' && (mode === 'countdown' || mode === 'recording')) stopRecording();
@@ -241,6 +287,10 @@ async function main() {
     else if (k === 's') save();
     else if (k === 'l' && mode === 'review') goLive();
     else if (k === 'c') recalibrate();
+    else if (k === 't' && mode !== 'countdown' && mode !== 'recording') {
+      traceOn.checked = !traceOn.checked;
+      traceOn.onchange?.(e);
+    }
     else if (k === 'h') barHidden = !barHidden;
     else if ((k === 'ArrowLeft' || k === 'ArrowRight') && mode === 'review') timeline.nudge((k === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 1));
     else return;
@@ -278,8 +328,10 @@ async function main() {
         audio.play('button');
       }
     }
-    if (mode === 'countdown' || mode === 'recording') take.push(toRecordedFrame(f, now - takeStart));
-    if (mode === 'recording' && standingStill(f, now)) stopRecording();
+    if (mode === 'countdown' || mode === 'recording')
+      take.push(tracing ? traceLog.add(f, now - takeStart, r, tracker?.raw ?? null, tracker?.inferenceMs ?? 0) : toRecordedFrame(f, now - takeStart));
+    // a debug trace runs until Esc: holding a pose still is what it's for
+    if (mode === 'recording' && !tracing && standingStill(f, now)) stopRecording();
     if (mode === 'live' || mode === 'recording') {
       // as in the game: out of frame, the pose controls nothing
       if (!r.vis.inFrame) lastPoseT = -Infinity;
@@ -308,16 +360,18 @@ async function main() {
 
     const away = mode === 'countdown' || mode === 'recording';
     bar.hidden = barHidden || away;
+    traceOn.disabled = away;
+    traceName.disabled = away || !traceOn.checked;
     countdownEl.hidden = mode !== 'countdown';
     if (mode === 'countdown') countdownEl.textContent = String(Math.max(1, Math.ceil((countdownEnd - now) / 1000)));
     badge.hidden = mode !== 'recording';
     if (mode === 'recording') {
       const stillFor = moved && anchor ? (now - anchor.t) / 1000 : 0;
-      badge.textContent = `● REC ${((now - takeStart - recStartMs) / 1000).toFixed(1)}s` + (stillFor > 0.5 ? `  ■ ${(STILL_MS / 1000 - stillFor).toFixed(1)}` : '');
+      badge.textContent = `● ${tracing ? 'TRACE' : 'REC'} ${((now - takeStart - recStartMs) / 1000).toFixed(1)}s` + (stillFor > 0.5 ? `  ■ ${(STILL_MS / 1000 - stillFor).toFixed(1)}` : '');
     }
     buttons.play.disabled = buttons.save.disabled = buttons.live.disabled = mode !== 'review';
     buttons.play.textContent = replay.recording ? '❚❚ Stop' : '▶ Play clip';
-    buttons.save.textContent = saved ? 'Saved ✓' : 'Save';
+    buttons.save.textContent = (currentTrace ? 'Save trace' : 'Save') + (saved ? ' ✓' : '');
     statusEl.textContent = statusText();
     timeline.draw();
 
@@ -329,7 +383,10 @@ async function main() {
   const statusText = () => {
     const calib = baseline ? 'calibrated' : `calibrating: ${calibMessage || 'stand in view, arms down, hold still'} (poo needs it)`;
     const ctrl = config.pointing.flapping ? 'flapping' : 'pointing';
-    const head = `${levelName} · ${ctrl} · ${cameraError ? `camera: ${cameraError}` : calib}`;
+    const trace = currentTrace && mode === 'review'
+      ? ` · debug trace: ${currentTrace.trace.frames.length} frames, ${currentTrace.trace.events.filter((e) => e.type === 'outOfFrame').length}× out of frame`
+      : '';
+    const head = `${levelName} · ${ctrl} · ${cameraError ? `camera: ${cameraError}` : calib}${trace}`;
     const clip = mode === 'review' && current
       ? `\nclip ${(timeline.startMs / 1000).toFixed(2)}–${(timeline.endMs / 1000).toFixed(2)} s (${((timeline.endMs - timeline.startMs) / 1000).toFixed(2)} s of ${(timeline.duration / 1000).toFixed(2)} s)` +
         (current.flapping !== config.pointing.flapping ? ` · recorded with ${current.flapping ? 'flapping' : 'pointing'}` : '')
@@ -348,7 +405,7 @@ async function main() {
 
   try {
     await startCamera(video, () => (cameraError = 'disconnected — reload the page'));
-    const tracker = await PoseTracker.create(video);
+    tracker = await PoseTracker.create(video);
     tracker.onFrame = onPose;
     tracker.start();
   } catch (e) {

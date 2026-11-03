@@ -5,3 +5,5 @@ public/mediapipe/
 *.log
 # Tiled keeps open files and window layout here (per user)
 *.tiled-session
+# debug traces from the tutorial recorder (src/dev/debugTrace.ts)
+traces/
