@@ -536,6 +536,13 @@ export class Game {
       }
       this.levelView?.setSolid(def.id, solid);
     }
+    // a door about to switch back blinks, as the button of it that lasts longest says
+    const longest = new Map<number, Button>();
+    for (const b of this.buttons) {
+      const l = longest.get(b.def.target);
+      if (!l || b.remaining > l.remaining) longest.set(b.def.target, b);
+    }
+    for (const [id, b] of longest) this.levelView?.setBlink(id, b.blinkBack);
     this.levelBodies = this.built.bodies.filter((b) => this.doors.get(b.def.id) !== false).map((b) => b.body);
   }
 

@@ -354,6 +354,9 @@ export const config = {
     glowPulseMs: 2900 
   },
 
+  /** a door blinks this long (ms) before its button wears off and it switches back, this many times a second; a button lasting less than `blinkMs` blinks for half its time, as many blinks, faster */
+  button: { blinkMs: 2000, blinkHz: 4 },
+
   countdownMs: 2000,
   /** how much the game darkens (0–1) behind the "Pause", "Game Over" and "Hooray" signs, the calibration dialog and the countdown */
   signDim: 0.4,

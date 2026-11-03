@@ -39,7 +39,7 @@ export class LevelView extends Container {
   private movers: { item: LevelBody; sprite: Sprite }[] = [];
   private jointLines = new Graphics();
   /** by terrain id */
-  private doors = new Map<number, { sprite: Sprite; solid: boolean }>();
+  private doors = new Map<number, { sprite: Sprite; solid: boolean; blink: boolean }>();
   /** by button id */
   private buttons = new Map<number, { up: Sprite; down: Sprite }>();
 
@@ -53,7 +53,7 @@ export class LevelView extends Container {
       const sprite = bodySprite(item, style(item.def.id * 7, BARK, { hachureAngle: 20 }));
       sprite.position.set(item.body.position.x, item.body.position.y);
       sprite.rotation = item.body.angle;
-      this.doors.set(item.def.id, { sprite, solid: true });
+      this.doors.set(item.def.id, { sprite, solid: true, blink: false });
       this.addChild(sprite);
     }
     for (const b of level.buttons) {
@@ -78,6 +78,12 @@ export class LevelView extends Container {
     if (door) door.solid = solid;
   }
 
+  /** A door about to switch back blinks: `back` shows it as it'll be (without fading, to keep up with fast blinking). */
+  setBlink(id: number, back: boolean) {
+    const door = this.doors.get(id);
+    if (door) door.blink = back;
+  }
+
   setPressed(id: number, pressed: boolean) {
     const b = this.buttons.get(id);
     if (!b) return;
@@ -87,8 +93,8 @@ export class LevelView extends Container {
 
   sync() {
     for (const door of this.doors.values()) {
-      const to = door.solid ? 1 : OPEN_ALPHA;
-      door.sprite.alpha += 0.25 * (to - door.sprite.alpha);
+      if (door.blink) door.sprite.alpha = door.solid ? OPEN_ALPHA : 1;
+      else door.sprite.alpha += 0.25 * ((door.solid ? 1 : OPEN_ALPHA) - door.sprite.alpha);
     }
     for (const { item, sprite } of this.movers) {
       sprite.position.set(item.body.position.x, item.body.position.y);

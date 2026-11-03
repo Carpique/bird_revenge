@@ -1,3 +1,4 @@
+import { config } from '../config';
 import type { ButtonDef } from '../level/types';
 
 /** how far (px) below a button's bottom edge something may be and still press it: a splat lies a bit into the surface */
@@ -17,6 +18,26 @@ export class Button {
   /** switching its target right now */
   get active(): boolean {
     return this.pressed || this.left > 0;
+  }
+
+  /** ms until it wears off: Infinity while pressed or for good, 0 when not in effect */
+  get remaining(): number {
+    return this.pressed ? Infinity : this.left;
+  }
+
+  /**
+   * About to wear off: in the "back" half of a blink, its target showing as switched back. It blinks for the last
+   * `blinkMs` at `blinkHz`; one lasting less than `blinkMs` blinks for half its time, as many blinks, faster.
+   */
+  get blinkBack(): boolean {
+    const left = this.remaining;
+    if (left <= 0 || left === Infinity) return false;
+    const { blinkMs, blinkHz } = config.button;
+    const total = this.def.duration * 1000;
+    const window = total < blinkMs ? total / 2 : blinkMs;
+    if (left > window) return false;
+    const hz = (blinkHz * blinkMs) / window;
+    return Math.floor(((window - left) * hz) / 500) % 2 === 0;
   }
 
   /** Is the point (x, y) on the button: the bottom of the bird, a splat? */
