@@ -1,7 +1,7 @@
 import type { Container } from 'pixi.js';
 import rough from 'roughjs';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
-import { L, PART_NAMES, REQUIRED_PARTS, SKELETON, type PartName } from '../pose/landmarks';
+import { L, PART_NAMES, REQUIRED_PARTS, type PartName } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
 import { worldFit } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
@@ -52,8 +52,8 @@ const PANEL = {
   text: { size: 28, lineHeight: 32, color: INK, errorColor: RED },
   /** the smaller second line, relative to `text` */
   hintScale: 0.8,
-  /** the target outline and the player's skeleton */
-  pose: { outlineWidth: 7, skeletonWidth: 3, skeletonColor: 'rgba(43,43,43,0.75)', belly: BIG_FILL },
+  /** the target outline, and the player's figure over it (drawn like the demo's, see `posedFigure`, in one colour and see-through) */
+  pose: { outlineWidth: 7, skeletonWidth: 7, skeletonColor: '#2b2b2b', skeletonAlpha: 0.5, belly: BIG_FILL },
   /** the hold-still progress bar: height, and width as a fraction of the panel's */
   bar: { height: 12, width: 0.6, border: 3, color: GREEN, borderColor: INK, emptyColor: MUTED },
   /**
@@ -129,6 +129,9 @@ function posedFigure(f: PoseFrame, cam: Rect): Figure {
 export class FrameGuide {
   private ctx: CanvasRenderingContext2D;
   private rc: ReturnType<typeof rough.canvas>;
+  /** offscreen, the player's figure drawn opaque, then laid over the panel see-through (rough.js's strokes overlap) */
+  private layer = document.createElement('canvas');
+  private layerRc = rough.canvas(this.layer);
   /** the dialog's title: one of the game's big titles, drawn by PixiJS (under this canvas, beside the panel) */
   private title = new GlowText('', bigTextStyle(DIALOG_TITLE));
 
@@ -149,6 +152,8 @@ export class FrameGuide {
     if (this.canvas.width !== Math.round(W * dpr) || this.canvas.height !== Math.round(H * dpr)) {
       this.canvas.width = Math.round(W * dpr);
       this.canvas.height = Math.round(H * dpr);
+      this.layer.width = this.canvas.width;
+      this.layer.height = this.canvas.height;
     }
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -342,7 +347,7 @@ export class FrameGuide {
   /**
    * Target outline with a yellow belly (each part green when visible; a lost required part blinks red, a lost optional
    * part such as the lower legs is grey; the thighs follow the torso, which includes the hips) plus the player's live
-   * skeleton, both mapped into the camera rectangle `cam` (mirrored). Line widths: `PANEL.pose`'s, scaled
+   * figure over it (the demo's `posedFigure`, dark grey and see-through), both mapped into the camera rectangle `cam` (mirrored). Line widths: `PANEL.pose`'s, scaled
    * by `k`. Without visibility data (still loading) the outline is grey. `posed`: the outline's figure moves with the
    * pose instead (`posedFigure`; the target outline while nobody's in view), no skeleton.
    */
@@ -369,15 +374,44 @@ export class FrameGuide {
       const seed = 40 + PART_NAMES.indexOf('torso');
       this.rc.polygon(torso.pts.map(toScreen), { stroke: 'none', fill: pose.belly, fillStyle: 'solid', roughness: 1.6, bowing: 1.5, seed });
     }
+    this.drawFigure(this.rc, figure, toScreen, cam, outlineWidth, colorOf);
+
+    if (s.frame && !posed) {
+      // the player's figure, shaped and drawn like the demo's, opaque on the layer, then see-through over the outline
+      const lc = this.layer.getContext('2d')!;
+      lc.setTransform(1, 0, 0, 1, 0, 0);
+      lc.clearRect(0, 0, this.layer.width, this.layer.height);
+      lc.setTransform(ctx.getTransform());
+      this.drawFigure(this.layerRc, posedFigure(s.frame, cam), toScreen, cam, skeletonWidth, () => pose.skeletonColor);
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = pose.skeletonAlpha;
+      ctx.drawImage(this.layer, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  /**
+   * `figure`'s outline, sketched by `rc` in rough strokes `width` wide: each part in `colorOf(part)` (null: not drawn);
+   * the thighs in the torso's colour, as they show the hips.
+   */
+  private drawFigure(
+    rc: ReturnType<typeof rough.canvas>,
+    figure: Figure,
+    toScreen: (p: P) => P,
+    cam: Rect,
+    width: number,
+    colorOf: (name: PartName) => string | null,
+  ) {
     PART_NAMES.forEach((name, i) => {
       const shape = figure[name];
-      const style = (color: string) => ({ stroke: color, strokeWidth: outlineWidth, roughness: 1.6, bowing: 1.5, seed: 40 + i });
+      const style = (color: string) => ({ stroke: color, strokeWidth: width, roughness: 1.6, bowing: 1.5, seed: 40 + i });
       if (shape.kind === 'path' && (name === 'leftLeg' || name === 'rightLeg')) {
         // the thighs show the hips, which must be in view (they count with the torso); the rest of the leg is optional
         const [hip, knee, ankle] = shape.pts.map(toScreen);
         const thigh = colorOf('torso'), shin = colorOf(name);
-        if (thigh) this.rc.line(...hip, ...knee, style(thigh));
-        if (shin) this.rc.line(...knee, ...ankle, style(shin));
+        if (thigh) rc.line(...hip, ...knee, style(thigh));
+        if (shin) rc.line(...knee, ...ankle, style(shin));
         return;
       }
       const color = colorOf(name);
@@ -385,28 +419,13 @@ export class FrameGuide {
       const o = style(color);
       if (shape.kind === 'circle') {
         const [cx, cy] = toScreen(shape.c);
-        this.rc.circle(cx, cy, shape.r * 2 * cam.h, o);
+        rc.circle(cx, cy, shape.r * 2 * cam.h, o);
       } else if (shape.kind === 'polygon') {
-        this.rc.polygon(shape.pts.map(toScreen), o);
+        rc.polygon(shape.pts.map(toScreen), o);
       } else {
-        this.rc.linearPath(shape.pts.map(toScreen), o);
+        rc.linearPath(shape.pts.map(toScreen), o);
       }
     });
-
-    if (s.frame && !posed) {
-      const lm = s.frame.lm;
-      ctx.lineWidth = skeletonWidth;
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = pose.skeletonColor;
-      ctx.beginPath();
-      for (const [a, b] of SKELETON) {
-        const [x1, y1] = toScreen([1 - lm[a].x, lm[a].y]);
-        const [x2, y2] = toScreen([1 - lm[b].x, lm[b].y]);
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-      }
-      ctx.stroke();
-    }
   }
 
   /**
