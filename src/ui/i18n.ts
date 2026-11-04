@@ -27,7 +27,6 @@ const PL = {
 
   // overlays and the calibration dialog
   'Loading…': 'Ładowanie…',
-  'Get ready to flap!': 'Szykuj skrzydła!',
   'Get in position': 'Ustaw Się',
   'Get back in frame!': 'Wróć do kadru!',
   'Get into view': 'Wejdź w kadr',

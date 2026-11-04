@@ -71,6 +71,8 @@ const DIALOG_ASPECT = 0.75;
 /** world px: the title's size (the level select's) and the space under it */
 const DIALOG_TITLE = 110;
 const TITLE_GAP = 24;
+/** world px: the countdown's digits, as big as the game's big signs ("Game Over") */
+const COUNTDOWN_SIZE = 180;
 
 /** The small in-game box, in world px (scaled like the game): height, width / height and margin; its contents at `MINI_SCALE` of the dialog's. */
 const MINI_HEIGHT = 216;
@@ -134,6 +136,8 @@ export class FrameGuide {
   private layerRc = rough.canvas(this.layer);
   /** the dialog's title: one of the game's big titles, drawn by PixiJS (under this canvas, beside the panel) */
   private title = new GlowText('', bigTextStyle(DIALOG_TITLE));
+  /** the countdown's digit, styled like the titles */
+  private countdown = new GlowText('', bigTextStyle(COUNTDOWN_SIZE));
 
   /** `stage`: the game's (unscaled), for the dialog's title, on top of everything else there */
   constructor(
@@ -144,6 +148,7 @@ export class FrameGuide {
     this.ctx = canvas.getContext('2d')!;
     this.rc = rough.canvas(canvas);
     this.title.visible = false;
+    this.countdown.visible = false;
   }
 
   draw(s: GuideState, now: number) {
@@ -159,6 +164,7 @@ export class FrameGuide {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.title.visible = false;
+    this.countdown.visible = false;
     if (s.mode === 'hidden') return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -170,8 +176,7 @@ export class FrameGuide {
         break;
       case 'countdown':
         // over the game, dimmed (like behind the calibration dialog)
-        this.text(String(Math.max(1, Math.ceil(s.countdown ?? 0))), W / 2, H / 2, 180, INK, undefined, 180);
-        this.text(t('Get ready to flap!'), W / 2, H / 2 + 120, 34, INK, undefined, 34);
+        this.drawCountdown(s, W, H);
         break;
       case 'calibrate':
         this.drawCalibrateDialog(s, W, H, now);
@@ -220,6 +225,17 @@ export class FrameGuide {
 
     const box: Rect = { x: (W - w) / 2, y: top + titleH + gap, w, h };
     this.drawPanel(box, 1, s, now, { message: s.message ?? '', hint: s.hint, error: s.error, progress: s.progress ?? 0 });
+  }
+
+  /** The countdown's digit in the middle of the screen, a big title scaled like the game. */
+  private drawCountdown(s: GuideState, W: number, H: number) {
+    const digit = this.countdown;
+    const text = String(Math.max(1, Math.ceil(s.countdown ?? 0)));
+    if (digit.text !== text) digit.text = text;
+    digit.scale.set(worldFit(W, H).scale);
+    digit.position.set(W / 2, H / 2);
+    if (this.stage.children.at(-1) !== digit) this.stage.addChild(digit); // on top
+    digit.visible = true;
   }
 
   /** The small "get back in frame" box in the lower right corner during the game: the dialog's panel, smaller. */
