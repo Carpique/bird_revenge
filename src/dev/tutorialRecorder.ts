@@ -329,7 +329,7 @@ async function main() {
       }
     }
     if (mode === 'countdown' || mode === 'recording')
-      take.push(tracing ? traceLog.add(f, now - takeStart, r, tracker?.raw ?? null, tracker?.inferenceMs ?? 0) : toRecordedFrame(f, now - takeStart));
+      take.push(tracing ? traceLog.add(f, now - takeStart, r, tracker?.raw ?? null, tracker?.inferenceMs ?? 0, tracker?.occlusion.standIn) : toRecordedFrame(f, now - takeStart));
     // a debug trace runs until Esc: holding a pose still is what it's for
     if (mode === 'recording' && !tracing && standingStill(f, now)) stopRecording();
     if (mode === 'live' || mode === 'recording') {

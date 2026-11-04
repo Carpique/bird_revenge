@@ -12,6 +12,8 @@ export interface TraceFrame extends RecordedFrame {
   raw: [number, number, number, number][] | null;
   /** ms the pose model took on the frame */
   ms: number;
+  /** how much of each arm (the person's own left, right) is the other arm standing in for it, 0..1 (`ArmOcclusion`) */
+  standIn: [number, number];
   /** per body part (`VisibilityMonitor`): [visible in this frame 0/1, smoothed score, debounced visible 0/1] */
   parts: Record<PartName, [number, number, number]>;
   /** all required parts visible: false opens the game's "get back in frame" panel */
@@ -56,7 +58,14 @@ export class TraceLog {
   }
 
   /** The trace frame for `f` (`t`: ms into the take), logging the visibility changes since the last one. */
-  add(f: PoseFrame | null, t: number, r: PoseReading, raw: NormalizedLandmark[] | null, ms: number): TraceFrame {
+  add(
+    f: PoseFrame | null,
+    t: number,
+    r: PoseReading,
+    raw: NormalizedLandmark[] | null,
+    ms: number,
+    standIn: { left: number; right: number } = { left: 0, right: 0 },
+  ): TraceFrame {
     t = Math.round(t);
     const { vis, pointing } = r;
     const prev = this.prev;
@@ -82,6 +91,7 @@ export class TraceLog {
       ...toRecordedFrame(f, t),
       raw: raw && raw.map((p) => [round(p.x, 4), round(p.y, 4), round(p.z, 4), round(p.visibility, 3)]),
       ms: round(ms, 1),
+      standIn: [round(standIn.left, 2), round(standIn.right, 2)],
       parts,
       inFrame: vis.inFrame,
       pointing: pointing && {

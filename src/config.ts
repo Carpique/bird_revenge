@@ -21,6 +21,21 @@ export const config = {
   /** One-Euro filter applied to landmark coordinates (lower minCutoff = smoother but laggier). */
   smoothing: { minCutoff: 2.0, beta: 0.3, dCutoff: 1.0 },
 
+  /**
+   * One arm hidden behind the other (both pointing to one side turn the body sideways): MediaPipe loses the far
+   * arm and guesses it hanging. The near arm then stands in for it (`ArmOcclusion`).
+   */
+  armOcclusion: {
+    /** an arm (its less visible joint: elbow or wrist) at least this visible is seen; below, a stand-in may take over */
+    confident: 0.7,
+    /** ...and at or below this, the stand-in replaces it fully (blended in between) */
+    hidden: 0.5,
+    /** the near arm must be at least this visible to stand in */
+    otherMin: 0.8,
+    /** the arms must have been parallel within this (deg) when last both seen */
+    parallelMax: 35,
+  },
+
   visibility: {
     /** a landmark counts as visible if its MediaPipe visibility is at least this... */
     minLandmarkVisibility: 0.6,

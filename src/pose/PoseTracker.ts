@@ -1,5 +1,6 @@
 import { FilesetResolver, PoseLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { config } from '../config';
+import { ArmOcclusion } from './ArmOcclusion';
 import { OneEuroFilter } from './OneEuroFilter';
 import type { Landmark, PoseFrame } from './types';
 
@@ -20,6 +21,8 @@ export class PoseTracker {
   inferenceMs = 0;
   /** MediaPipe's own landmarks for the frame `onFrame` gets, before smoothing (with z and visibility); null: nobody */
   raw: NormalizedLandmark[] | null = null;
+  /** stands in for an arm hidden behind the other; `occlusion.standIn` says how much, for the last frame */
+  readonly occlusion = new ArmOcclusion();
 
   private filters: OneEuroFilter[] = [];
   private lastTs = 0;
@@ -96,9 +99,12 @@ export class PoseTracker {
     this.raw = raw && raw.length >= N ? raw : null;
     if (!raw || raw.length < N) {
       this.filters.forEach((f) => f.reset());
+      this.occlusion.reset();
       this.onFrame(null);
       return;
     }
+    const aspect = video.videoWidth / video.videoHeight;
+    const pts = this.occlusion.apply(raw, aspect);
     const s = config.smoothing;
     const tSec = ts / 1000;
     const lm: Landmark[] = new Array(N);
@@ -109,11 +115,11 @@ export class PoseTracker {
       fx.beta = fy.beta = s.beta;
       fx.dCutoff = fy.dCutoff = s.dCutoff;
       lm[i] = {
-        x: fx.filter(raw[i].x, tSec),
-        y: fy.filter(raw[i].y, tSec),
-        v: raw[i].visibility ?? 0,
+        x: fx.filter(pts[i].x, tSec),
+        y: fy.filter(pts[i].y, tSec),
+        v: pts[i].visibility ?? 0,
       };
     }
-    this.onFrame({ t: ts, lm, aspect: video.videoWidth / video.videoHeight });
+    this.onFrame({ t: ts, lm, aspect });
   }
 }
