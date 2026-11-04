@@ -15,7 +15,7 @@ const url = (file: string) => import.meta.env.BASE_URL + DIR + file;
 /**
  * All game audio. Effects are decoded into memory by @pixi/sound so they play instantly; music is
  * streamed through an <audio> element (a whole song decoded would take ~60 MB), and so is the title
- * screen's theme (`playTheme`), on an element of its own. The falling-poo
+ * screen's looped theme (`playTheme`), on an element of its own. The falling-poo
  * tone is synthesised on @pixi/sound's AudioContext.
  *
  * Browsers only allow sound after a click or key press. Music starts with the first countdown
@@ -84,8 +84,7 @@ class GameAudio {
     this.music.addEventListener('ended', () => this.nextTrack());
     this.theme.preload = 'auto';
     if (this.themes.length) this.theme.src = url(this.themes[0]);
-    // played once to its end, not looped
-    this.theme.addEventListener('ended', () => (this.themeWanted = false));
+    this.theme.loop = true;
 
     const unlock = () => {
       if (this.suspended) return;
@@ -240,7 +239,7 @@ class GameAudio {
   }
 
   /**
-   * The title screen showed up: its theme from the start, played through once. Before the first
+   * The title screen showed up: its theme from the start, looped until `stopTheme`. Before the first
    * click / key press the browser doesn't allow it, so it starts then.
    */
   playTheme() {
