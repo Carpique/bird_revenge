@@ -1,4 +1,5 @@
-{ "compressionlevel":-1,
+{ "class":"Level",
+ "compressionlevel":-1,
  "height":45,
  "infinite":false,
  "layers":[
@@ -108,6 +109,13 @@
  "nextlayerid":8,
  "nextobjectid":110,
  "orientation":"orthogonal",
+ "properties":[
+        {
+         "name":"timeOfDay",
+         "propertytype":"TimeOfDay",
+         "type":"string",
+         "value":"morning"
+        }],
  "renderorder":"right-down",
  "tiledversion":"1.12.2",
  "tileheight":16,
