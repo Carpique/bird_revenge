@@ -100,7 +100,8 @@ export class Menu extends Container {
   /** The next / previous item, with a click when the highlight moves. */
   private move(step: number) {
     const from = this.selected;
-    this.select(this.selected + step);
+    const n = this.items.length;
+    this.select((this.selected + step + n) % n); // wrapped here: a bare -1 would mean "none"
     if (this.selected !== from) audio.play('button');
   }
 
