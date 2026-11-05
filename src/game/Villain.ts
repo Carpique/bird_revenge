@@ -84,6 +84,7 @@ export class Villain {
   constructor(def: VillainDef) {
     this.kind = def.kind;
     this.view = new CharacterSprite<VillainAnim>(villainLooks[def.kind].def);
+    this.view.alpha = villainLooks[def.kind].alpha;
     this.place(def);
     this.body = Bodies.rectangle(this.x, this.feetY - villainHitbox.height / 2, villainHitbox.width, villainHitbox.height, {
       label: 'villain',

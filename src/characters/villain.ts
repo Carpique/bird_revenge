@@ -44,8 +44,11 @@ export const ghostDef = {
   },
 } satisfies CharacterDef<'walk' | 'hit'>;
 
-/** Each villain kind's look; `floats`: it keeps moving (its `walk`) while it stands still, instead of standing mid-stride. */
-export const villainLooks: Record<VillainKind, { def: typeof villainDef; floats: boolean }> = {
-  villain: { def: villainDef, floats: false },
-  ghost: { def: ghostDef, floats: true },
+/**
+ * Each villain kind's look; `floats`: it keeps moving (its `walk`) while it stands still, instead of standing mid-stride;
+ * `alpha`: how opaque it's drawn (the ghost is see-through).
+ */
+export const villainLooks: Record<VillainKind, { def: typeof villainDef; floats: boolean; alpha: number }> = {
+  villain: { def: villainDef, floats: false, alpha: 1 },
+  ghost: { def: ghostDef, floats: true, alpha: 0.7 },
 };
