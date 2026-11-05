@@ -3,7 +3,7 @@ import files from 'virtual:audio-files';
 import { config } from '../config';
 
 /** Sound effect groups; each plays a random file of public/assets/audio/<group>-N.mp3 */
-export type SfxGroup = 'shot' | 'splat' | 'bad-guy-dies' | 'bat-dies' | 'score' | 'player-hit' | 'boing' | 'sad-audience' | 'friend' | 'coin' | 'button' | 'fanfare';
+export type SfxGroup = 'shot' | 'splat' | 'bad-guy-dies' | 'ghost-dies' | 'bat-dies' | 'score' | 'player-hit' | 'boing' | 'sad-audience' | 'friend' | 'coin' | 'button' | 'fanfare';
 
 const DIR = 'assets/audio/';
 const STORAGE_KEY = 'bird-revenge-volume';

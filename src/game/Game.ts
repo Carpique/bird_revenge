@@ -714,7 +714,7 @@ export class Game {
         audio.play('splat');
         if (villain.hit()) {
           this.addScore(config.score.villain, pooBody.position.x, pooBody.position.y);
-          audio.play('bad-guy-dies');
+          audio.play(villain.kind === 'ghost' ? 'ghost-dies' : 'bad-guy-dies');
           this.after(1000, () => audio.play('score'));
         }
         Composite.remove(this.engine.world, pooBody);
