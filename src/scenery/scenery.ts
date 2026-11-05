@@ -23,7 +23,7 @@ export const scenery = {
       horizon: '#acd4ec', top: '#d8edf8', tint: '#ffffff', clouds: 1, sun: true, moon: false, stars: 0,
       // light blue at the very top, the main blue from a fifth of the way down, darkening towards the ground
       between: [[0.19, '#badcef'], [0.65, '#badcef']] as [number, string][],
-      behindGround: '#eaf3f6',
+      behindGround: '#edf2ea',
     },
     evening: { horizon: '#8877b4', top: '#2a3a9a', tint: '#b1aac8', clouds: 0.8, sun: false, moon: false, stars: 0 },
     night: { horizon: '#2e418d', top: '#19276b', tint: '#6876a3', clouds: 0.45, sun: false, moon: true, stars: 140 },
