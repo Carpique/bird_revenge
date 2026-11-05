@@ -1,4 +1,4 @@
-import { CanvasSource, Sprite, Text, Texture } from 'pixi.js';
+import { BlurFilter, CanvasSource, Sprite, Text, Texture } from 'pixi.js';
 
 /**
  * The faint outline behind characters, bat poo and the score counters: a pale silhouette a little bigger than the
@@ -11,25 +11,28 @@ export const BACKING = {
   /** the same for small things: the score counters, bat poo */
   smallWidth: 1.5,
   alpha: 0.24,
+  /** how soft its edge is: the blur's reach, as a share of its width (0 for a hard edge) */
+  softness: 1,
 };
 
 const textures = new Map<string, Texture>();
 
 /**
- * A silhouette of `t` grown by `radius` (in the texture's own pixels) on every side, filled with `color`: the image
- * stamped in a ring of offsets, then recoloured. The result is `radius` bigger than `t` on each side. Cached.
+ * A silhouette of `t` grown by `radius` (in the texture's own pixels) on every side, filled with `color` and its edge
+ * blurred by `blur`: the image stamped in a ring of offsets, recoloured, then blurred. It's padded evenly on each side,
+ * so the blur isn't cut off. Cached.
  */
-function backingTexture(t: Texture, radius: number, color: string): Texture {
-  const key = `${t.uid}|${radius}|${color}`;
+function backingTexture(t: Texture, radius: number, blur: number, color: string): Texture {
+  const key = `${t.uid}|${radius}|${blur}|${color}`;
   let b = textures.get(key);
   if (b) return b;
   const res = t.source.resolution;
   const r = Math.ceil(radius * res);
   const w = t.frame.width * res, h = t.frame.height * res;
-  const canvas = document.createElement('canvas');
-  canvas.width = w + 2 * r;
-  canvas.height = h + 2 * r;
-  const g = canvas.getContext('2d')!;
+  const solid = document.createElement('canvas');
+  solid.width = w + 2 * r;
+  solid.height = h + 2 * r;
+  const g = solid.getContext('2d')!;
   const image = t.source.resource as CanvasImageSource;
   const stamp = (dx: number, dy: number) => g.drawImage(image, t.frame.x * res, t.frame.y * res, w, h, r + dx, r + dy, w, h);
   // two rings, so the gaps between the outer stamps are filled too
@@ -37,7 +40,22 @@ function backingTexture(t: Texture, radius: number, color: string): Texture {
   stamp(0, 0);
   g.globalCompositeOperation = 'source-in';
   g.fillStyle = color;
-  g.fillRect(0, 0, canvas.width, canvas.height);
+  g.fillRect(0, 0, solid.width, solid.height);
+  let canvas = solid;
+  const s = blur * res;
+  if (s > 0) {
+    // the shadow's blur reaches about 1.5× shadowBlur; ctx.filter would be simpler but Safari lacks it
+    const p = Math.ceil(1.5 * s);
+    canvas = document.createElement('canvas');
+    canvas.width = solid.width + 2 * p;
+    canvas.height = solid.height + 2 * p;
+    const o = canvas.getContext('2d')!;
+    // draw it off the canvas, so only its (blurred) shadow lands on it
+    o.shadowColor = color;
+    o.shadowBlur = s;
+    o.shadowOffsetX = canvas.width;
+    o.drawImage(solid, p - canvas.width, p);
+  }
   b = new Texture({ source: new CanvasSource({ resource: canvas, resolution: res }) });
   textures.set(key, b);
   return b;
@@ -53,7 +71,8 @@ export function spriteBacking(art: Sprite, width = BACKING.width): Sprite {
   backing.alpha = BACKING.alpha;
   backing.onRender = () => {
     const t = art.texture;
-    const b = (backing.texture = backingTexture(t, width / Math.abs(art.scale.y), BACKING.color));
+    const radius = width / Math.abs(art.scale.y);
+    const b = (backing.texture = backingTexture(t, radius, radius * BACKING.softness, BACKING.color));
     // the backing is bigger on each side: put the same point of the art on the anchor
     const { width: w, height: h } = t.frame;
     const pad = (b.frame.width - w) / 2;
@@ -65,14 +84,15 @@ export function spriteBacking(art: Sprite, width = BACKING.width): Sprite {
 }
 
 /**
- * The backing for `text`: the same text in the backing's colour with a stroke reaching `width` past it on each side.
- * Add it to the same parent, just before `text`; it follows the text's content and position.
+ * The backing for `text`: the same text in the backing's colour with a stroke reaching `width` past it on each side,
+ * blurred. Add it to the same parent, just before `text`; it follows the text's content and position.
  */
 export function textBacking(text: Text, width = BACKING.width): Text {
   const backing = new Text({ text: text.text, style: text.style.clone() });
   backing.style.fill = BACKING.color;
   backing.style.stroke = { color: BACKING.color, width: 2 * width, join: 'round' };
   backing.alpha = BACKING.alpha;
+  if (BACKING.softness > 0) backing.filters = [new BlurFilter({ strength: width * BACKING.softness })];
   backing.onRender = () => {
     backing.text = text.text;
     backing.anchor.copyFrom(text.anchor);
