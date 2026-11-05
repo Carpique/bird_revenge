@@ -10,7 +10,7 @@ export const BACKING = {
   width: 3,
   /** the same for small things: the score counters, bat poo */
   smallWidth: 1.5,
-  alpha: 0.24,
+  alpha: 0.39,
   /** how soft its edge is: the blur's reach, as a share of its width (0 for a hard edge) */
   softness: 1,
 };
