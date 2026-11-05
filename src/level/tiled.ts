@@ -103,7 +103,7 @@ export interface TiledMap {
  * Object references are ids, 0 = none.
  */
 export const CLASS_DEFAULTS = {
-  Terrain: { friction: 0.2 },
+  Terrain: { friction: 0.6 },
   Body: { material: 'wood', density: 0, sleeping: false },
   Branch: {},
   Rope: { body: 0, to: 0, length: 0, stiffness: 1 },

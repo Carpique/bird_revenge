@@ -56,8 +56,9 @@ export class Bird {
       label: 'bird',
       inertia: Infinity, // never tumbles
       restitution: 0,
-      // no friction of its own: Matter combines friction with the larger of the two bodies' values, so this
-      // would make the bird stick to the walls and ceiling; the ground supplies the friction instead
+      // Matter takes the smaller of the two bodies' friction (and the larger static friction), so with
+      // friction 1 the surface decides; `step` sets it only while standing (0 in the air, so the bird
+      // never sticks to the side of a wall or shelf)
       friction: 0,
       frictionStatic: 0,
       frictionAir: config.physics.birdAirFriction,
@@ -189,6 +190,8 @@ export class Bird {
     // pointing: flying (and drifting) can take off from the ground or a branch; the rest only acts in the air
     this.pointing = p !== null && (p.mode === 'fly' || p.mode === 'drift' || !this.onGround);
     b.frictionAir = this.pointing && p!.mode !== 'rest' ? config.pointing.airFriction : config.physics.birdAirFriction;
+    // the floor under it grips, a wall beside it doesn't
+    b.friction = this.onGround ? 1 : 0;
     // otherwise flapping + tilt + hover: hovering only acts in the air; tilted on the floor, the bird rises a
     // little instead of sliding, then flies sideways just above it
     // a fresh tilt (or one turned the other way) starts gently
