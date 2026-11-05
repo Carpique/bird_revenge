@@ -141,6 +141,79 @@ const walk = [
 walk.forEach((p, i) => write(`villain/walk_${i}.svg`, villain({ ...p, seed: 100 + i * 31 })));
 write('villain/hit.svg', villain({ legA: 10, legB: -10, armA: 150, armB: -150, seed: 300, splat: true }));
 
+// ---------------------------------------------------------------- ghost (the villain's other look: same frame, faces right)
+// a ball under a bed sheet, floating a little above its feet (the bottom of the frame); the hem waves as it goes
+const sheet = '#f6f8fc', sheetFold = '#aab6cc', GHOST_INK = '#3a4256';
+
+/** `phase` 0..1: where the hem's wave (and the bob up and down) is; `hit`: a poo on its head, mouth open in shock */
+function ghost({ phase, seed, hit = false }) {
+  const d = [];
+  const go = (s, extra = {}) => o(s, { stroke: GHOST_INK, roughness: 0.9, bowing: 0.8, ...extra });
+  const t = phase * Math.PI * 2;
+  const bob = Math.sin(t) * 3;
+  const cx = 48, R = 30, headY = 46 + bob;
+  const hemY = 126 + bob;
+  // the sheet's sides flare out and sway a little, trailing behind (it moves to the right)
+  const sway = Math.sin(t + 0.6) * 2.5;
+  const left = cx - R - 8 + sway, right = cx + R + 8 + sway * 0.6;
+  // the hem: scallops whose dips travel along it
+  const n = 4, w = (right - left) / n;
+  let hem = '';
+  for (let i = n - 1; i >= 0; i--) {
+    const x0 = left + (i + 1) * w, x1 = left + i * w;
+    const dip = 8 + Math.sin(t * 1 + i * 1.7) * 4;
+    hem += ` Q ${x0 - w / 2} ${hemY + dip + Math.cos(t + i) * 2} ${x1} ${hemY - 2 + Math.sin(t + i * 1.3) * 2}`;
+  }
+  const body =
+    `M ${cx - R} ${headY} A ${R} ${R} 0 0 1 ${cx + R} ${headY}` +
+    ` C ${cx + R + 2} ${headY + 34} ${right - 2} ${hemY - 26} ${right} ${hemY - 2}` +
+    hem +
+    ` C ${left - 2} ${hemY - 26} ${cx - R - 2} ${headY + 34} ${cx - R} ${headY} Z`;
+  d.push(gen.path(body, go(seed + 1, { fill: sheet, fillStyle: 'solid' })));
+  // folds: from under the head down into the hem, swinging with it
+  for (const [i, fx] of [[0, -14], [1, 6], [2, 22]]) {
+    const top = [cx + fx * 0.6, headY + 30];
+    const mid = [cx + fx + Math.sin(t + i * 1.7) * 3, hemY - 24];
+    const end = [cx + fx * 1.15 + Math.sin(t + i * 1.7 + 0.8) * 4, hemY + 2];
+    d.push(gen.curve([top, mid, end], go(seed + 2 + i, { stroke: sheetFold, strokeWidth: 1.6 })));
+  }
+  // eyes: two black holes, looking the way it goes
+  d.push(gen.ellipse(cx + 2, headY - 2, 11, 17, go(seed + 6, { fill: '#111', fillStyle: 'solid', strokeWidth: 1 })));
+  d.push(gen.ellipse(cx + 18, headY - 2, 11, 17, go(seed + 7, { fill: '#111', fillStyle: 'solid', strokeWidth: 1 })));
+  if (hit) {
+    const poo = '#7a5230';
+    d.push(gen.ellipse(cx + 2, headY - R + 2, 40, 16, o(seed + 20, { fill: poo, fillStyle: 'solid' })));
+    d.push(gen.polygon([[cx - 14, headY - R + 4], [cx - 16, headY - R + 22], [cx - 10, headY - R + 6]], o(seed + 21, { fill: poo, fillStyle: 'solid' })));
+    d.push(gen.polygon([[cx + 12, headY - R + 6], [cx + 16, headY - R + 26], [cx + 18, headY - R + 6]], o(seed + 22, { fill: poo, fillStyle: 'solid' })));
+    d.push(gen.ellipse(cx + 10, headY + 18, 10, 13, go(seed + 23, { fill: '#111', fillStyle: 'solid', strokeWidth: 1 })));
+  }
+  return svg(V_W, V_H, d);
+}
+
+// float frames: one full wave of the hem (the animation loops). All drawn with the same seed, so the sketchy lines
+// wobble the same way in each and only the sheet moves; different seeds make the outlines flicker from frame to frame.
+const GHOST_FRAMES = 6;
+for (let i = 0; i < GHOST_FRAMES; i++) write(`ghost/float_${i}.svg`, ghost({ phase: i / GHOST_FRAMES, seed: 1200 }));
+write('ghost/hit.svg', ghost({ phase: 0.25, seed: 1300, hit: true }));
+
+// ---------------------------------------------------------------- glue (what the ghost throws: a glowing green blob)
+{
+  const glue = '#9dff4f', glueInk = '#2f7d16';
+  const d = [
+    gen.path('M 9 20 C 6 11 15 5 21 8 C 27 4 34 12 30 19 C 33 26 26 31 20 29 C 14 33 6 28 9 20 Z', o(1400, { fill: glue, fillStyle: 'solid', stroke: glueInk, strokeWidth: 1.8, roughness: 0.8 })),
+    // drips trailing off it
+    gen.path('M 12 27 Q 10 33 13 34 Q 16 33 15 28', o(1401, { fill: glue, fillStyle: 'solid', stroke: glueInk, strokeWidth: 1.4, roughness: 0.6 })),
+    gen.circle(25, 33, 3.5, o(1402, { fill: glue, fillStyle: 'solid', stroke: glueInk, strokeWidth: 1.2, roughness: 0.5 })),
+    // a shine
+    gen.curve([[14, 14], [17, 11], [21, 11]], o(1403, { stroke: '#eaffd6', strokeWidth: 2.2, roughness: 0.5 })),
+  ];
+  // the fluorescent glow: a soft green halo behind the blob
+  const glow =
+    '<defs><radialGradient id="glow"><stop offset="0.45" stop-color="#9dff4f" stop-opacity="0.75"/><stop offset="1" stop-color="#9dff4f" stop-opacity="0"/></radialGradient></defs>\n' +
+    '<circle cx="20" cy="20" r="20" fill="url(#glow)"/>\n';
+  write('glue/glue.svg', svg(40, 40, d).replace('<g ', `${glow}<g `));
+}
+
 // ---------------------------------------------------------------- bat (seen from the front, centre at the middle)
 const BAT_W = 140, BAT_H = 90;
 /** a bat flying its route: dusky grey-purple, inked black */

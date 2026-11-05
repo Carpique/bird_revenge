@@ -1,3 +1,4 @@
+import type { VillainKind } from '../level/types';
 import type { CharacterDef } from './types';
 
 /**
@@ -24,3 +25,27 @@ export const villainDef = {
 
 /** Collision box (world px), centred horizontally on the feet, extending up. */
 export const villainHitbox = { width: 56, height: 120 };
+
+/**
+ * The ghost: the villain's other look, a ball under a bed sheet floating a little above his feet; the same size,
+ * so the same hitbox. Its `walk` is the sheet's hem waving, which goes on while it stands still.
+ * Tiled shows `src/levels/tiles/ghost.png`.
+ */
+export const ghostDef = {
+  ...villainDef,
+  id: 'ghost',
+  animations: {
+    walk: {
+      frames: Array.from({ length: 6 }, (_, i) => `assets/ghost/float_${i}.svg`),
+      fps: 8,
+      loop: true,
+    },
+    hit: { frames: ['assets/ghost/hit.svg'], fps: 1 },
+  },
+} satisfies CharacterDef<'walk' | 'hit'>;
+
+/** Each villain kind's look; `floats`: it keeps moving (its `walk`) while it stands still, instead of standing mid-stride. */
+export const villainLooks: Record<VillainKind, { def: typeof villainDef; floats: boolean }> = {
+  villain: { def: villainDef, floats: false },
+  ghost: { def: ghostDef, floats: true },
+};

@@ -8,9 +8,11 @@ import puppeteer from 'puppeteer';
 /**
  * `height`: the character's `displayHeight`. `feet`: the share of that height down to its feet, for the actors placed
  * by their feet (villain: his `anchor.y`; a friend: its bottom); the image is cut there, so its bottom edge is the feet.
+ * `shadow`: a shadow drawn at the feet, for one floating above them (the ghost), so it's clear in Tiled where it stands.
  */
 const ICONS = [
   { out: 'villain', svg: 'villain/walk_0', height: 130, feet: 0.98 },
+  { out: 'ghost', svg: 'ghost/float_0', height: 130, feet: 0.98, shadow: true },
   { out: 'bat', svg: 'bat/fly_0', height: 64 },
   { out: 'bunny', svg: 'friend/bunny/idle', height: 64, feet: 1 },
   { out: 'bird', svg: 'bird/idle', height: 90 },
@@ -22,7 +24,7 @@ try {
   for (const icon of ICONS) {
     const svg = await readFile(new URL(`../public/assets/${icon.svg}.svg`, import.meta.url), 'utf8');
     const dataUrl = await page.evaluate(
-      async (svg, height, feet) => {
+      async (svg, height, feet, shadow) => {
         const img = new Image();
         img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
         await img.decode();
@@ -30,12 +32,20 @@ try {
         const canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = Math.round(height * feet);
-        canvas.getContext('2d').drawImage(img, 0, 0, w, height);
+        const g = canvas.getContext('2d');
+        if (shadow) {
+          g.fillStyle = 'rgba(0, 0, 0, 0.3)';
+          g.beginPath();
+          g.ellipse(w / 2, canvas.height - 4, w * 0.32, 4, 0, 0, 2 * Math.PI);
+          g.fill();
+        }
+        g.drawImage(img, 0, 0, w, height);
         return canvas.toDataURL('image/png');
       },
       svg,
       icon.height,
       icon.feet ?? 1,
+      icon.shadow ?? false,
     );
     const out = new URL(`../src/levels/tiles/${icon.out}.png`, import.meta.url);
     await writeFile(out, Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64'));

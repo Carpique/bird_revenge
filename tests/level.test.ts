@@ -144,17 +144,26 @@ describe('Tiled levels', () => {
       ]),
     );
     expect(level.villains).toEqual([
-      { x: 100, y: 0, path: { x0: 100, x1: 150 }, throwDelay: 4 },
-      { x: 300, y: 0, path: { x0: 300, x1: 350 }, throwDelay: 0 },
+      { kind: 'villain', x: 100, y: 0, path: { x0: 100, x1: 150 }, throwDelay: 4 },
+      { kind: 'villain', x: 300, y: 0, path: { x0: 300, x1: 350 }, throwDelay: 0 },
     ]);
     expect(() => parseTiledMap('t', mapOf([{ type: 'Villain', polyline: [{ x: 0, y: 0 }, { x: 50, y: 0 }], properties: [prop('throwDelay', 'float', -1)] }]))).toThrow(
       "can't be negative",
     );
   });
 
+  it('reads each villain\'s kind: his look', () => {
+    const line = [{ x: 0, y: 0 }, { x: 50, y: 0 }];
+    const level = parseTiledMap('t', mapOf([{ type: 'Villain', polyline: line, properties: [prop('kind', 'string', 'ghost')] }]));
+    expect(level.villains.map((v) => v.kind)).toEqual(['ghost']);
+    expect(() => parseTiledMap('t', mapOf([{ type: 'Villain', polyline: line, properties: [prop('kind', 'string', 'vampire')] }]))).toThrow(
+      'unknown villain kind "vampire"',
+    );
+  });
+
   it('takes a Villain polyline\'s x range as his path, starting at its first point', () => {
     const level = parseTiledMap('t', mapOf([{ type: 'Villain', x: 500, y: 640, polyline: [{ x: 0, y: 0 }, { x: -300, y: 0 }, { x: 100, y: 0 }] }]));
-    expect(level.villains).toEqual([{ x: 500, y: 640, path: { x0: 200, x1: 600 }, throwDelay: 4 }]);
+    expect(level.villains).toEqual([{ kind: 'villain', x: 500, y: 640, path: { x0: 200, x1: 600 }, throwDelay: 4 }]);
     expect(() => parseTiledMap('t', mapOf([{ type: 'Villain', polyline: [{ x: 0, y: 0 }, { x: 0, y: 50 }] }]))).toThrow('needs some width');
     expect(() => parseTiledMap('t', mapOf([{ type: 'Villain', point: true }]))).toThrow('must be a polyline');
   });
@@ -178,7 +187,7 @@ describe('Tiled levels', () => {
   });
 
   describe('actor tiles (icons.tsj, bottom-centre aligned)', () => {
-    /** a map with the icons tileset (gid: coin 1, villain 2, bat 3, bunny 4, bird 5) and `objects` */
+    /** a map with the icons tileset (gid: coin 1, villain 2, bat 3, bunny 4, bird 5, ghost 6) and `objects` */
     const actorMap = (objects: Partial<TiledObject>[]) => {
       const map = mapOf(objects);
       map.tilesets = [{ firstgid: 1, source: 'icons.tsj' }];
@@ -188,7 +197,7 @@ describe('Tiled levels', () => {
       const tile = (tilesets['icons.tsj'] as { tiles: { id: number; imagewidth: number; imageheight: number }[] }).tiles[id];
       return { width: tile.imagewidth, height: tile.imageheight };
     };
-    const villain = { gid: 2, ...size(1) }, bat = { gid: 3, ...size(2) }, bunny = { gid: 4, ...size(3) }, bird = { gid: 5, ...size(4) };
+    const villain = { gid: 2, ...size(1) }, bat = { gid: 3, ...size(2) }, bunny = { gid: 4, ...size(3) }, bird = { gid: 5, ...size(4) }, ghost = { gid: 6, ...size(5) };
 
     it('has icons at the actors\' sizes in the game (else: npm run tiled-icons, and fix icons.tsj)', () => {
       // the villain's is cut at his feet
@@ -214,11 +223,17 @@ describe('Tiled levels', () => {
         ]),
         tilesets,
       );
-      expect(level.villains).toEqual([{ x: 250, y: 640, path: { x0: 100, x1: 500 }, throwDelay: 0 }]);
+      expect(level.villains).toEqual([{ kind: 'villain', x: 250, y: 640, path: { x0: 100, x1: 500 }, throwDelay: 0 }]);
       expect(() => parseTiledMap('t', actorMap([{ ...villain }]), tilesets)).toThrow('its "path" must be a polyline');
       expect(() =>
         parseTiledMap('t', actorMap([{ id: 1, polygon: [{ x: 0, y: 0 }, { x: 9, y: 0 }, { x: 0, y: 9 }] }, { id: 2, ...villain, properties: [prop('path', 'object', 1)] }]), tilesets),
       ).toThrow('its "path" must be a polyline');
+    });
+
+    it('makes the ghost tile a ghost, the same size as the villain', () => {
+      expect(ghost.height).toBe(villain.height);
+      const level = parseTiledMap('t', actorMap([{ id: 1, x: 100, y: 640, polyline: [{ x: 0, y: 0 }, { x: 400, y: 0 }] }, { id: 2, ...ghost, x: 250, y: 640, properties: [prop('path', 'object', 1)] }]), tilesets);
+      expect(level.villains).toEqual([{ kind: 'ghost', x: 250, y: 640, path: { x0: 100, x1: 500 }, throwDelay: 4 }]);
     });
 
     it('starts a bat on its route, at the point nearest its centre', () => {

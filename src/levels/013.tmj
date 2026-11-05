@@ -462,25 +462,6 @@
                  "y":368
                 }, 
                 {
-                 "gid":2,
-                 "height":127,
-                 "id":36,
-                 "name":"",
-                 "opacity":1,
-                 "properties":[
-                        {
-                         "name":"path",
-                         "type":"object",
-                         "value":37
-                        }],
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":80,
-                 "x":144,
-                 "y":640
-                }, 
-                {
                  "height":0,
                  "id":37,
                  "name":"",
@@ -524,25 +505,6 @@
                  "width":16,
                  "x":160,
                  "y":160
-                }, 
-                {
-                 "gid":2,
-                 "height":127,
-                 "id":40,
-                 "name":"",
-                 "opacity":1,
-                 "properties":[
-                        {
-                         "name":"path",
-                         "type":"object",
-                         "value":46
-                        }],
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":80,
-                 "x":688,
-                 "y":640
                 }, 
                 {
                  "gid":1,
@@ -731,6 +693,44 @@
                  "width":128,
                  "x":656,
                  "y":272
+                }, 
+                {
+                 "gid":6,
+                 "height":127,
+                 "id":52,
+                 "name":"",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":37
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":128,
+                 "y":640
+                }, 
+                {
+                 "gid":6,
+                 "height":127,
+                 "id":53,
+                 "name":"",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":46
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":736,
+                 "y":640
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -739,7 +739,7 @@
          "y":0
         }],
  "nextlayerid":3,
- "nextobjectid":52,
+ "nextobjectid":54,
  "orientation":"orthogonal",
  "properties":[
         {

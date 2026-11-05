@@ -1,6 +1,6 @@
-import { villainDef, villainHitbox } from '../characters/villain';
+import { villainDef, villainHitbox, villainLooks } from '../characters/villain';
 import { config, WORLD } from '../config';
-import type { VillainDef } from '../level/types';
+import type { VillainDef, VillainKind } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { Bodies, Body, type MBody } from './physics';
 
@@ -42,12 +42,15 @@ const nextPauseTime = () => randomBetween(config.villain.minPauseMs, config.vill
  * Every `throwDelay` seconds or so he stops and throws an apple at the bird, then walks on the way he was going.
  * He never turns to throw: only at a bird in front of him (the half of the world the way he walks); with the bird behind him
  * the throw waits until it's in front.
+ * A ghost (`kind`) is the same villain in another look, throwing glue instead of apples.
  * When hit, he is knocked off the screen arcade style: a little hop, then a parabolic fall past the bottom edge,
  * growing as if flying towards the camera. He's gone for good then.
  */
 export class Villain {
   readonly body: MBody;
-  readonly view = new CharacterSprite<VillainAnim>(villainDef);
+  readonly view: CharacterSprite<VillainAnim>;
+  /** his look, and what he throws */
+  readonly kind: VillainKind;
   /** stands still where he is, mid-stride (the level is won); one already knocked off still flies away */
   frozen = false;
   private state: State = 'walking';
@@ -79,6 +82,8 @@ export class Villain {
   onThrow: ((x: number, y: number, dir: 1 | -1) => void) | null = null;
 
   constructor(def: VillainDef) {
+    this.kind = def.kind;
+    this.view = new CharacterSprite<VillainAnim>(villainLooks[def.kind].def);
     this.place(def);
     this.body = Bodies.rectangle(this.x, this.feetY - villainHitbox.height / 2, villainHitbox.width, villainHitbox.height, {
       label: 'villain',
@@ -187,8 +192,8 @@ export class Villain {
     this.view.position.set(this.x, this.y + (HEIGHT * this.scale) / 2);
     this.view.setFacing(this.dir > 0 ? 'right' : 'left');
     if (this.frozen && this.state === 'walking') this.view.anim.stop();
-    // standing still: in the windup of a throw, or stopped for a moment
-    else if (this.aimT !== null || this.pauseLeft !== null) this.view.showPhase('walk', 0);
+    // standing still: in the windup of a throw, or stopped for a moment (a ghost's sheet waves on)
+    else if ((this.aimT !== null || this.pauseLeft !== null) && !villainLooks[this.kind].floats) this.view.showPhase('walk', 0);
     else this.view.play(this.state === 'walking' ? 'walk' : 'hit');
   }
 
@@ -216,10 +221,10 @@ export class Villain {
     return this.feetY;
   }
 
-  /** Puts him at his start on his path (kept on the screen), facing a random way. */
+  /** Puts him at his start on his path (kept on the screen, his feet not below the ground), facing a random way. */
   private place({ x, y, path, throwDelay }: VillainDef) {
     this.throwDelay = throwDelay;
-    this.feetY = y;
+    this.feetY = Math.min(y, WORLD.groundY);
     this.lo = Math.max(path.x0, MIN_X);
     this.hi = Math.min(path.x1, MAX_X);
     if (this.lo > this.hi) this.lo = this.hi = (this.lo + this.hi) / 2;

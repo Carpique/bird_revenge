@@ -1,7 +1,7 @@
 import { batDef } from '../characters/bat';
 import { birdDef } from '../characters/bird';
 import { coinDef } from '../characters/coin';
-import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Shape, TimeOfDay } from './types';
+import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Shape, TimeOfDay, VillainKind } from './types';
 
 /**
  * Loads a map saved by the Tiled editor (JSON, `.tmj`) into a `LevelDef`.
@@ -14,7 +14,7 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  * | Branch    | polyline                       | one-way platform, one per segment         |
  * | Rope      | point                          | rope from the point to `body`             |
  * | Hinge     | point                          | `body` pinned at the point                |
- * | Villain   | tile, `path` a polyline        | a villain walking the `path`'s x range, starting where the tile's feet are, on what's under them |
+ * | Villain   | tile, `path` a polyline        | a villain walking the `path`'s x range, starting where the tile's feet are, on what's under them; `kind` his look (villain, ghost) |
  * |           | or a polyline                  | the same, the polyline being the path, starting on its first point |
  * | Bat       | tile, `path` a polyline or polygon | a bat flying along `path`: there and back (polyline), round and round (polygon), from its point nearest the tile's centre |
  * |           | or a polyline, polygon         | the same, from its first point            |
@@ -108,7 +108,7 @@ export const CLASS_DEFAULTS = {
   Branch: {},
   Rope: { body: 0, to: 0, length: 0, stiffness: 1 },
   Hinge: { body: 0, to: 0, stiffness: 1 },
-  Villain: { path: 0, throwDelay: 4 },
+  Villain: { kind: 'villain', path: 0, throwDelay: 4 },
   Bat: { path: 0, speed: 2, pooDelay: 3 },
   Friend: { kind: 'bunny' },
   BirdStart: {},
@@ -125,6 +125,7 @@ type ClassName = keyof typeof CLASS_DEFAULTS;
 const TIMES_OF_DAY: readonly TimeOfDay[] = ['morning', 'afternoon', 'evening', 'night'];
 const MATERIALS: readonly Material[] = ['wood', 'stone', 'rubber', 'ice'];
 const FRIEND_KINDS: readonly FriendKind[] = ['bunny'];
+const VILLAIN_KINDS: readonly VillainKind[] = ['villain', 'ghost'];
 const BUTTON_ACTIONS: readonly ButtonAction[] = ['open', 'close'];
 
 /**
@@ -246,6 +247,8 @@ function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup, objects: 
       break;
     }
     case 'Villain': {
+      const kind = String(p.kind) as VillainKind;
+      if (!VILLAIN_KINDS.includes(kind)) throw new Error(`unknown villain kind "${kind}"`);
       const throwDelay = num(p.throwDelay);
       if (throwDelay < 0) throw new Error('"throwDelay" can\'t be negative (0 = never throws)');
       const pts = tile ? pathOf(objects, p.path, false).points : o.polyline && pointsOf(o, o.polyline);
@@ -254,7 +257,7 @@ function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup, objects: 
       const x0 = Math.min(...xs), x1 = Math.max(...xs);
       if (x0 === x1) throw new Error('a Villain path needs some width');
       const [x, y] = tile ? tilePos() : pts[0];
-      level.villains.push({ x, y, path: { x0, x1 }, throwDelay });
+      level.villains.push({ kind, x, y, path: { x0, x1 }, throwDelay });
       break;
     }
     case 'Bat': {

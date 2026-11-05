@@ -52,7 +52,7 @@ Placeholder art is generated with Rough.js: `npm run art` writes SVGs into `publ
 To use real drawings, replace those files (SVG or PNG) and/or edit the paths in:
 
 - `src/characters/bird.ts` — idle frame, flap frames (ordered wings **down → up**), squash amounts
-- `src/characters/villain.ts` — walk cycle, hit frame, hitbox
+- `src/characters/villain.ts` — walk cycle, hit frame, hitbox; the ghost (the villain's other look)
 - `src/characters/bat.ts` — wingbeat, hit frame, hitbox
 - `src/characters/poo.ts` — falling and splat frames (the bat's poo uses them too, smaller)
 - `src/characters/friend.ts` — the friends to save (the bunny: idle, blink and ear-twitch frames; how often they fidget)
@@ -71,7 +71,7 @@ from the `icons` tileset (`icons.tsj`, in the Project view) with the Insert Tile
 as coins in Tiled too; a point of class Coin works as well (its centre). The actors — Villain, Bat, Friend (bunny) and the
 bird's start — come from the same tileset and show as their sprites, placed by their feet (villain, bunny)
 or where they are drawn (bat, bird). A villain or bat also needs its `path` property set to a polyline without a class (a bat's can be a
-polygon, flown round and round): the villain walks its x range, the bat flies it from the point nearest the icon. A bat without a `path` is a homing bat:
+polygon, flown round and round): the villain walks its x range, the bat flies it from the point nearest the icon. A villain's `kind` is his look: `villain`, or `ghost` (the ghost tile), which throws glue instead of apples. A bat without a `path` is a homing bat:
 once it sees the bird (no terrain in between) it goes for it at its `speed`, round the level's bodies and keeping apart
 from the other bats; till then it flutters about where it was placed. Its icons are drawn from the
 sprites by `npm run tiled-icons` (redo it after changing an actor's art or size). To test a level, open `?level=<file name>` (without `.tmj`): it

@@ -9,7 +9,7 @@
  "name":"icons",
  "objectalignment":"bottom",
  "spacing":0,
- "tilecount":5,
+ "tilecount":6,
  "tiledversion":"1.12.2",
  "tileheight":127,
  "tiles":[
@@ -54,6 +54,20 @@
          "imageheight":90,
          "imagewidth":98,
          "type":"BirdStart"
+        }, 
+        {
+         "id":5,
+         "image":"tiles\/ghost.png",
+         "imageheight":127,
+         "imagewidth":80,
+         "properties":[
+                {
+                 "name":"kind",
+                 "propertytype":"VillainKind",
+                 "type":"string",
+                 "value":"ghost"
+                }],
+         "type":"Villain"
         }],
  "tilewidth":100,
  "type":"tileset",

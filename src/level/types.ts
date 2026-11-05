@@ -78,8 +78,13 @@ export interface CoinDef {
   y: number;
 }
 
+/** How a villain looks: the man in the trench coat throwing apples, or a ghost throwing glue. They do the same. */
+export type VillainKind = 'villain' | 'ghost';
+
 /** A villain walking along the ground. */
 export interface VillainDef {
+  /** his look (and what he throws) */
+  kind: VillainKind;
   /** where he starts */
   x: number;
   /** where his feet are: the ground, or the top of what he walks on */

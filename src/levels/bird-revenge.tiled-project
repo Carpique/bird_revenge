@@ -144,6 +144,12 @@
             "id": 7,
             "members": [
                 {
+                    "name": "kind",
+                    "propertyType": "VillainKind",
+                    "type": "string",
+                    "value": "villain"
+                },
+                {
                     "name": "path",
                     "type": "object",
                     "value": 0
@@ -173,6 +179,17 @@
                 "object",
                 "tile"
             ]
+        },
+        {
+            "id": 17,
+            "name": "VillainKind",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "villain",
+                "ghost"
+            ],
+            "valuesAsFlags": false
         },
         {
             "id": 9,
