@@ -1,10 +1,21 @@
+import { batOutline } from '../characters/bat';
 import { config, WORLD } from '../config';
 import { Query, type MBody } from './physics';
 
-/** what a grid cell is to a homing bat: open sky, near something (passable, but avoided), or inside something */
-const OPEN = 0, NEAR = 1, SOLID = 2;
+/**
+ * what a grid cell is to a homing bat (its centre there): open sky, near something (passable, but avoided), too near
+ * something (its wings would be in it), or inside something
+ */
+const OPEN = 0, NEAR = 1, BLOCKED = 2, SOLID = 3;
 /** how much more a step through a NEAR cell costs than one through open sky */
 const NEAR_COST = 6;
+/**
+ * ...and through a BLOCKED one: a bat can't fly there, but the way may have to go through some, to a bird by a wall
+ * or on the ground; it gets as near as its wings let it
+ */
+const BLOCKED_COST = 40;
+/** how far (px) inside a cell its corners are looked at */
+const EDGE = 0.5;
 /** how many cells ahead along its way a bat looks for one it can fly straight to */
 const LOOKAHEAD = 8;
 
@@ -63,10 +74,33 @@ export class HomingField {
     return aim ? unit(aim.x - p.x, aim.y - p.y) : null;
   }
 
-  /** Is `p` inside one of the bodies (or under the ground, or off the world)? */
-  solidAt(p: Point) {
-    if (p.x < 0 || p.y < 0 || p.x >= WORLD.width || p.y >= WORLD.height) return true;
-    return this.kind[this.index(p.x, p.y)] === SOLID;
+  /**
+   * Would a bat at `p` be (wings and all, see `batOutline`) in one of the bodies, under the ground, or off the world?
+   */
+  blocked(p: Point) {
+    return this.overlap(p) > 0;
+  }
+
+  /**
+   * How far a bat at `p` is in one of the bodies, under the ground, or off the world: 0 not at all, up to 1 (and past it,
+   * off the world) its centre in it. A bat already in something can tell which way gets it out.
+   */
+  overlap(p: Point): number {
+    const { halfWidth: hw, halfHeight: hh } = batOutline;
+    if (p.y >= WORLD.height) return 1;
+    // the world's edges, as walls
+    let worst = Math.max(0, 1 - (Math.max(0, p.x) / hw) ** 2, 1 - (Math.max(0, WORLD.width - p.x) / hw) ** 2, 1 - (Math.max(0, p.y) / hh) ** 2);
+    const { cell, cols, rows, kind } = this;
+    const c0 = Math.max(0, Math.floor((p.x - hw) / cell)), c1 = Math.min(cols - 1, Math.floor((p.x + hw) / cell));
+    const r0 = Math.max(0, Math.floor((p.y - hh) / cell)), r1 = Math.min(rows - 1, Math.floor((p.y + hh) / cell));
+    for (let r = r0; r <= r1; r++)
+      for (let c = c0; c <= c1; c++) {
+        if (kind[r * cols + c] !== SOLID) continue;
+        // the cell's nearest point to `p`, inside the oval?
+        const dx = Math.max(c * cell - p.x, 0, p.x - (c + 1) * cell), dy = Math.max(r * cell - p.y, 0, p.y - (r + 1) * cell);
+        worst = Math.max(worst, 1 - (dx / hw) ** 2 - (dy / hh) ** 2);
+      }
+    return worst;
   }
 
   private markObstacles(bodies: MBody[]) {
@@ -79,28 +113,27 @@ export class HomingField {
       const r0 = Math.max(0, Math.floor(b.bounds.min.y / cell)), r1 = Math.min(rows - 1, Math.floor(b.bounds.max.y / cell));
       for (let r = r0; r <= r1; r++)
         for (let c = c0; c <= c1; c++) {
-          // a thin wall can miss every cell's centre, so a cell's corners count too
-          const x = c * cell, y = r * cell;
-          const corners = [{ x: x + cell / 2, y: y + cell / 2 }, { x, y }, { x: x + cell, y }, { x, y: y + cell }, { x: x + cell, y: y + cell }];
+          // a thin wall can miss every cell's centre, so a cell's corners count too: just inside it, or a body only
+          // touching the cell's edge would count, and every wall would be a cell thicker
+          const x = c * cell + EDGE, y = r * cell + EDGE, far = cell - 2 * EDGE;
+          const corners = [{ x: c * cell + cell / 2, y: r * cell + cell / 2 }, { x, y }, { x: x + far, y }, { x, y: y + far }, { x: x + far, y: y + far }];
           if (corners.some((pt) => Query.point([b], pt).length)) kind[r * cols + c] = SOLID;
         }
     }
-    // the bat's clearance round each solid cell, and inside the world's edges
+    // where its wings won't fit, its centre at the cell's
+    for (let i = 0; i < kind.length; i++) if (kind[i] !== SOLID && this.blocked(this.centre(i))) kind[i] = BLOCKED;
+    // the bat's clearance beyond its wings, round them and inside the world's edges
     const reach = Math.ceil(config.bat.homingClearance / cell);
-    const solid = kind.slice();
+    const blocked = kind.slice();
     for (let r = 0; r < rows; r++)
       for (let c = 0; c < cols; c++) {
         const i = r * cols + c;
-        if (solid[i] === SOLID) continue;
-        if (c < reach || r < reach || c >= cols - reach) {
-          kind[i] = NEAR;
-          continue;
-        }
+        if (blocked[i] !== OPEN) continue;
         search: for (let dr = -reach; dr <= reach; dr++)
           for (let dc = -reach; dc <= reach; dc++) {
             const rr = r + dr, cc = c + dc;
             if (dr * dr + dc * dc > reach * reach || rr < 0 || cc < 0 || rr >= rows || cc >= cols) continue;
-            if (solid[rr * cols + cc] === SOLID) {
+            if (blocked[rr * cols + cc] >= BLOCKED) {
               kind[i] = NEAR;
               break search;
             }
@@ -125,7 +158,7 @@ export class HomingField {
         if (kind[j] === SOLID) continue;
         // no cutting a solid corner diagonally
         if (dc && dr && (kind[r * cols + cc] === SOLID || kind[rr * cols + c] === SOLID)) continue;
-        const nd = d + len * (kind[j] === NEAR ? NEAR_COST : 1);
+        const nd = d + len * (kind[j] === BLOCKED ? BLOCKED_COST : kind[j] === NEAR ? NEAR_COST : 1);
         if (nd < dist[j]) {
           dist[j] = nd;
           heap.push(j, nd);
@@ -148,12 +181,12 @@ export class HomingField {
     return best;
   }
 
-  /** Can a bat fly straight from `a` to `b` without going into a SOLID cell (nor a NEAR one, if `strict`)? */
+  /** Can a bat fly straight from `a` to `b` without its wings going into anything (nor its centre into a NEAR cell, if `strict`)? */
   private clear(a: Point, b: Point, strict: boolean) {
     const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (this.cell / 2));
     for (let k = 1; k < n; k++) {
       const x = a.x + ((b.x - a.x) * k) / n, y = a.y + ((b.y - a.y) * k) / n;
-      if (this.solidAt({ x, y })) return false;
+      if (this.blocked({ x, y })) return false;
       if (strict && this.kind[this.index(x, y)] === NEAR) return false;
     }
     return true;

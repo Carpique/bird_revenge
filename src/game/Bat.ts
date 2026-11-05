@@ -188,7 +188,7 @@ export class Bat {
    * Flies `speed` px (at most) towards the bird, the way the field shows, away from bats too close; turning a share of the
    * way at a time, so it swerves rather than jerks. Its heading swings either way of the bird's, smoothly and unevenly,
    * so its path curves the way a bat's does, and no two bats fly alike. Before it has seen the bird it loops about where
-   * it started instead. It never flies into a body: blocked, it slides along it, or stops.
+   * it started instead. Its wings never go into a body: blocked, it slides along it, or stops.
    */
   private home(speed: number, homing: Homing | undefined) {
     const { homingSeparation: separation, homingSeparationWeight: separationWeight, homingTurn: turn, homingWander, homingWanderHz, homingIdleRadius } = config.bat;
@@ -229,9 +229,9 @@ export class Bat {
       this.v.y *= speed / v;
     }
     const field = homing?.field;
-    // one a body has moved onto gets out any way it can
-    const stuck = field?.solidAt(this.position) ?? false;
-    const free = (x: number, y: number) => stuck || !field?.solidAt({ x, y });
+    // one already in something (a body moved onto it, or it started there) may move only so as not to go in deeper
+    const now = field?.overlap(this.position) ?? 0;
+    const free = (x: number, y: number) => !field || field.overlap({ x, y }) <= now;
     const nx = this.x + this.v.x, ny = this.y + this.v.y;
     if (free(nx, ny)) [this.x, this.y] = [nx, ny];
     else if (free(nx, this.y)) [this.x, this.v.y] = [nx, 0];

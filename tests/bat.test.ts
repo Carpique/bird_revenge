@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { batOutline } from '../src/characters/bat';
 import { config } from '../src/config';
 import { Bat, type Homing } from '../src/game/Bat';
 import { HomingField, inSight } from '../src/game/homing';
@@ -129,16 +130,29 @@ describe('a homing bat (no route)', () => {
     expect(Math.max(...a.map((y, i) => Math.abs(y - c[i])))).toBeGreaterThan(2);
   });
 
-  it('goes round a wall between it and the bird, never into it', () => {
+  it('goes round a wall between it and the bird, its wings never in it', () => {
     // a wall from the ground up to y 150, between the bat and the bird
     const wall = Bodies.rectangle(640, 395, 40, 490, { isStatic: true });
     const b = homer(900, 500);
     const field = new HomingField();
+    const { halfWidth: hw, halfHeight: hh } = batOutline;
     run([b], field, [wall], { x: 300, y: 500 }, 60 * 30, (bat) => {
       const { x, y } = bat.position;
-      expect(x > 620 && x < 660 && y > 150).toBe(false);
+      // the oval round it clear of the wall's box: its nearest point outside the oval
+      const dx = Math.max(620 - x, 0, x - 660), dy = Math.max(150 - y, 0, y - 640);
+      expect((dx / hw) ** 2 + (dy / hh) ** 2).toBeGreaterThanOrEqual(1);
     });
     expect(Math.hypot(b.position.x - 300, b.position.y - 500)).toBeLessThan(40);
+  });
+
+  it('flutters by a wall without its wings going in, starting near it', () => {
+    // a wall at x 160–176, the bat's left wing tip just clear of it (as in level 13)
+    const wall = Bodies.rectangle(168, 320, 16, 320, { isStatic: true });
+    const b = homer(240, 256);
+    const { halfWidth: hw } = batOutline;
+    run([b], new HomingField(), [wall], { x: 1000, y: 300 }, 60 * 10, (bat) => {
+      expect(bat.position.x - hw).toBeGreaterThanOrEqual(176);
+    }, false);
   });
 
   it('keeps apart from the other bats', () => {

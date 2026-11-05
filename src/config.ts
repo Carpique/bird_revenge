@@ -319,8 +319,8 @@ export const config = {
     // a bat without a route homes in on the bird, round the level's bodies and keeping apart from the other bats:
     /** homing bat: size (px) of the grid cells it finds its way on (takes a reload) */
     homingCell: 16,
-    /** homing bat: how far (px) it keeps from the level's bodies, the ground and the world's edges where it can */
-    homingClearance: 32,
+    /** homing bat: how far (px) beyond its wings it keeps from the level's bodies, the ground and the world's edges where it can */
+    homingClearance: 16,
     /** homing bat: how often (ms) the way to the bird is worked out again */
     homingReplanMs: 250,
     /** homing bat: it keeps this far (px, centre to centre) from the other bats... */
