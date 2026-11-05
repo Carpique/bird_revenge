@@ -295,6 +295,12 @@ export const config = {
     intervalSpread: 0.4,
     /** before a throw he stops and turns to the bird this long: the player's warning */
     windupMs: 400,
+    /** he holds up what he'll throw this long before it leaves his hand (windup included): the player's warning */
+    warnMs: 2000,
+    /** ...fading in over this long */
+    warnFadeMs: 300,
+    /** ...and blinking this many times per second */
+    warnBlinkHz: 3,
     /** random aim error, ± degrees */
     aimSpread: 6,
     /** collision radius (px) */

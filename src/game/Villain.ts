@@ -1,3 +1,4 @@
+import { missiles } from '../characters/apple';
 import { villainDef, villainLooks, type VillainHitbox } from '../characters/villain';
 import { config, WORLD } from '../config';
 import type { VillainDef, VillainKind } from '../level/types';
@@ -10,8 +11,8 @@ type VillainAnim = keyof typeof villainDef.animations;
 /** his centre stays this far inside the screen edges, whatever his path */
 const MIN_X = 60, MAX_X = WORLD.width - 60;
 const HEIGHT = villainDef.displayHeight;
-/** where the apple leaves his hand: in front of him (the way he walks), above the feet */
-const HAND_DX = 22, HAND_DY = 95;
+/** where the apple leaves his hand: in front of him (the way he walks), about halfway up him */
+const HAND_DX = 22, HAND_DY = 65;
 
 /** A stretch of ground, `x0` < `x1` (world px). */
 export interface Span {
@@ -54,6 +55,8 @@ export function spanInBand(body: MBody, top: number, bottom: number): Span | nul
   return x0 <= x1 ? { x0, x1 } : null;
 }
 
+/** how long a throw takes, from its start to the apple leaving his hand: the warning, or the windup if that's longer */
+const throwMs = () => Math.max(config.apple.warnMs, config.apple.windupMs);
 const randomBetween = (lo: number, hi: number) => lo + Math.random() * Math.max(0, hi - lo);
 const nextWalkTime = () => randomBetween(config.villain.minWalkMs, config.villain.maxWalkMs);
 const nextPauseTime = () => randomBetween(config.villain.minPauseMs, config.villain.maxPauseMs);
@@ -82,6 +85,8 @@ const distSqToSegment = (px: number, py: number, a: { x: number; y: number }, b:
  * Every `throwDelay` seconds or so he stops and throws an apple at the bird, then walks on the way he was going.
  * He never turns to throw: only at a bird in front of him (the half of the world the way he walks); with the bird behind him
  * the throw waits until it's in front.
+ * A throw starts with the bird in front of him: for `apple.warnMs` he holds what he'll throw up in his hand (`held`), blinking,
+ * as he walks on and then stops for the windup: the player's warning. He throws then even if the bird has got behind him.
  * A ghost (`kind`) is the same villain in another look, throwing glue instead of apples.
  * When hit, he is knocked off the screen arcade style: a little hop, then a parabolic fall past the bottom edge,
  * growing as if flying towards the camera. He's gone for good then.
@@ -89,6 +94,8 @@ const distSqToSegment = (px: number, py: number, a: { x: number; y: number }, b:
 export class Villain {
   readonly body: MBody;
   readonly view: CharacterSprite<VillainAnim>;
+  /** the apple (or glue) in his hand before a throw: shown only then */
+  readonly held: CharacterSprite;
   /** his look, and what he throws */
   readonly kind: VillainKind;
   /** what a poo or the bird hits */
@@ -118,8 +125,12 @@ export class Villain {
   private walkIn = nextWalkTime();
   /** ms left of a stop, or null when walking */
   private pauseLeft: number | null = null;
-  /** ms into the windup of a throw (standing still), or null when not throwing */
+  /** ms into a throw (`throwMs` long: walking on, then the windup standing still), or null when not throwing */
   private aimT: number | null = null;
+  /** holding up what he'll throw: the throw is due within `apple.warnMs` */
+  private holding = false;
+  /** ms he's been holding it, for its fade in */
+  private heldMs = 0;
   /** called when an apple leaves his hand, with the hand position and the way he faces (the apple must fly that way, or straight up/down) */
   onThrow: ((x: number, y: number, dir: 1 | -1) => void) | null = null;
 
@@ -128,6 +139,8 @@ export class Villain {
     this.hitbox = villainLooks[def.kind].hitbox;
     this.view = new CharacterSprite<VillainAnim>(villainLooks[def.kind].def);
     this.view.alpha = villainLooks[def.kind].alpha;
+    this.held = new CharacterSprite(missiles[def.kind].def);
+    this.held.visible = false;
     this.place(def);
     this.body = Bodies.fromVertices(this.x, this.hitboxY, [ellipse(this.hitbox)], {
       label: 'villain',
@@ -174,6 +187,7 @@ export class Villain {
     if (this.frozen && this.state === 'walking') return;
     const speed = config.villain.speed;
     this.timer += stepMs;
+    this.holding = false;
     switch (this.state) {
       case 'walking': {
         if (this.aimT !== null) {
@@ -183,20 +197,21 @@ export class Villain {
             break;
           }
           this.aimT += stepMs;
-          if (this.aimT >= config.apple.windupMs) {
+        } else if (bird) {
+          // starts a throw (also in the middle of a stop) when it's due and there's a bird in front of him to throw at
+          this.throwIn -= stepMs;
+          if (this.throwIn <= 0 && (bird.x - this.x) * this.dir >= 0) this.aimT = 0;
+        }
+        if (this.aimT !== null) {
+          if (this.aimT >= throwMs()) {
             this.aimT = null;
             this.throwIn = this.nextThrowDelay();
             this.onThrow?.(this.x + this.dir * HAND_DX, this.feetY - HAND_DY, this.dir);
-          }
-          break;
-        }
-        // throws (also in the middle of a stop) while there's a bird in front of him to throw at
-        if (bird) {
-          this.throwIn -= stepMs;
-          if (this.throwIn <= 0 && (bird.x - this.x) * this.dir >= 0) {
-            this.aimT = 0;
             break;
           }
+          this.holding = this.aimT >= throwMs() - config.apple.warnMs;
+          // standing still for the windup; walking on till then
+          if (this.winding) break;
         }
         if (this.pauseLeft !== null) {
           this.pauseLeft -= stepMs;
@@ -234,6 +249,7 @@ export class Villain {
       case 'gone':
         break;
     }
+    this.heldMs = this.holding ? this.heldMs + stepMs : 0;
     // only a walking villain can be hit, so the body just parks off-screen otherwise
     Body.setPosition(this.body, { x: this.state === 'walking' ? this.x : -1000, y: this.hitboxY });
   }
@@ -244,10 +260,21 @@ export class Villain {
     this.view.scale.set(this.scale);
     this.view.position.set(this.x, this.y + (HEIGHT * this.scale) / 2);
     this.view.setFacing(this.dir > 0 ? 'right' : 'left');
+    this.held.visible = this.holding && this.state === 'walking' && !this.frozen;
+    this.held.position.set(this.x + this.dir * HAND_DX, this.feetY - HAND_DY);
+    // fades in, easing out, and blinks: shown for the first half of each blink
+    const t = Math.min(1, this.heldMs / Math.max(1, config.apple.warnFadeMs));
+    const on = ((this.heldMs / 1000) * config.apple.warnBlinkHz) % 1 < 0.5;
+    this.held.alpha = on ? (1 - (1 - t) ** 2) * this.view.alpha : 0;
     if (this.frozen && this.state === 'walking') this.view.anim.stop();
     // standing still: in the windup of a throw, or stopped for a moment (a ghost's sheet waves on)
-    else if ((this.aimT !== null || this.pauseLeft !== null) && !villainLooks[this.kind].floats) this.view.showPhase('walk', 0);
+    else if ((this.winding || this.pauseLeft !== null) && !villainLooks[this.kind].floats) this.view.showPhase('walk', 0);
     else this.view.play(this.state === 'walking' ? 'walk' : 'hit');
+  }
+
+  /** in the windup of a throw: standing still */
+  private get winding() {
+    return this.aimT !== null && this.aimT >= throwMs() - config.apple.windupMs;
   }
 
   private turn() {

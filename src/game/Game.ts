@@ -285,12 +285,14 @@ export class Game {
     for (const v of this.villains) {
       Composite.remove(this.engine.world, v.body);
       v.view.destroy();
+      v.held.destroy();
     }
     this.villains = this.level.villains.map((def) => {
       const v = new Villain(def);
       v.onThrow = (x, y, dir) => this.throwApple(x, y, dir, v.kind);
       Composite.add(this.engine.world, v.body);
       this.actors.addChildAt(v.view, 0);
+      this.fx.addChild(v.held);
       return v;
     });
     for (const b of this.bats) {
