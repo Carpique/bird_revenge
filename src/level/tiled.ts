@@ -27,7 +27,7 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  * Objects without a class are ignored (handy for notes and guides, and the paths of tiles); hidden layers and objects are skipped
  * (but a `path` can be on any layer).
  * The map itself can have the class Level (Tiled: Map > Map Properties > Class), whose fields set the level's own things:
- * `timeOfDay` (afternoon, evening, night) picks the background. A plain custom property of the same name on the map works too.
+ * `timeOfDay` (morning, afternoon, evening, night) picks the background. A plain custom property of the same name on the map works too.
  *
  * The tiles are in `icons.tsj`: the game's sprites at their size in the game, so things show in Tiled as they will in the game. A tile (image) object takes its tile's class and properties unless it has its own.
  */
@@ -122,7 +122,7 @@ export const MAP_DEFAULTS = {
 } as const;
 
 type ClassName = keyof typeof CLASS_DEFAULTS;
-const TIMES_OF_DAY: readonly TimeOfDay[] = ['afternoon', 'evening', 'night'];
+const TIMES_OF_DAY: readonly TimeOfDay[] = ['morning', 'afternoon', 'evening', 'night'];
 const MATERIALS: readonly Material[] = ['wood', 'stone', 'rubber', 'ice'];
 const FRIEND_KINDS: readonly FriendKind[] = ['bunny'];
 const BUTTON_ACTIONS: readonly ButtonAction[] = ['open', 'close'];

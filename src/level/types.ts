@@ -128,7 +128,7 @@ export interface ButtonDef {
 }
 
 /** The background: the sky, and the sun or the moon. */
-export type TimeOfDay = 'afternoon' | 'evening' | 'night';
+export type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 
 export interface LevelDef {
   name: string;

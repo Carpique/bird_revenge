@@ -17,6 +17,7 @@ export const scenery = {
    * The sun shows in the afternoon; the moon and the stars at night, the moon where the sun would be.
    */
   timesOfDay: {
+    morning: { horizon: '#fff3dc', top: '#6aa8e0', tint: '#ffffff', clouds: 1, sun: false, moon: false, stars: 0 },
     afternoon: { horizon: '#eaf3f6', top: '#eaf3f6', tint: '#ffffff', clouds: 1, sun: true, moon: false, stars: 0 },
     evening: { horizon: '#8877b4', top: '#2a3a9a', tint: '#b1aac8', clouds: 0.8, sun: false, moon: false, stars: 0 },
     night: { horizon: '#2e418d', top: '#19276b', tint: '#6876a3', clouds: 0.45, sun: false, moon: true, stars: 140 },
