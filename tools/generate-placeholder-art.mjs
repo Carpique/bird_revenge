@@ -33,6 +33,7 @@ function write(path, content) {
 }
 
 const o = (seed, extra = {}) => ({ seed, stroke: INK, strokeWidth: 2.2, roughness: 1.4, bowing: 1.2, ...extra });
+const ink = o;
 
 const rot = (pts, deg, [cx, cy]) => {
   const a = (deg * Math.PI) / 180;
@@ -142,11 +143,16 @@ write('villain/hit.svg', villain({ legA: 10, legB: -10, armA: 150, armB: -150, s
 
 // ---------------------------------------------------------------- bat (seen from the front, centre at the middle)
 const BAT_W = 140, BAT_H = 90;
-const batFur = '#4a3a5c', batWing = '#6b5a80';
+/** a bat flying its route: dusky grey-purple, inked black */
+const BAT_PLAIN = { fur: '#4a3a5c', wing: '#6b5a80', ink: INK };
+/** a homing bat (no route), told apart by its colour: dark purple all over, outline too */
+const BAT_HOMING = { fur: '#4b1d73', wing: '#7a3fb0', ink: '#2a0f45' };
 
-/** `wing`: how far the wings are raised (deg, + = up); `hit`: wings folded, dazed, a poo on its head */
-function bat({ wing, seed, hit = false }) {
+/** `wing`: how far the wings are raised (deg, + = up); `hit`: wings folded, dazed, a poo on its head; `colours`: BAT_PLAIN or BAT_HOMING */
+function bat({ wing, seed, hit = false, colours = BAT_PLAIN }) {
   const d = [];
+  const { fur: batFur, wing: batWing } = colours;
+  const o = (seed, extra = {}) => ink(seed, { stroke: colours.ink, ...extra });
   const cx = BAT_W / 2, cy = 50;
   // one wing, drawn for the right side and mirrored: from the shoulder out to the tip, scalloped along the bottom
   const wingShape = [[0, -8], [22, -16], [46, -14], [60, -4], [50, 2], [44, 12], [34, 6], [26, 16], [16, 8], [6, 12], [0, 8]];
@@ -182,6 +188,9 @@ function bat({ wing, seed, hit = false }) {
 // fly frames: a full wingbeat, wings up -> down -> back up (the animation loops)
 [30, 5, -25, 5].forEach((wing, i) => write(`bat/fly_${i}.svg`, bat({ wing, seed: 900 + i * 17 })));
 write('bat/hit.svg', bat({ wing: 60, seed: 980, hit: true }));
+// the homing bat: the same drawings, in its own colours
+[30, 5, -25, 5].forEach((wing, i) => write(`bat/homing/fly_${i}.svg`, bat({ wing, seed: 900 + i * 17, colours: BAT_HOMING })));
+write('bat/homing/hit.svg', bat({ wing: 60, seed: 980, hit: true, colours: BAT_HOMING }));
 
 // ---------------------------------------------------------------- poo
 const pooC = '#7a5230';

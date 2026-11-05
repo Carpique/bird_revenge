@@ -161,7 +161,7 @@ describe('Tiled levels', () => {
       { route: [[100, 200], [400, 250]], loop: false, start: [100, 200], target: 1, speed: 2, pooDelay: 3 },
       { route: [[500, 100], [600, 100], [550, 180]], loop: true, start: [500, 100], target: 1, speed: 3.5, pooDelay: 0 },
     ]);
-    expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', point: true }]))).toThrow('must be a polyline or polygon');
+    expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', width: 10, height: 10 }]))).toThrow('must be a polyline or polygon');
     expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', polyline: [{ x: 0, y: 0 }, { x: 0, y: 0 }] }]))).toThrow('needs some length');
     expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', polyline: [{ x: 0, y: 0 }, { x: 9, y: 0 }], properties: [prop('speed', 'float', 0)] }]))).toThrow('"speed"');
     expect(() => parseTiledMap('t', mapOf([{ type: 'Bat', polyline: [{ x: 0, y: 0 }, { x: 9, y: 0 }], properties: [prop('pooDelay', 'float', -1)] }]))).toThrow("can't be negative");
@@ -230,6 +230,21 @@ describe('Tiled levels', () => {
       expect(level.bats).toEqual([
         { route: route(100), loop: true, start: [550, 200], target: 3, speed: 3, pooDelay: 3 },
         { route: route(300), loop: false, start: [500, 400], target: 3, speed: 2, pooDelay: 3 },
+      ]);
+    });
+
+    it('makes a bat without a path a homing one, starting at its centre (a tile) or the point', () => {
+      const level = parseTiledMap(
+        't',
+        actorMap([
+          { ...bat, x: 300, y: 200 + bat.height / 2, properties: [prop('speed', 'float', 1)] },
+          { type: 'Bat', x: 600, y: 100, point: true },
+        ]),
+        tilesets,
+      );
+      expect(level.bats).toEqual([
+        { route: [], loop: false, start: [300, 200], target: 0, speed: 1, pooDelay: 3 },
+        { route: [], loop: false, start: [600, 100], target: 0, speed: 2, pooDelay: 3 },
       ]);
     });
   });

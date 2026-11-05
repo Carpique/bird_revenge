@@ -316,6 +316,25 @@ export const config = {
     fallGravity: 0.45,
     /** ...tumbling this many turns per second */
     fallSpin: 1.2,
+    // a bat without a route homes in on the bird, round the level's bodies and keeping apart from the other bats:
+    /** homing bat: size (px) of the grid cells it finds its way on (takes a reload) */
+    homingCell: 16,
+    /** homing bat: how far (px) it keeps from the level's bodies, the ground and the world's edges where it can */
+    homingClearance: 32,
+    /** homing bat: how often (ms) the way to the bird is worked out again */
+    homingReplanMs: 250,
+    /** homing bat: it keeps this far (px, centre to centre) from the other bats... */
+    homingSeparation: 110,
+    /** ...this keenly, against going for the bird (1) */
+    homingSeparationWeight: 4,
+    /** homing bat: how quickly it turns: the share of the way from its velocity to the one it wants, each physics step */
+    homingTurn: 0.06,
+    /** homing bat: its heading swings this far (radians) either way of the way to the bird, so it flies curvy, bat-like... */
+    homingWander: 1.2,
+    /** ...about this many times a second (each bat a little differently) */
+    homingWanderHz: 0.2,
+    /** homing bat: until it first sees the bird (nothing static in between, centre to centre) it flutters about where it started, this far (px) */
+    homingIdleRadius: 40,
   },
 
   player: {

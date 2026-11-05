@@ -20,6 +20,16 @@ export const batDef = {
   defaultAnimation: 'fly',
 } satisfies CharacterDef<'fly' | 'hit'>;
 
+/** A homing bat (one without a route): the same bat in dark purple, so players can tell it will come for them. */
+export const homingBatDef = {
+  ...batDef,
+  id: 'bat-homing',
+  animations: {
+    fly: { ...batDef.animations.fly, frames: batDef.animations.fly.frames.map((f) => f.replace('assets/bat/', 'assets/bat/homing/')) },
+    hit: { ...batDef.animations.hit, frames: ['assets/bat/homing/hit.svg'] },
+  },
+} satisfies CharacterDef<'fly' | 'hit'>;
+
 /** Radius (px) of the bat's round body, for the bird bumping into it: the body and the inner wings, not the wing tips. */
 export const batRadius = 22;
 

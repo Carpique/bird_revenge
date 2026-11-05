@@ -90,15 +90,15 @@ export interface VillainDef {
   throwDelay: number;
 }
 
-/** A bat flying along its route, pooing straight down now and then. */
+/** A bat flying along its route, or homing in on the bird when it has none, pooing straight down now and then. */
 export interface BatDef {
-  /** the route's points, in order */
+  /** the route's points, in order; none: it homes in on the bird (round obstacles, apart from the other bats) */
   route: [number, number][];
   /** true: round and round (a closed polygon); false: there and back again (an open polyline) */
   loop: boolean;
   /** where it starts: on the route */
   start: [number, number];
-  /** the index of the route point it flies to first, forward along the route */
+  /** the index of the route point it flies to first, forward along the route (0 for a homing bat) */
   target: number;
   /** px per physics step */
   speed: number;

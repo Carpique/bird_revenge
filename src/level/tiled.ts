@@ -18,6 +18,7 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  * |           | or a polyline                  | the same, the polyline being the path, starting on its first point |
  * | Bat       | tile, `path` a polyline or polygon | a bat flying along `path`: there and back (polyline), round and round (polygon), from its point nearest the tile's centre |
  * |           | or a polyline, polygon         | the same, from its first point            |
+ * |           | tile or point, no `path`       | a homing bat: no route, it goes for the bird, from the tile's centre / the point |
  * | Friend    | point, or a tile               | a friend to save, standing on the point / where the tile's feet are |
  * | Coin      | point, or a tile               | a coin to collect, centred on the point / the tile's image |
  * | BirdStart | point, or a tile               | where the bird starts: its centre / where the tile shows it |
@@ -242,9 +243,15 @@ function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup, objects: 
       const speed = num(p.speed), pooDelay = num(p.pooDelay);
       if (speed <= 0) throw new Error('"speed" must be more than 0');
       if (pooDelay < 0) throw new Error('"pooDelay" can\'t be negative (0 = never poos)');
+      // a tile or point without a path: a homing bat
+      if ((tile || o.point) && !num(p.path)) {
+        const start = tile ? tilePos() : ([o.x, o.y] as [number, number]);
+        level.bats.push({ route: [], loop: false, start, target: 0, speed, pooDelay });
+        break;
+      }
       const own = o.polyline ?? o.polygon;
       const path = tile ? pathOf(objects, p.path, true) : own && { points: pointsOf(o, own), loop: !o.polyline };
-      if (!path || path.points.length < 2) throw new Error('a Bat must be a polyline or polygon (its route), or a tile with a "path"');
+      if (!path || path.points.length < 2) throw new Error('a Bat must be a polyline or polygon (its route), a tile with or without a "path", or a point');
       const route = path.points;
       if (route.every(([x, y]) => x === route[0][0] && y === route[0][1])) throw new Error('a Bat route needs some length');
       const { start, target } = tile ? nearestOnRoute(route, path.loop, tilePos()) : { start: route[0], target: 1 };

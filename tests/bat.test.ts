@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { config } from '../src/config';
-import { Bat } from '../src/game/Bat';
+import { Bat, type Homing } from '../src/game/Bat';
+import { HomingField, inSight } from '../src/game/homing';
+import { Bodies } from '../src/game/physics';
 import { STEP_MS } from '../src/game/physics';
 import type { BatDef } from '../src/level/types';
 
@@ -85,5 +87,106 @@ describe('a bat', () => {
     expect(b.hit()).toBe(true);
     expect(b.hit()).toBe(false);
     expect(b.touches(x, y, 20)).toBe(false);
+  });
+});
+
+describe('a homing bat (no route)', () => {
+  const homer = (x: number, y: number, speed = 1) => batOf({ route: [], loop: false, start: [x, y], target: 0, speed, pooDelay: 0 });
+  /** steps the bats `n` times, the field worked out again every 15 steps, as the game does; they can see the bird unless told */
+  const run = (bats: Bat[], field: HomingField, bodies: Parameters<HomingField['update']>[0], bird: { x: number; y: number }, n: number, track?: (b: Bat) => void, seesBird = true) => {
+    for (let i = 0; i < n; i++) {
+      if (i % 15 === 0) field.update(bodies, bird);
+      for (const b of bats) {
+        const homing: Homing = { field, others: bats.filter((o) => o !== b).map((o) => o.position), seesBird };
+        b.step(STEP_MS, homing);
+        track?.(b);
+      }
+    }
+  };
+
+  it('flies at the bird, never faster than its speed', () => {
+    const b = homer(1000, 300);
+    const field = new HomingField();
+    let last = b.position;
+    run([b], field, [], { x: 200, y: 300 }, 1200, (bat) => {
+      const p = bat.position;
+      expect(Math.hypot(p.x - last.x, p.y - last.y)).toBeLessThanOrEqual(1 + 1e-9);
+      last = p;
+    });
+    expect(Math.hypot(b.position.x - 200, b.position.y - 300)).toBeLessThan(30);
+  });
+
+  it('flies a curvy path, each bat its own', () => {
+    const ys = (b: Bat) => {
+      const out: number[] = [];
+      run([b], new HomingField(), [], { x: 200, y: 300 }, 600, (bat) => out.push(bat.position.y));
+      return out;
+    };
+    const a = ys(homer(1000, 300)), c = ys(homer(1000, 300));
+    // off the straight line there...
+    expect(Math.max(...a.map((y) => Math.abs(y - 300)))).toBeGreaterThan(5);
+    // ...and not the way the other one goes
+    expect(Math.max(...a.map((y, i) => Math.abs(y - c[i])))).toBeGreaterThan(2);
+  });
+
+  it('goes round a wall between it and the bird, never into it', () => {
+    // a wall from the ground up to y 150, between the bat and the bird
+    const wall = Bodies.rectangle(640, 395, 40, 490, { isStatic: true });
+    const b = homer(900, 500);
+    const field = new HomingField();
+    run([b], field, [wall], { x: 300, y: 500 }, 60 * 30, (bat) => {
+      const { x, y } = bat.position;
+      expect(x > 620 && x < 660 && y > 150).toBe(false);
+    });
+    expect(Math.hypot(b.position.x - 300, b.position.y - 500)).toBeLessThan(40);
+  });
+
+  it('keeps apart from the other bats', () => {
+    const bats = [homer(1000, 200), homer(1000, 300), homer(1000, 400)];
+    const field = new HomingField();
+    run(bats, field, [], { x: 300, y: 300 }, 60 * 20);
+    for (const a of bats)
+      for (const o of bats) if (a !== o) expect(Math.hypot(a.position.x - o.position.x, a.position.y - o.position.y)).toBeGreaterThan(70);
+  });
+
+  it('hangs where it is with no bird to go for', () => {
+    const b = homer(500, 300);
+    run([b], new HomingField(), [], { x: 0, y: 0 }, 0);
+    const field = new HomingField();
+    field.update([], null);
+    for (let i = 0; i < 60; i++) b.step(STEP_MS, { field, others: [], seesBird: true });
+    expect(b.position).toEqual({ x: 500, y: 300 });
+  });
+
+  it('flutters about where it started till it sees the bird', () => {
+    const b = homer(900, 300);
+    let far = 0;
+    run([b], new HomingField(), [], { x: 200, y: 300 }, 60 * 20, (bat) => {
+      far = Math.max(far, Math.hypot(bat.position.x - 900, bat.position.y - 300));
+    }, false);
+    expect(b.chasing).toBe(false);
+    // it moves, but stays about its start
+    expect(far).toBeGreaterThan(10);
+    expect(far).toBeLessThan(3 * config.bat.homingIdleRadius);
+  });
+
+  it('once it has seen the bird, goes for it even out of sight', () => {
+    const b = homer(900, 300);
+    const field = new HomingField();
+    run([b], field, [], { x: 200, y: 300 }, 1);
+    expect(b.chasing).toBe(true);
+    run([b], field, [], { x: 200, y: 300 }, 60 * 20, undefined, false);
+    expect(Math.hypot(b.position.x - 200, b.position.y - 300)).toBeLessThan(40);
+  });
+});
+
+describe('a homing bat\'s sight', () => {
+  it('is blocked by static bodies only', () => {
+    const wall = Bodies.rectangle(500, 300, 40, 200, { isStatic: true });
+    const crate = Bodies.rectangle(500, 300, 40, 200);
+    expect(inSight([wall], { x: 300, y: 300 }, { x: 700, y: 300 })).toBe(false);
+    expect(inSight([crate], { x: 300, y: 300 }, { x: 700, y: 300 })).toBe(true);
+    // over the top of the wall
+    expect(inSight([wall], { x: 300, y: 150 }, { x: 700, y: 150 })).toBe(true);
   });
 });

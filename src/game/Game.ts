@@ -17,6 +17,7 @@ import { i18n, t } from '../ui/i18n';
 import { Apple } from './Apple';
 import { Background } from './Background';
 import { Bat } from './Bat';
+import { HomingField, inSight } from './homing';
 import { Bird } from './Bird';
 import { Button } from './Button';
 import { Coin } from './Coin';
@@ -102,6 +103,10 @@ export class Game {
   private villains: Villain[] = [];
   /** the level's bats; a knocked-off one stays (gone) until the level restarts */
   private bats: Bat[] = [];
+  /** the way to the bird for the homing bats (those without a route) */
+  private homingField = new HomingField();
+  /** ms until the homing field is worked out again */
+  private replanIn = 0;
   private poos: Poo[] = [];
   private apples: Apple[] = [];
   private friends: Friend[] = [];
@@ -297,6 +302,7 @@ export class Game {
       this.actors.addChild(b.view);
       return b;
     });
+    this.replanIn = 0;
     for (const p of this.poos) {
       p.stopSound();
       Composite.remove(this.engine.world, p.body);
@@ -385,7 +391,7 @@ export class Game {
     const bp = this.bird.body.position;
     const bird = this.bird.dying ? null : { x: bp.x, y: bp.y };
     for (const v of this.villains) v.step(STEP_MS, { bird, obstacles: this.villainObstacles(v.feet) });
-    for (const b of this.bats) b.step(STEP_MS);
+    this.stepBats(bird);
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
     for (const f of this.friends) f.step(STEP_MS);
@@ -610,6 +616,25 @@ export class Game {
     }
     gaps.push({ x0: from, x1: 2 * WORLD.width });
     return [...splats, ...bodies, ...gaps];
+  }
+
+  /** Steps the bats; the homing ones go for `bird` (null: none to go for), by a field worked out again every `replanMs`. */
+  private stepBats(bird: { x: number; y: number } | null) {
+    const homers = this.bats.filter((b) => b.homing && b.hittable);
+    if (homers.length && (this.replanIn -= STEP_MS) <= 0) {
+      this.replanIn = config.bat.homingReplanMs;
+      this.homingField.update(this.levelBodies, bird);
+    }
+    const flying = this.bats.filter((b) => b.hittable);
+    for (const b of this.bats) {
+      if (!b.homing) {
+        b.step(STEP_MS);
+        continue;
+      }
+      // one already after the bird needn't look again
+      const seesBird = !b.chasing && b.hittable && bird !== null && inSight(this.levelBodies, b.position, bird);
+      b.step(STEP_MS, { field: this.homingField, others: flying.filter((o) => o !== b).map((o) => o.position), seesBird });
+    }
   }
 
   /** How fast the villain's apples fly (px per physics step). Constant for now; could grow as the game goes on. */
