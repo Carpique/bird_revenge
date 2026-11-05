@@ -1,7 +1,7 @@
 import { batDef } from '../characters/bat';
 import { birdDef } from '../characters/bird';
 import { coinDef } from '../characters/coin';
-import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Shape } from './types';
+import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Shape, TimeOfDay } from './types';
 
 /**
  * Loads a map saved by the Tiled editor (JSON, `.tmj`) into a `LevelDef`.
@@ -26,6 +26,9 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  *
  * Objects without a class are ignored (handy for notes and guides, and the paths of tiles); hidden layers and objects are skipped
  * (but a `path` can be on any layer).
+ * The map itself can have the class Level (Tiled: Map > Map Properties > Class), whose fields set the level's own things:
+ * `timeOfDay` (afternoon, evening, night) picks the background. A plain custom property of the same name on the map works too.
+ *
  * The tiles are in `icons.tsj`: the game's sprites at their size in the game, so things show in Tiled as they will in the game. A tile (image) object takes its tile's class and properties unless it has its own.
  */
 
@@ -89,6 +92,9 @@ export interface TiledMap {
   infinite: boolean;
   layers: TiledLayer[];
   tilesets?: TiledTilesetRef[];
+  /** the map's class (Level) and its custom properties */
+  class?: string;
+  properties?: TiledProperty[];
 }
 
 /**
@@ -110,7 +116,13 @@ export const CLASS_DEFAULTS = {
   Button: { target: 0, action: 'open', duration: 3 },
 } as const;
 
+/** The map's class (Level): its fields and their defaults, matching `bird-revenge.tiled-project` like `CLASS_DEFAULTS`. */
+export const MAP_DEFAULTS = {
+  Level: { timeOfDay: 'afternoon' },
+} as const;
+
 type ClassName = keyof typeof CLASS_DEFAULTS;
+const TIMES_OF_DAY: readonly TimeOfDay[] = ['afternoon', 'evening', 'night'];
 const MATERIALS: readonly Material[] = ['wood', 'stone', 'rubber', 'ice'];
 const FRIEND_KINDS: readonly FriendKind[] = ['bunny'];
 const BUTTON_ACTIONS: readonly ButtonAction[] = ['open', 'close'];
@@ -134,6 +146,11 @@ export function parseTiledMap(name: string, map: TiledMap, tilesets: Record<stri
   const problems: string[] = [];
   if (map.orientation !== 'orthogonal') problems.push(`orientation is "${map.orientation}"; use Orthogonal`);
   if (map.infinite) problems.push('the map is infinite; use a fixed-size map');
+  if (map.class && !(map.class in MAP_DEFAULTS)) problems.push(`the map's class is "${map.class}"; use Level, or none`);
+  const mapProps: Record<string, unknown> = { ...MAP_DEFAULTS.Level };
+  for (const prop of map.properties ?? []) mapProps[prop.name] = prop.value;
+  const timeOfDay = String(mapProps.timeOfDay) as TimeOfDay;
+  if (!TIMES_OF_DAY.includes(timeOfDay)) problems.push(`unknown timeOfDay "${timeOfDay}"; use ${TIMES_OF_DAY.join(', ')}`);
 
   const level: LevelDef = {
     name,
@@ -148,6 +165,7 @@ export function parseTiledMap(name: string, map: TiledMap, tilesets: Record<stri
     branches: [],
     joints: [],
     buttons: [],
+    timeOfDay,
   };
 
   const tiles = tileLookup(map, tilesets);

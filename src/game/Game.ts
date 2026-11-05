@@ -331,6 +331,7 @@ export class Game {
     Composite.remove(world, [...this.built.bodies.map((b) => b.body), ...this.built.joints.map((j) => j.constraint)]);
     this.levelView?.destroy();
     this.built = buildLevel(this.level);
+    this.background.timeOfDay = this.level.timeOfDay ?? 'afternoon';
     Composite.add(world, [...this.built.bodies.map((b) => b.body), ...this.built.joints.map((j) => j.constraint)]);
     this.levelView = new LevelView(this.level, this.built);
     this.levelLayer.addChild(this.levelView);

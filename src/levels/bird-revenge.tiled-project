@@ -282,6 +282,36 @@
                 "object",
                 "tile"
             ]
+        },
+        {
+            "id": 15,
+            "name": "TimeOfDay",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "afternoon",
+                "evening",
+                "night"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "color": "#ffa0a0a4",
+            "drawFill": true,
+            "id": 16,
+            "members": [
+                {
+                    "name": "timeOfDay",
+                    "propertyType": "TimeOfDay",
+                    "type": "string",
+                    "value": "afternoon"
+                }
+            ],
+            "name": "Level",
+            "type": "class",
+            "useAs": [
+                "map"
+            ]
         }
     ]
 }

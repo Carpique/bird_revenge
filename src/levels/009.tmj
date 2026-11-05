@@ -1,4 +1,5 @@
-{ "compressionlevel":-1,
+{ "class":"Level",
+ "compressionlevel":-1,
  "height":45,
  "infinite":false,
  "layers":[

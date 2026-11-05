@@ -4,7 +4,7 @@ import { buildLevel } from '../src/level/build';
 import { nextLevel } from '../src/levels';
 import { LETTERS, letterCoins, letterLevels } from '../src/level/letters';
 import { WORLD } from '../src/config';
-import { CLASS_DEFAULTS, LevelError, parseTiledMap, type TiledMap, type TiledObject, type TiledTileset } from '../src/level/tiled';
+import { CLASS_DEFAULTS, LevelError, MAP_DEFAULTS, parseTiledMap, type TiledMap, type TiledObject, type TiledTileset } from '../src/level/tiled';
 import projectText from '../src/levels/bird-revenge.tiled-project?raw';
 import { Button } from '../src/game/Button';
 import { birdDef } from '../src/characters/bird';
@@ -48,12 +48,22 @@ describe('Tiled levels', () => {
 
   it('has the same class defaults as the Tiled project', () => {
     const project = JSON.parse(projectText);
-    const classes = Object.fromEntries(
-      project.propertyTypes
-        .filter((t: { type: string }) => t.type === 'class')
-        .map((t: { name: string; members: { name: string; value: unknown }[] }) => [t.name, Object.fromEntries(t.members.map((m) => [m.name, m.value]))]),
-    );
-    expect(classes).toEqual(CLASS_DEFAULTS);
+    type ClassType = { type: string; name: string; useAs: string[]; members: { name: string; value: unknown }[] };
+    const classes = (forMap: boolean) =>
+      Object.fromEntries(
+        (project.propertyTypes as ClassType[])
+          .filter((t) => t.type === 'class' && t.useAs.includes('map') === forMap)
+          .map((t) => [t.name, Object.fromEntries(t.members.map((m) => [m.name, m.value]))]),
+      );
+    expect(classes(false)).toEqual(CLASS_DEFAULTS);
+    expect(classes(true)).toEqual(MAP_DEFAULTS);
+  });
+
+  it("reads the map's timeOfDay, afternoon by default", () => {
+    expect(parseTiledMap('t', mapOf([])).timeOfDay).toBe('afternoon');
+    expect(parseTiledMap('t', { ...mapOf([]), class: 'Level', properties: [prop('timeOfDay', 'string', 'night')] }).timeOfDay).toBe('night');
+    expect(() => parseTiledMap('t', { ...mapOf([]), properties: [prop('timeOfDay', 'string', 'dawn')] })).toThrow(/timeOfDay "dawn"/);
+    expect(() => parseTiledMap('t', { ...mapOf([]), class: 'Room' })).toThrow(/class is "Room"/);
   });
 
   it('turns Tiled shapes into centred, rotated world shapes', () => {

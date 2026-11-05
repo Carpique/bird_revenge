@@ -127,6 +127,9 @@ export interface ButtonDef {
   duration: number;
 }
 
+/** The background: the sky, and the sun or the moon. */
+export type TimeOfDay = 'afternoon' | 'evening' | 'night';
+
 export interface LevelDef {
   name: string;
   width: number;
@@ -140,6 +143,8 @@ export interface LevelDef {
   coins: CoinDef[];
   /** what completes the level: saving all the friends (the default), or collecting all the coins (the training letters) */
   goal?: 'friends' | 'coins';
+  /** the background; 'afternoon' when not given */
+  timeOfDay?: TimeOfDay;
   bodies: BodyDef[];
   branches: Branch[];
   joints: JointDef[];
