@@ -195,21 +195,28 @@ export class Bird {
     const dir = Math.sign(sideAmount(c.tilt));
     this.tiltHeldMs = dir !== 0 && dir === this.tiltDir ? this.tiltHeldMs + stepMs : 0;
     this.tiltDir = dir;
-    if (this.pointing || dir === 0 || c.lift > 0) this.liftingOff = false;
+    // only a real flap climbs out of it: any lift at all used to end it, and the flap detector's noise then let the
+    // bird sink back to the floor and lift off again, every now and then
+    if (this.pointing || dir === 0 || c.lift >= config.tilt.liftOffFlap) this.liftingOff = false;
     else if (this.onGround) {
-      // v² = 2·g·h, gravity in px per step²
+      // v² = 2·g·h, gravity in px per step²; keeps its sideways speed (touching down mid-flight, it flies on)
       const gStep = config.physics.gravity * 1000 * (stepMs / 1000) ** 2;
-      Body.setVelocity(b, { x: 0, y: -Math.sqrt(2 * gStep * config.tilt.liftOffHeight) });
+      Body.setVelocity(b, { x: b.velocity.x, y: -Math.sqrt(2 * gStep * config.tilt.liftOffHeight) });
       this.liftingOff = true;
     }
-    // the wingbeats' lift, smoothed (so climbs are straight lines, level or tilted), less of it going up when tilted
-    this.lift = this.pointing ? 0 : smoothLift(this.lift, c.lift * liftShare(c.tilt), stepMs);
+    // the wingbeats' lift, smoothed (so climbs are straight lines, level or tilted), less of it going up when tilted;
+    // flying just above the floor, the weak lift that doesn't climb out of it is ignored (gravity is cancelled there)
+    const flapLift = this.liftingOff ? 0 : c.lift;
+    this.lift = this.pointing ? 0 : smoothLift(this.lift, flapLift * liftShare(c.tilt), stepMs);
     const g = this.pointing
       ? pointingStep(b.velocity, p!, stepMs)
       : flightStep(b.velocity, c.tilt, this.onGround ? 0 : c.hover, this.lift, stepMs, this.tiltHeldMs);
-    // topped out after lifting off: stay at that height (on the way up, gravity tops it out)
-    if (this.liftingOff && g.y > 0) g.y = 0;
-    const gravity = this.liftingOff && g.y >= 0 ? 0 : g.gravity;
+    // topped out after lifting off: stay at that height (on the way up, gravity tops it out). Held there, the
+    // velocity Matter leaves is float noise of either sign (it's worked out from the positions): a tiny upward one
+    // mustn't count as still rising, or that step falls with full gravity and the bird sinks back to the floor
+    const toppedOut = this.liftingOff && g.y > -0.01;
+    if (toppedOut) g.y = 0;
+    const gravity = toppedOut ? 0 : g.gravity;
     Body.setVelocity(b, { x: g.x, y: g.y });
     // Matter applies the full gravity itself; the arms (or pointing control) hold against part of it
     const antiGravity = config.physics.gravity * 1000 * (1 - gravity);

@@ -161,6 +161,11 @@ export const config = {
      * flying sideways just above the floor
      */
     liftOffHeight: 12,
+    /**
+     * flying just above the floor, a flap's lift (px/s²) must reach this to climb out of it; weaker lift (the flap
+     * detector's noise while the arms are held tilted) is ignored, so it doesn't drop the bird back to the floor
+     */
+    liftOffFlap: 200,
   },
 
   /**
