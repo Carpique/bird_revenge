@@ -17,6 +17,7 @@ export const friendDefs = {
       twitch: { frames: ['assets/friend/bunny/twitch.svg'], fps: 1 },
     },
     defaultAnimation: 'idle',
+    backing: true,
   },
 } satisfies Record<FriendKind, CharacterDef<FriendAnim>>;
 

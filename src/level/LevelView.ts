@@ -16,6 +16,10 @@ const OPEN_ALPHA = 0.15;
 const RES = 2;
 /** room around a shape for the sketchy strokes */
 const PAD = 6;
+/** how far towards white the solid fill under the hachure is: it hides the sky between the strokes */
+const UNDERLAY_LIGHTEN = 0.55;
+/** the solid fill under the bark (terrain, branches): a warm orange-brown rather than its paled colour */
+const BARK_UNDERLAY = '#c08a55';
 
 const style = (seed: number, fill: string, extra: Options = {}): Options => ({
   seed,
@@ -157,17 +161,36 @@ function bodySprite(item: LevelBody, o?: Options): Sprite {
   return sprite;
 }
 
+/** `color` (#rrggbb) moved `k` (0..1) of the way to white. */
+function lighten(color: string, k: number): string {
+  const n = parseInt(color.slice(1), 16);
+  const ch = (shift: number) => Math.round(((n >> shift) & 255) * (1 - k) + 255 * k);
+  return `rgb(${ch(16)}, ${ch(8)}, ${ch(0)})`;
+}
+
+/** The same shape filled solid and pale, without an outline: drawn first, so the sky doesn't show through the hachure. */
+const underlay = (o: Options): Options => ({
+  ...o,
+  fill: o.fill === BARK ? BARK_UNDERLAY : lighten(o.fill!, UNDERLAY_LIGHTEN),
+  fillStyle: 'solid',
+  stroke: 'none',
+  roughness: 0,
+});
+
 /** Draws a body's shape around (0, 0). */
 function drawShape(rc: ReturnType<typeof rough.canvas>, item: LevelBody, o: Options) {
   const s = item.def.shape;
-  if (s.kind === 'circle') rc.circle(0, 0, s.r * 2, o);
-  else rc.polygon(item.outline, o);
+  for (const opts of [underlay(o), o]) {
+    if (s.kind === 'circle') rc.circle(0, 0, s.r * 2, opts);
+    else rc.polygon(item.outline, opts);
+  }
 }
 
 /** Tapered like the old tree branches: thick at the start, thin at the tip; the top edge is where the bird sits. */
 function drawBranch(rc: ReturnType<typeof rough.canvas>, br: Branch) {
   const [x0, y0] = br.from, [x1, y1] = br.to;
-  rc.polygon([[x0, y0], [x1, y1], [x1, y1 + 6], [x0, y0 + 16]], style(Math.round(x0 + y0), BARK, { hachureAngle: 20, hachureGap: 5 }));
+  const o = style(Math.round(x0 + y0), BARK, { hachureAngle: 20, hachureGap: 5 });
+  for (const opts of [underlay(o), o]) rc.polygon([[x0, y0], [x1, y1], [x1, y1 + 6], [x0, y0 + 16]], opts);
 }
 
 /** A button: a red cap on a grey base plate, domed when up, squashed flat when pressed. */

@@ -9,6 +9,7 @@ import { buildLevel, type BuiltLevel } from '../level/build';
 import { LevelView } from '../level/LevelView';
 import type { Branch, LevelDef } from '../level/types';
 import { tex } from '../render/assets';
+import { BACKING, spriteBacking, textBacking } from '../render/backing';
 import { fitWorld, view } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
 import { bigTextStyle, TEXT_FONT as FONT } from '../ui/fonts';
@@ -175,17 +176,18 @@ export class Game {
     this.root.addChild(this.world, this.hud);
 
     // the icon is as tall as the digits' font size
+    const small = BACKING.smallWidth;
     const scoreIcon = new Sprite(tex(villainDef.animations.walk.frames[0]));
     scoreIcon.scale.set(40 / scoreIcon.texture.height);
     this.scoreText = new Text({ text: '', style: { fontFamily: FONT, fontSize: 40, fill: '#2b2b2b' } });
     this.scoreText.x = scoreIcon.width + 8;
-    this.scoreBox.addChild(scoreIcon, this.scoreText);
+    this.scoreBox.addChild(spriteBacking(scoreIcon, small), scoreIcon, textBacking(this.scoreText, small), this.scoreText);
     this.scoreBox.position.set(24, 14);
     const coinIcon = new Sprite(tex(coinDef.animations.spin.frames[0]));
     coinIcon.scale.set(40 / coinIcon.texture.height);
     this.coinText = new Text({ text: '', style: { fontFamily: FONT, fontSize: 40, fill: '#2b2b2b' } });
     this.coinText.x = coinIcon.width + 8;
-    this.coinBox.addChild(coinIcon, this.coinText);
+    this.coinBox.addChild(spriteBacking(coinIcon, small), coinIcon, textBacking(this.coinText, small), this.coinText);
     this.coinBox.y = 14;
     this.hearts.position.set(WORLD.width - 24, 14);
     this.buildHearts();

@@ -19,6 +19,7 @@ export const villainDef = {
     hit: { frames: ['assets/villain/hit.svg'], fps: 1 },
   },
   defaultAnimation: 'walk',
+  backing: true,
 } satisfies CharacterDef<'walk' | 'hit'>;
 
 /** Collision box (world px), centred horizontally on the feet, extending up. */

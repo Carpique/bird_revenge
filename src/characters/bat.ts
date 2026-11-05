@@ -18,6 +18,7 @@ export const batDef = {
     hit: { frames: ['assets/bat/hit.svg'], fps: 1 },
   },
   defaultAnimation: 'fly',
+  backing: true,
 } satisfies CharacterDef<'fly' | 'hit'>;
 
 /** A homing bat (one without a route): the same bat in dark purple, so players can tell it will come for them. */
