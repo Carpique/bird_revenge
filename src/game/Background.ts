@@ -66,6 +66,8 @@ export class Background extends Container {
   private clouds: { sprite: Sprite; speed: number }[] = [];
   private ground = new Ground();
   private time: TimeOfDay | null = null;
+  /** the sky's gradient, destroyed when the sky changes */
+  private gradient: FillGradient | null = null;
   /** ms, for the stars' twinkling */
   private t = 0;
 
@@ -90,23 +92,7 @@ export class Background extends Container {
     if (time === this.time) return;
     this.time = time;
     const look = scenery.timesOfDay[time];
-    const w = WORLD.width, h = WORLD.height, m = SKY_MARGIN;
-    const gradient = new FillGradient({
-      type: 'linear',
-      start: { x: 0, y: 0 },
-      end: { x: 0, y: 1 },
-      colorStops: [{ offset: 0, color: look.top }, { offset: 1, color: look.horizon }],
-      textureSpace: 'local',
-    });
-    // above the world's top: the top colour; the gradient down to the ground; below it (behind the ground) the horizon's
-    this.sky
-      .clear()
-      .rect(-w * m, -h * m, w * (2 * m + 1), h * m)
-      .fill(look.top)
-      .rect(-w * m, 0, w * (2 * m + 1), WORLD.groundY)
-      .fill(gradient)
-      .rect(-w * m, WORLD.groundY, w * (2 * m + 1), h * m)
-      .fill(look.horizon);
+    this.drawSky(look);
     this.sun.visible = look.sun;
     this.moon.visible = look.moon;
     for (const s of this.stars) s.visible = look.stars > 0;
@@ -115,6 +101,32 @@ export class Background extends Container {
       c.sprite.alpha = look.clouds;
     }
     this.ground.tint = look.tint;
+  }
+
+  private drawSky(look: (typeof scenery.timesOfDay)[TimeOfDay]) {
+    const w = WORLD.width, h = WORLD.height, m = SKY_MARGIN;
+    const between = 'between' in look ? look.between : [];
+    this.gradient?.destroy();
+    this.gradient = new FillGradient({
+      type: 'linear',
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 1 },
+      colorStops: [
+        { offset: 0, color: look.top },
+        ...between.map(([offset, color]) => ({ offset, color })),
+        { offset: 1, color: look.horizon },
+      ],
+      textureSpace: 'local',
+    });
+    // above the world's top: the top colour; the gradient down to the ground; behind the ground, its own colour
+    this.sky
+      .clear()
+      .rect(-w * m, -h * m, w * (2 * m + 1), h * m)
+      .fill(look.top)
+      .rect(-w * m, 0, w * (2 * m + 1), WORLD.groundY)
+      .fill(this.gradient)
+      .rect(-w * m, WORLD.groundY, w * (2 * m + 1), h * m)
+      .fill('behindGround' in look ? look.behindGround : look.horizon);
   }
 
   /** Extend the ground to the screen's edges (`view`); call after `fitWorld`. */
