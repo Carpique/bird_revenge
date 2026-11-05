@@ -1,4 +1,5 @@
 import { BlurFilter, CanvasSource, Sprite, Text, Texture } from 'pixi.js';
+import type { TimeOfDay } from '../level/types';
 
 /**
  * The faint outline behind characters, bat poo and the score counters: a pale silhouette a little bigger than the
@@ -10,10 +11,18 @@ export const BACKING = {
   width: 3,
   /** the same for small things: the score counters, bat poo */
   smallWidth: 1.5,
-  alpha: 0.39,
+  /** its opacity on each background (0 hides it) */
+  alpha: { morning: 0, afternoon: 0, evening: 0.27, night: 0.39 } as Record<TimeOfDay, number>,
   /** how soft its edge is: the blur's reach, as a share of its width (0 for a hard edge) */
   softness: 1,
 };
+
+let alpha = BACKING.alpha.afternoon;
+
+/** Sets every backing's opacity for the level's background (see `BACKING.alpha`). */
+export function showBackingsFor(timeOfDay: TimeOfDay) {
+  alpha = BACKING.alpha[timeOfDay];
+}
 
 const textures = new Map<string, Texture>();
 
@@ -68,8 +77,9 @@ function backingTexture(t: Texture, radius: number, blur: number, color: string)
  */
 export function spriteBacking(art: Sprite, width = BACKING.width): Sprite {
   const backing = new Sprite();
-  backing.alpha = BACKING.alpha;
   backing.onRender = () => {
+    // alpha rather than visible: a hidden sprite isn't rendered, so onRender wouldn't run to show it again
+    backing.alpha = alpha;
     const t = art.texture;
     const radius = width / Math.abs(art.scale.y);
     const b = (backing.texture = backingTexture(t, radius, radius * BACKING.softness, BACKING.color));
@@ -91,9 +101,9 @@ export function textBacking(text: Text, width = BACKING.width): Text {
   const backing = new Text({ text: text.text, style: text.style.clone() });
   backing.style.fill = BACKING.color;
   backing.style.stroke = { color: BACKING.color, width: 2 * width, join: 'round' };
-  backing.alpha = BACKING.alpha;
   if (BACKING.softness > 0) backing.filters = [new BlurFilter({ strength: width * BACKING.softness })];
   backing.onRender = () => {
+    backing.alpha = alpha;
     backing.text = text.text;
     backing.anchor.copyFrom(text.anchor);
     backing.position.copyFrom(text.position);
