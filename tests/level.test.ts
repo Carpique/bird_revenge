@@ -10,7 +10,7 @@ import { Button } from '../src/game/Button';
 import { birdDef } from '../src/characters/bird';
 import { batDef } from '../src/characters/bat';
 import { friendDefs } from '../src/characters/friend';
-import { villainDef } from '../src/characters/villain';
+import { villainDef, villainLooks } from '../src/characters/villain';
 
 const levelFiles = import.meta.glob<string>('../src/levels/*.tmj', { query: '?raw', import: 'default', eager: true });
 const tilesetFiles = import.meta.glob<string>('../src/levels/*.tsj', { query: '?raw', import: 'default', eager: true });
@@ -205,6 +205,18 @@ describe('Tiled levels', () => {
       expect(bat.height).toBe(batDef.displayHeight);
       expect(bunny.height).toBe(friendDefs.bunny.displayHeight);
       expect(bird.height).toBe(birdDef.displayHeight);
+    });
+
+    it('shows the villains\' hitboxes as their tiles\' collision shapes (else: fix icons.tsj)', () => {
+      const tiles = (tilesets['icons.tsj'] as { tiles: { id: number; imagewidth: number; imageheight: number; objectgroup?: { objects: Record<string, unknown>[] } }[] }).tiles;
+      for (const [id, kind] of [[1, 'villain'], [5, 'ghost']] as const) {
+        const tile = tiles[id];
+        const { width, height, lift } = villainLooks[kind].hitbox;
+        // the image's bottom edge is the feet, its middle his centre
+        expect(tile.objectgroup?.objects).toEqual([
+          expect.objectContaining({ ellipse: true, width, height, x: tile.imagewidth / 2 - width / 2, y: tile.imageheight - lift - height }),
+        ]);
+      }
     });
 
     it('places friends by their feet and the bird by its centre', () => {

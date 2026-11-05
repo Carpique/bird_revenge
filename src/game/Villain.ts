@@ -1,8 +1,8 @@
-import { villainDef, villainHitbox, villainLooks } from '../characters/villain';
+import { villainDef, villainLooks, type VillainHitbox } from '../characters/villain';
 import { config, WORLD } from '../config';
 import type { VillainDef, VillainKind } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
-import { Bodies, Body, type MBody } from './physics';
+import { Bodies, Body, Vertices, type MBody } from './physics';
 
 type State = 'walking' | 'hit' | 'falling' | 'gone';
 type VillainAnim = keyof typeof villainDef.animations;
@@ -30,9 +30,49 @@ export interface Surroundings {
   obstacles: readonly Span[];
 }
 
+/**
+ * The x range of `body`'s shape between heights `top` and `bottom` (top < bottom), or null when it doesn't reach into them.
+ * Each part is convex, so its slice is the vertices inside the band and the edges' crossings of its top and bottom.
+ */
+export function spanInBand(body: MBody, top: number, bottom: number): Span | null {
+  if (body.bounds.max.y <= top || body.bounds.min.y >= bottom) return null;
+  let x0 = Infinity, x1 = -Infinity;
+  for (const part of body.parts.length > 1 ? body.parts.slice(1) : body.parts) {
+    const vs = part.vertices;
+    vs.forEach((a, i) => {
+      const b = vs[(i + 1) % vs.length];
+      const xs = a.y > top && a.y < bottom ? [a.x] : [];
+      for (const y of [top, bottom]) {
+        if ((a.y - y) * (b.y - y) < 0) xs.push(a.x + ((y - a.y) / (b.y - a.y)) * (b.x - a.x));
+      }
+      for (const x of xs) {
+        x0 = Math.min(x0, x);
+        x1 = Math.max(x1, x);
+      }
+    });
+  }
+  return x0 <= x1 ? { x0, x1 } : null;
+}
+
 const randomBetween = (lo: number, hi: number) => lo + Math.random() * Math.max(0, hi - lo);
 const nextWalkTime = () => randomBetween(config.villain.minWalkMs, config.villain.maxWalkMs);
 const nextPauseTime = () => randomBetween(config.villain.minPauseMs, config.villain.maxPauseMs);
+/** how many sides the polygon standing in for the hitbox's ellipse has */
+const ELLIPSE_SIDES = 24;
+
+/** The hitbox's ellipse, as a polygon around (0, 0). */
+const ellipse = ({ width, height }: VillainHitbox) =>
+  Array.from({ length: ELLIPSE_SIDES }, (_, i) => {
+    const a = (i / ELLIPSE_SIDES) * Math.PI * 2;
+    return { x: (Math.cos(a) * width) / 2, y: (Math.sin(a) * height) / 2 };
+  });
+
+/** Squared distance from (px, py) to the segment a–b. */
+const distSqToSegment = (px: number, py: number, a: { x: number; y: number }, b: { x: number; y: number }) => {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / (dx * dx + dy * dy)));
+  return (px - a.x - t * dx) ** 2 + (py - a.y - t * dy) ** 2;
+};
 
 /**
  * Walks back and forth along his path (on the ground, or on a shelf), now and then stopping for a moment and walking on the same way.
@@ -51,6 +91,8 @@ export class Villain {
   readonly view: CharacterSprite<VillainAnim>;
   /** his look, and what he throws */
   readonly kind: VillainKind;
+  /** what a poo or the bird hits */
+  readonly hitbox: VillainHitbox;
   /** stands still where he is, mid-stride (the level is won); one already knocked off still flies away */
   frozen = false;
   private state: State = 'walking';
@@ -83,10 +125,11 @@ export class Villain {
 
   constructor(def: VillainDef) {
     this.kind = def.kind;
+    this.hitbox = villainLooks[def.kind].hitbox;
     this.view = new CharacterSprite<VillainAnim>(villainLooks[def.kind].def);
     this.view.alpha = villainLooks[def.kind].alpha;
     this.place(def);
-    this.body = Bodies.rectangle(this.x, this.feetY - villainHitbox.height / 2, villainHitbox.width, villainHitbox.height, {
+    this.body = Bodies.fromVertices(this.x, this.hitboxY, [ellipse(this.hitbox)], {
       label: 'villain',
       isStatic: true,
       isSensor: true,
@@ -105,10 +148,19 @@ export class Villain {
   /** Does a circle (the bird) overlap the hitbox of a walking villain? */
   touches(cx: number, cy: number, r: number): boolean {
     if (this.state !== 'walking') return false;
-    const { width: w, height: h } = villainHitbox;
-    const nx = Math.max(this.x - w / 2, Math.min(cx, this.x + w / 2));
-    const ny = Math.max(this.feetY - h, Math.min(cy, this.feetY));
-    return (cx - nx) ** 2 + (cy - ny) ** 2 < r * r;
+    const vs = this.body.vertices;
+    if (Vertices.contains(vs, { x: cx, y: cy })) return true;
+    return vs.some((v, i) => distSqToSegment(cx, cy, v, vs[(i + 1) % vs.length]) < r * r);
+  }
+
+  /** y of the top of his hitbox */
+  get top() {
+    return this.feetY - this.hitbox.lift - this.hitbox.height;
+  }
+
+  /** y of the centre of his hitbox */
+  private get hitboxY() {
+    return this.feetY - this.hitbox.lift - this.hitbox.height / 2;
   }
 
   /** Returns true if this hit counts. */
@@ -183,7 +235,7 @@ export class Villain {
         break;
     }
     // only a walking villain can be hit, so the body just parks off-screen otherwise
-    Body.setPosition(this.body, { x: this.state === 'walking' ? this.x : -1000, y: this.feetY - villainHitbox.height / 2 });
+    Body.setPosition(this.body, { x: this.state === 'walking' ? this.x : -1000, y: this.hitboxY });
   }
 
   sync() {
@@ -204,7 +256,7 @@ export class Villain {
 
   /** Would the next step (of `speed` px) take his feet into an obstacle in front of him? */
   private obstacleAhead(obstacles: readonly Span[], speed: number): boolean {
-    const reach = villainHitbox.width / 2 + speed;
+    const reach = this.hitbox.width / 2 + speed;
     return obstacles.some((o) => this.gapTo(o) < reach);
   }
 

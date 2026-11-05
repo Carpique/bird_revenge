@@ -25,6 +25,29 @@
          "image":"tiles\/villain.png",
          "imageheight":127,
          "imagewidth":80,
+         "objectgroup":
+            {
+             "draworder":"index",
+             "name":"",
+             "objects":[
+                    {
+                     "ellipse":true,
+                     "height":124,
+                     "id":1,
+                     "name":"hitbox",
+                     "rotation":0,
+                     "type":"",
+                     "visible":true,
+                     "width":52,
+                     "x":14,
+                     "y":3
+                    }],
+             "opacity":1,
+             "type":"objectgroup",
+             "visible":true,
+             "x":0,
+             "y":0
+            },
          "type":"Villain"
         }, 
         {
@@ -60,6 +83,29 @@
          "image":"tiles\/ghost.png",
          "imageheight":127,
          "imagewidth":80,
+         "objectgroup":
+            {
+             "draworder":"index",
+             "name":"",
+             "objects":[
+                    {
+                     "ellipse":true,
+                     "height":102,
+                     "id":1,
+                     "name":"hitbox",
+                     "rotation":0,
+                     "type":"",
+                     "visible":true,
+                     "width":68,
+                     "x":6,
+                     "y":10
+                    }],
+             "opacity":1,
+             "type":"objectgroup",
+             "visible":true,
+             "x":0,
+             "y":0
+            },
          "properties":[
                 {
                  "name":"kind",

@@ -2,7 +2,7 @@ import { Application, Container, Graphics, Rectangle, Sprite, Text, type Texture
 import { audio } from '../audio/audio';
 import { coinDef } from '../characters/coin';
 import { splatHalfWidth } from '../characters/poo';
-import { villainDef, villainHitbox } from '../characters/villain';
+import { villainDef } from '../characters/villain';
 import { config, WORLD } from '../config';
 import { noControls, type Controls } from '../input/controls';
 import { buildLevel, type BuiltLevel } from '../level/build';
@@ -26,7 +26,7 @@ import { Friend } from './Friend';
 import { landingBranch } from './branches';
 import { Bodies, Composite, Engine, Events, Query, Sleeping, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
 import { Poo } from './Poo';
-import { Villain, type Span } from './Villain';
+import { spanInBand, Villain, type Span } from './Villain';
 
 /** how far (px) a surface may be from a villain's feet and still be what he walks on */
 const SURFACE_TOLERANCE = 8;
@@ -395,7 +395,7 @@ export class Game {
     this.bird.step(this.controls, STEP_MS, () => this.dropPoo());
     const bp = this.bird.body.position;
     const bird = this.bird.dying ? null : { x: bp.x, y: bp.y };
-    for (const v of this.villains) v.step(STEP_MS, { bird, obstacles: this.villainObstacles(v.feet) });
+    for (const v of this.villains) v.step(STEP_MS, { bird, obstacles: this.villainObstacles(v.feet, v.top) });
     this.stepBats(bird);
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
@@ -594,19 +594,17 @@ export class Game {
 
   /** Stretches of ground sheltered from above right now. Static for now; moving obstacles would recompute them here each step. */
   /**
-   * What a villain with his feet at `feetY` won't walk into (crates move, so every step): the bird's poo splats he'd step in,
+   * What a villain with his feet at `feetY` (and the top of his hitbox at `head`) won't walk into (crates move, so every step): the bird's poo splats he'd step in,
    * the level's bodies reaching into his height, and wherever there's nothing to stand on at his feet
    * (all but the ground's or his shelf's top).
    */
-  private villainObstacles(feetY: number): Span[] {
+  private villainObstacles(feetY: number, head: number): Span[] {
     const near = (y: number) => Math.abs(y - feetY) <= SURFACE_TOLERANCE;
-    const head = feetY - villainHitbox.height;
     const splats = this.poos
       .filter((p) => p.owner === 'bird' && p.state === 'splat' && near(p.view.y))
       .map((p) => ({ x0: p.view.x - splatHalfWidth, x1: p.view.x + splatHalfWidth }));
-    const bodies = this.levelBodies
-      .filter((b) => b.bounds.max.y > head && b.bounds.min.y < feetY - SURFACE_TOLERANCE)
-      .map((b) => ({ x0: b.bounds.min.x, x1: b.bounds.max.x }));
+    // the part of each body between his head and feet, not its bounding box: a sloping roof only blocks where it comes down
+    const bodies = this.levelBodies.flatMap((b) => spanInBand(b, head, feetY - SURFACE_TOLERANCE) ?? []);
     if (near(WORLD.groundY)) return [...splats, ...bodies];
     // off the ground: he stands only on the tops of bodies at his feet
     const tops = this.levelBodies
