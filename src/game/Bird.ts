@@ -43,6 +43,8 @@ export class Bird {
   private lift = 0;
   /** pointing control is steering the bird this step */
   private pointing = false;
+  /** pointing control is flying it (not resting): it skims along whatever it touches, with no grip */
+  private propelled = false;
   /** current lean, radians (eased towards the direction of sideways flight) */
   private bankAngle = 0;
   /** sitting on a branch (set by `perchOn` after each physics step) */
@@ -141,7 +143,7 @@ export class Bird {
     const landing = landingBranch(branches, x, prevY, b.position.y, r);
     if (!landing) return;
     Body.setPosition(b, { x, y: landing.top - r });
-    Body.setVelocity(b, { x: b.velocity.x * (1 - config.physics.branchFriction), y: 0 });
+    Body.setVelocity(b, { x: b.velocity.x * (this.propelled ? 1 : 1 - config.physics.branchFriction), y: 0 });
     this.perched = true;
   }
 
@@ -189,9 +191,11 @@ export class Bird {
     const p = c.pointing;
     // pointing: flying (and drifting) can take off from the ground or a branch; the rest only acts in the air
     this.pointing = p !== null && (p.mode === 'fly' || p.mode === 'drift' || !this.onGround);
-    b.frictionAir = this.pointing && p!.mode !== 'rest' ? config.pointing.airFriction : config.physics.birdAirFriction;
-    // the floor under it grips, a wall beside it doesn't
-    b.friction = this.onGround ? 1 : 0;
+    this.propelled = this.pointing && p!.mode !== 'rest';
+    b.frictionAir = this.propelled ? config.pointing.airFriction : config.physics.birdAirFriction;
+    // the floor under it grips, a wall beside it doesn't. Flown by pointing control, it doesn't either: skimming
+    // along a floor or shelf (which counts as standing on it) it would drag to a crawl
+    b.friction = this.onGround && !this.propelled ? 1 : 0;
     // otherwise flapping + tilt + hover: hovering only acts in the air; tilted on the floor, the bird rises a
     // little instead of sliding, then flies sideways just above it
     // a fresh tilt (or one turned the other way) starts gently
