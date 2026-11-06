@@ -157,8 +157,8 @@ export const config = {
      */
     holdFlapRate: 2,
     /**
-     * tilted while standing (ground, branch, shelf), the bird doesn't slide: it rises this many px and holds there,
-     * flying sideways just above the floor
+     * tilted while standing (ground, branch, shelf; also a tilted T under pointing control), the bird doesn't slide: it
+     * rises this many px and holds there, flying sideways just above the floor
      */
     liftOffHeight: 12,
     /**

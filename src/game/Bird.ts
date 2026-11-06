@@ -211,6 +211,12 @@ export class Bird {
       Body.setVelocity(b, { x: b.velocity.x, y: -Math.sqrt(2 * gStep * config.tilt.liftOffHeight) });
       this.liftingOff = true;
     }
+    // pointing control, a tilted T on the floor: the same lift-off, rising `liftOffHeight` to drift just above it.
+    // Gravity is cancelled there, so the kick is from the pointing accel, which then tops it out at that height
+    if (this.pointing && p!.mode === 'drift' && this.onGround) {
+      const aStep = config.pointing.accel * (stepMs / 1000) ** 2;
+      Body.setVelocity(b, { x: b.velocity.x, y: -Math.sqrt(2 * aStep * config.tilt.liftOffHeight) });
+    }
     // the wingbeats' lift, smoothed (so climbs are straight lines, level or tilted), less of it going up when tilted;
     // flying just above the floor, the weak lift that doesn't climb out of it is ignored (gravity is cancelled there)
     const flapLift = this.liftingOff ? 0 : c.lift;
