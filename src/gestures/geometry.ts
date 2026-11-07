@@ -35,6 +35,24 @@ export function armElevation(f: PoseFrame, side: Side): number {
   return angleBetween(sub(hip, sh), sub(wr, sh));
 }
 
+/**
+ * Arm angle in the image: between straight down the image (not the torso) and the arm (shoulder → wrist).
+ * 0° = hanging down, 90° = horizontal, 180° = straight up. Leaning the whole body tilts it too.
+ */
+export function armAngleInImage(f: PoseFrame, side: Side): number {
+  const sh = pt(f, side === 'left' ? L.leftShoulder : L.rightShoulder);
+  const wr = pt(f, side === 'left' ? L.leftWrist : L.rightWrist);
+  return angleBetween({ x: 0, y: 1 }, sub(wr, sh));
+}
+
+/** Elbow angle: 180° = straight arm. */
+export function elbowAngle(f: PoseFrame, side: Side): number {
+  const sh = pt(f, side === 'left' ? L.leftShoulder : L.rightShoulder);
+  const el = pt(f, side === 'left' ? L.leftElbow : L.rightElbow);
+  const wr = pt(f, side === 'left' ? L.leftWrist : L.rightWrist);
+  return angleBetween(sub(sh, el), sub(wr, el));
+}
+
 /** Knee angle: 180° = straight leg. */
 export function kneeAngle(f: PoseFrame, side: Side): number {
   const hip = pt(f, side === 'left' ? L.leftHip : L.rightHip);

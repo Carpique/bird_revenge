@@ -1,0 +1,335 @@
+{
+    "automappingRulesFile": "",
+    "commands": [
+    ],
+    "extensionsPath": "extensions",
+    "folders": [
+        "."
+    ],
+    "properties": [
+    ],
+    "propertyTypes": [
+        {
+            "id": 1,
+            "name": "Material",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "wood",
+                "stone",
+                "rubber",
+                "ice"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "color": "#ff8a6440",
+            "drawFill": true,
+            "id": 2,
+            "members": [
+                {
+                    "name": "friction",
+                    "type": "float",
+                    "value": 0.6
+                }
+            ],
+            "name": "Terrain",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffc79a6b",
+            "drawFill": true,
+            "id": 3,
+            "members": [
+                {
+                    "name": "density",
+                    "type": "float",
+                    "value": 0
+                },
+                {
+                    "name": "material",
+                    "propertyType": "Material",
+                    "type": "string",
+                    "value": "wood"
+                },
+                {
+                    "name": "sleeping",
+                    "type": "bool",
+                    "value": false
+                }
+            ],
+            "name": "Body",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff5e8a45",
+            "drawFill": true,
+            "id": 4,
+            "members": [
+            ],
+            "name": "Branch",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff2b2b2b",
+            "drawFill": true,
+            "id": 5,
+            "members": [
+                {
+                    "name": "body",
+                    "type": "object",
+                    "value": 0
+                },
+                {
+                    "name": "length",
+                    "type": "float",
+                    "value": 0
+                },
+                {
+                    "name": "stiffness",
+                    "type": "float",
+                    "value": 1
+                },
+                {
+                    "name": "to",
+                    "type": "object",
+                    "value": 0
+                }
+            ],
+            "name": "Rope",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ff2b2b2b",
+            "drawFill": true,
+            "id": 6,
+            "members": [
+                {
+                    "name": "body",
+                    "type": "object",
+                    "value": 0
+                },
+                {
+                    "name": "stiffness",
+                    "type": "float",
+                    "value": 1
+                },
+                {
+                    "name": "to",
+                    "type": "object",
+                    "value": 0
+                }
+            ],
+            "name": "Hinge",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffc0392b",
+            "drawFill": true,
+            "id": 7,
+            "members": [
+                {
+                    "name": "kind",
+                    "propertyType": "VillainKind",
+                    "type": "string",
+                    "value": "villain"
+                },
+                {
+                    "name": "path",
+                    "type": "object",
+                    "value": 0
+                },
+                {
+                    "name": "throwDelay",
+                    "type": "float",
+                    "value": 4
+                }
+            ],
+            "name": "Villain",
+            "type": "class",
+            "useAs": [
+                "object",
+                "tile"
+            ]
+        },
+        {
+            "color": "#ff2f8a3c",
+            "drawFill": true,
+            "id": 8,
+            "members": [
+            ],
+            "name": "BirdStart",
+            "type": "class",
+            "useAs": [
+                "object",
+                "tile"
+            ]
+        },
+        {
+            "id": 17,
+            "name": "VillainKind",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "villain",
+                "ghost"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "id": 9,
+            "name": "FriendKind",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "bunny"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "color": "#ffffb627",
+            "drawFill": true,
+            "id": 10,
+            "members": [
+                {
+                    "name": "kind",
+                    "propertyType": "FriendKind",
+                    "type": "string",
+                    "value": "bunny"
+                }
+            ],
+            "name": "Friend",
+            "type": "class",
+            "useAs": [
+                "object",
+                "tile"
+            ]
+        },
+        {
+            "id": 11,
+            "name": "ButtonAction",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "open",
+                "close"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "color": "#ffd9534f",
+            "drawFill": true,
+            "id": 12,
+            "members": [
+                {
+                    "name": "action",
+                    "propertyType": "ButtonAction",
+                    "type": "string",
+                    "value": "open"
+                },
+                {
+                    "name": "duration",
+                    "type": "float",
+                    "value": 3
+                },
+                {
+                    "name": "target",
+                    "type": "object",
+                    "value": 0
+                }
+            ],
+            "name": "Button",
+            "type": "class",
+            "useAs": [
+                "object"
+            ]
+        },
+        {
+            "color": "#ffe8b012",
+            "drawFill": true,
+            "id": 13,
+            "members": [
+            ],
+            "name": "Coin",
+            "type": "class",
+            "useAs": [
+                "object",
+                "tile"
+            ]
+        },
+        {
+            "color": "#ff4a3a5c",
+            "drawFill": true,
+            "id": 14,
+            "members": [
+                {
+                    "name": "path",
+                    "type": "object",
+                    "value": 0
+                },
+                {
+                    "name": "pooDelay",
+                    "type": "float",
+                    "value": 3
+                },
+                {
+                    "name": "speed",
+                    "type": "float",
+                    "value": 2
+                }
+            ],
+            "name": "Bat",
+            "type": "class",
+            "useAs": [
+                "object",
+                "tile"
+            ]
+        },
+        {
+            "id": 15,
+            "name": "TimeOfDay",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "morning",
+                "afternoon",
+                "evening",
+                "night"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "color": "#ffa0a0a4",
+            "drawFill": true,
+            "id": 16,
+            "members": [
+                {
+                    "name": "timeOfDay",
+                    "propertyType": "TimeOfDay",
+                    "type": "string",
+                    "value": "afternoon"
+                }
+            ],
+            "name": "Level",
+            "type": "class",
+            "useAs": [
+                "map"
+            ]
+        }
+    ]
+}

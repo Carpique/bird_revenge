@@ -21,6 +21,7 @@ export const birdDef = {
     },
   },
   defaultAnimation: 'idle',
+  backing: true,
 } satisfies CharacterDef<'idle' | 'flap'>;
 
 /** "Squat" before a poo: squash the bird, then drop the poo when the squash is at its deepest. */

@@ -1,6 +1,7 @@
 import { AnimatedSprite, Container, type Texture } from 'pixi.js';
 import type { CharacterDef } from '../characters/types';
 import { tex } from './assets';
+import { BACKING, spriteBacking } from './backing';
 
 /** A sprite built from a CharacterDef: named animations, auto-scaled to displayHeight, mirrorable. */
 export class CharacterSprite<A extends string = string> extends Container {
@@ -19,18 +20,19 @@ export class CharacterSprite<A extends string = string> extends Container {
     this.anim.anchor.set(def.anchor.x, def.anchor.y);
     this.baseScale = def.displayHeight / first[0].height;
     this.anim.scale.set(this.baseScale);
+    if (def.backing) this.addChild(spriteBacking(this.anim, def.backing === 'small' ? BACKING.smallWidth : BACKING.width));
     this.addChild(this.anim);
     this.current = def.defaultAnimation;
     this.play(def.defaultAnimation);
   }
 
-  /** Play an animation at its own fps (no-op if already playing it). */
-  play(name: A) {
+  /** Play an animation at its own fps times `rate` (only the rate changes if it's already playing). */
+  play(name: A, rate = 1) {
     const a = this.def.animations[name];
     const frames = this.textures[name];
+    this.anim.animationSpeed = (a.fps / 60) * rate;
     if (this.current === name && (this.anim.playing || frames.length === 1)) return;
     this.setTextures(name);
-    this.anim.animationSpeed = a.fps / 60;
     this.anim.loop = a.loop ?? true;
     if (frames.length > 1) this.anim.play();
     else this.anim.gotoAndStop(0);

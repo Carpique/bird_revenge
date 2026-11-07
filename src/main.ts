@@ -2,13 +2,18 @@ import { Application } from 'pixi.js';
 import { audio } from './audio/audio';
 import { config, loadSavedConfig } from './config';
 import { Game } from './game/Game';
+import { firstLevel, gameLevels, levels, nextLevel, onLevelEdited, testLevelName, TRAINING } from './levels';
+import { markCompleted, unlockedLevels } from './levels/progress';
+import { Thumbnails } from './level/thumbnails';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
-import { FlapDetector, type FlapOutput } from './gestures/FlapDetector';
-import { GlideDetector, type GlideOutput } from './gestures/GlideDetector';
-import { ShootDetector, type ShootOutput } from './gestures/ShootDetector';
-import { VisibilityMonitor, type VisibilityOutput } from './gestures/VisibilityMonitor';
+import type { FlapOutput } from './gestures/FlapDetector';
+import type { PointingOutput } from './gestures/PointingDetector';
+import type { TiltOutput } from './gestures/TiltDetector';
+import type { ShootOutput } from './gestures/ShootDetector';
+import type { VisibilityOutput } from './gestures/VisibilityMonitor';
 import { noControls, type Controls } from './input/controls';
 import { Keyboard } from './input/keyboard';
+import { controlsFrom, POSE_STALE_MS, PoseDetectors } from './input/poseControls';
 import { startCamera, stopCamera } from './pose/camera';
 import { PoseTracker } from './pose/PoseTracker';
 import type { PoseFrame } from './pose/types';
@@ -18,7 +23,13 @@ import { DebugPanel } from './ui/DebugPanel';
 import { loadFonts } from './ui/fonts';
 import { FrameGuide, type GuideState } from './ui/FrameGuide';
 import { FullscreenButton } from './ui/FullscreenButton';
+import { t, type Msg } from './ui/i18n';
+import { LanguageButton } from './ui/LanguageButton';
+import { PauseMenu } from './ui/PauseMenu';
 import { Recorder } from './ui/Recorder';
+import { loadRecording } from './tutorial';
+import { PoseReplay } from './tutorial/PoseReplay';
+import { TUTORIAL_LEVEL, type PoseRecording } from './tutorial/recording';
 import { SplashScreen } from './ui/SplashScreen';
 import { Tuning } from './ui/Tuning';
 import { VolumeButton } from './ui/VolumeButton';
@@ -31,10 +42,15 @@ import { wakeLock } from './ui/wakeLock';
  *   the camera runs only in states that use the pose: calibrating, countdown, playing, outOfFrame
  *   and a pose game's gameOver — not in the menu or keyboard play
  *   calibrating shows a dialog over the paused game (also camera loading / camera errors)
- *   outOfFrame keeps the game running with no pose controls, so the bird drops until the player is back
- *   keyboard (Esc toggles; pose is ignored)
+ *   outOfFrame pauses the game (no "Pause" sign, just the small pose box) until the player is back
+ *   nobody in front of the camera (no person, or one off to the side) in countdown / playing / outOfFrame:
+ *   calibrating again, with the big dialog
+ *   calibrating → keyboard (Esc; pose is ignored)
+ *   Esc in a game (countdown, playing, outOfFrame, keyboard) opens the pause menu over the frozen game:
+ *   keep playing, start over from the level select, or quit to the menu
  *   playing / outOfFrame / keyboard → gameOver (last life lost) → new game: countdown, or keyboard again
- * Pausing (Space / P in game, or the window losing focus during a game) freezes the game and shows "Pause".
+ * Pausing (Space / P in game, or the window losing focus during a game) freezes the game and shows "Pause";
+ * not while "Game Over" or "Hooray" is on screen (losing focus then just suspends, without the sign).
  * While paused or while the window is unfocused / hidden, everything is suspended — render loop, guide
  * overlay, pose tracker and the camera itself — so an idle game uses almost no CPU.
  */
@@ -54,14 +70,17 @@ async function main() {
   document.getElementById('game')!.appendChild(app.canvas);
 
   const video = document.getElementById('camera') as HTMLVideoElement;
-  const guide = new FrameGuide(document.getElementById('guide') as HTMLCanvasElement, video);
+  const guide = new FrameGuide(document.getElementById('guide') as HTMLCanvasElement, video, app.stage);
 
   let state: AppState = 'loading';
-  /** camera / pose model status, shown in the calibration dialog */
+  /** camera / pose model status, shown in the calibration dialog (already translated) */
   let poseError: string | null = null;
   /** the camera stopped working after it had started; it's being retried */
-  let cameraError: string | null = null;
+  let cameraError: Msg | null = null;
   let manualPause = false;
+  /** the pause menu (Esc in a game) is open */
+  let menuOpen = false;
+  let menuOpenedAt = 0;
   let countdownEnd = 0;
   let gameOverEnd = 0;
   /** whether the game after "Game Over" is played with the keyboard */
@@ -72,14 +91,19 @@ async function main() {
   let vis: VisibilityOutput | null = null;
   let flapOut: FlapOutput | null = null;
   let shootOut: ShootOutput | null = null;
-  let glideOut: GlideOutput | null = null;
+  let tiltOut: TiltOutput | null = null;
+  let pointingOut: PointingOutput | null = null;
   let calibStatus: CalibrationStatus | null = null;
   let poseControls: Controls = noControls();
   let lastPoseT = 0;
+  let lastRedetectT = -Infinity;
   let tracker: PoseTracker | null = null;
 
   /** the window is unfocused / hidden, or the game is paused: nothing runs */
   let suspended = false;
+  /** the instructions page is open: its demonstration plays (set up below) */
+  let demoOn = false;
+  let replay: PoseReplay | null = null;
 
   // the guide is drawn every animation frame, also while loading (not while suspended)
   let guideRunning = true;
@@ -92,18 +116,25 @@ async function main() {
       return;
     }
     const gs: GuideState = { mode: 'hidden', frame, vis };
-    if (state === 'loading') Object.assign(gs, { mode: 'loading', message: 'Loading…' });
+    // the pause menu hides the countdown and the out-of-frame box
+    if (menuOpen) gs.mode = 'hidden';
+    else if (state === 'loading') Object.assign(gs, { mode: 'loading', message: t('Loading…') });
     else if (state === 'calibrating' && poseError)
-      Object.assign(gs, { mode: 'calibrate', title: 'No camera', message: poseError, error: true, hint: 'Press Esc to play with the keyboard' });
+      Object.assign(gs, { mode: 'calibrate', title: t('No camera'), message: poseError, error: true, hint: t('Press Esc to play with the keyboard') });
     else if (state === 'calibrating' && cameraError)
-      Object.assign(gs, { mode: 'calibrate', title: cameraError, message: 'Reconnecting…', hint: 'Press Esc to play with the keyboard' });
+      Object.assign(gs, { mode: 'calibrate', title: t(cameraError), message: t('Reconnecting…'), hint: t('Press Esc to play with the keyboard') });
     else if (state === 'calibrating' && (!cameraOn || !tracker))
-      Object.assign(gs, { mode: 'calibrate', title: 'Getting ready', message: cameraOn ? 'Loading pose model…' : 'Starting camera…' });
+      Object.assign(gs, { mode: 'calibrate', message: t(cameraOn ? 'Loading pose model…' : 'Starting camera…') });
     else if (state === 'calibrating')
-      Object.assign(gs, { mode: 'calibrate', message: calibStatus?.message ?? 'Get into view', progress: calibStatus?.progress });
+      Object.assign(gs, { mode: 'calibrate', message: calibStatus?.message ?? t('Get into view'), progress: calibStatus?.progress });
     else if (state === 'outOfFrame')
-      Object.assign(gs, { mode: 'outOfFrame', message: cameraError ? `${cameraError} – reconnecting…` : (vis?.hint ?? 'Get into view') });
+      Object.assign(gs, {
+        mode: 'outOfFrame',
+        message: cameraError ? t('{error} – reconnecting…', { error: t(cameraError) }) : (vis?.hint ?? t('Get into view')),
+      });
     else if (state === 'countdown') Object.assign(gs, { mode: 'countdown', countdown: (countdownEnd - now) / 1000 });
+    else if (state === 'menu' && demoOn && replay?.recording)
+      Object.assign(gs, { mode: 'demo', frame: replay.frame, vis: replay.vis, aspect: replay.recording.aspect });
     guide.draw(gs, now);
     requestAnimationFrame(drawGuide);
   };
@@ -112,22 +143,74 @@ async function main() {
   await loadFonts();
   await loadAllAssets();
 
-  const game = new Game(app);
-  const splash = new SplashScreen(app);
+  const game = new Game(app, firstLevel());
+  let allLevels = levels;
+  // the instructions' demonstration: the tutorial level, its bird flown by a recorded pose stream (`src/tutorial/`),
+  // drawn over the game and under the title screen, which makes way for it
+  const tutorialLevel = () => allLevels.get(TUTORIAL_LEVEL) ?? firstLevel();
+  const demo = new Game(app, tutorialLevel());
+  demo.hud.visible = false;
+  replay = new PoseReplay(demo, tutorialLevel);
+  const demoReplay = replay;
+  // all friends saved: remembered (it opens the next one in the level select), and on to the next level, keeping score,
+  // lives back to full (training, or testing a level from the URL: that level again, not remembered)
+  game.onLevelComplete = () => {
+    if (!testLevelName) markCompleted(game.level.name);
+    game.startNextLevel(testLevelName ? game.level : nextLevel(allLevels, game.level.name));
+  };
+  // saving the level being played in Tiled while the dev server runs swaps it in, without reloading the page
+  onLevelEdited((next) => {
+    allLevels = next;
+    const level = next.get(game.level.name);
+    // a map saved broken is left out: the game keeps the version it has
+    if (level && JSON.stringify(level) !== JSON.stringify(game.level)) game.loadLevel(level);
+  });
+  // the level select: the latest version of the levels, the finished ones and the first one not finished pickable,
+  // that one selected (the last level once all are finished)
+  const levelChoice = () => {
+    const list = gameLevels(allLevels);
+    const unlocked = unlockedLevels(list.map((l) => l.name));
+    return { levels: list, unlocked, current: list.filter((l) => unlocked.has(l.name)).at(-1)?.name };
+  };
+  const splash = new SplashScreen(app, new Thumbnails(app), levelChoice, document.getElementById('guide') as HTMLCanvasElement, levels.has(TRAINING));
   app.stage.addChild(splash);
-  const help = document.getElementById('help')!;
+  // under "Watch", the clip's first moment, frozen; then the world runs on, the bird uncontrolled, while the panel
+  // fades in; then the clip plays
+  let demoStage: 'frozen' | 'world' | 'playing' = 'frozen';
+  // the recording loaded: as far on as the page is
+  const playDemo = (rec: PoseRecording) => {
+    demoReplay.play(rec, demoStage !== 'playing');
+    if (demoStage === 'world') demoReplay.runWorld();
+  };
+  splash.onInstructions = async (open) => {
+    demoOn = open;
+    if (!open) return demoReplay.stop();
+    demoStage = 'frozen';
+    // the level as it is, the bird standing, until the recording loads (none recorded: just that)
+    demo.loadLevel(tutorialLevel());
+    const rec = await loadRecording(TUTORIAL_LEVEL);
+    if (rec && demoOn && !demoReplay.recording) playDemo(rec);
+  };
+  splash.onWorldStart = () => {
+    demoStage = 'world';
+    demoReplay.runWorld();
+  };
+  splash.onDemoStart = () => {
+    demoStage = 'playing';
+    demoReplay.resume();
+  };
+  const pauseMenu = new PauseMenu(app);
+  app.stage.addChild(pauseMenu);
   const status = document.getElementById('status')!;
   const debug = new DebugPanel(video);
   const tuning = new Tuning();
   const recorder = new Recorder();
   const corner = document.getElementById('corner')!;
-  new FullscreenButton(corner);
+  const fullscreen = new FullscreenButton(corner);
   const volume = new VolumeButton(corner);
+  const language = new LanguageButton();
   const keyboard = new Keyboard();
-  const visibility = new VisibilityMonitor();
-  const flap = new FlapDetector();
-  const shoot = new ShootDetector();
-  const glide = new GlideDetector();
+  const detectors = new PoseDetectors();
   const calibration = new Calibration();
 
   const startCountdown = () => {
@@ -142,7 +225,16 @@ async function main() {
     state = 'calibrating';
   };
 
-  splash.onStart = recalibrate;
+  // a game from the level select starts on the level picked (none to pick: the first level)
+  splash.onStart = (level) => {
+    if (level) game.reset(level);
+    recalibrate();
+  };
+  // the training letters, A to Z and round, until quit from the pause menu (which goes back to the first level)
+  splash.onTraining = () => {
+    game.reset(allLevels.get(TRAINING) ?? levels.get(TRAINING));
+    recalibrate();
+  };
   game.onGameOver = () => {
     keyboardAfterGameOver = state === 'keyboard';
     state = 'gameOver';
@@ -150,6 +242,7 @@ async function main() {
   };
 
   /** states where the game is on screen and can be paused */
+  let menuShown = false;
   const inGame = () => state === 'countdown' || state === 'playing' || state === 'outOfFrame' || state === 'keyboard' || state === 'gameOver';
   let focused = document.hasFocus();
   const windowActive = () => focused && !document.hidden;
@@ -196,8 +289,8 @@ async function main() {
           await startCamera(video, onCameraLost);
         } catch (e) {
           console.error(e);
-          if (isPermissionError(e)) poseError = 'Camera access was blocked';
-          else if (!navigator.mediaDevices?.getUserMedia) poseError = e instanceof Error ? e.message : String(e);
+          if (isPermissionError(e)) poseError = t('Camera access was blocked');
+          else if (!navigator.mediaDevices?.getUserMedia) poseError = t('Camera API not available (the page must be served from localhost or https).');
           else {
             cameraError ??= 'Camera unavailable';
             scheduleRetry();
@@ -246,10 +339,38 @@ async function main() {
     updateSuspended();
   };
 
-  // losing focus pauses a game; elsewhere (menu, calibration) it just suspends silently
+  const openPauseMenu = () => {
+    setPaused(false);
+    pauseMenu.open();
+    menuOpen = true;
+    menuOpenedAt = performance.now();
+  };
+  pauseMenu.onResume = () => {
+    menuOpen = false;
+    countdownEnd += performance.now() - menuOpenedAt; // the countdown carries on where it was
+  };
+  // "Start over": back to the level select, the level being played selected (and calibrating again from there)
+  pauseMenu.onRestart = () => {
+    const current = game.level.name;
+    pauseMenu.onQuit();
+    splash.showLevels(current);
+  };
+  pauseMenu.onQuit = () => {
+    menuOpen = false;
+    // a new game from the menu starts from the first level (the latest version of it, if edited meanwhile)
+    const first = firstLevel();
+    game.reset(allLevels.get(first.name) ?? first);
+    audio.stopMusic(config.audio.themeFadeMs);
+    state = 'menu';
+  };
+
+  /** a game on screen that can be paused now: not behind the pause menu, "Game Over" or "Hooray" */
+  const canPause = () => inGame() && !menuOpen && !game.showingSign;
+
+  // losing focus pauses a game; elsewhere (menu, calibration, the pause menu, a sign) it just suspends silently
   const onWindowChange = (e: Event) => {
     if (e.type === 'blur' || e.type === 'focus') focused = e.type === 'focus';
-    if (!windowActive() && inGame()) manualPause = true;
+    if (!windowActive() && canPause()) manualPause = true;
     updateSuspended();
   };
   window.addEventListener('blur', onWindowChange);
@@ -260,44 +381,52 @@ async function main() {
 
   keyboard.onPoo = () => game.requestPoo();
   keyboard.onPause = () => {
-    if (manualPause || inGame()) setPaused(!manualPause);
+    if (manualPause) setPaused(false);
+    else if (canPause()) setPaused(true);
   };
   keyboard.onHotkey = (k) => {
     if (k === 'd') debug.toggle();
     else if (k === 'g') tuning.toggle();
     else if (k === 'r') recorder.toggle();
     else if (k === 'm') volume.toggleMute();
-    if (state === 'loading' || state === 'menu') return;
+    if (state === 'loading' || state === 'menu' || menuOpen) return;
     if (k === 'p') keyboard.onPause();
     else if (state === 'gameOver') return;
     else if (k === 'c' && tracker) recalibrate();
-    else if (k === 'escape') {
-      if (state !== 'keyboard') {
+    else if (k === 'escape' && !game.showingSign) {
+      if (state === 'calibrating') {
         state = 'keyboard';
         audio.startMusic(); // keyboard play skips calibration and the countdown
       }
-      else state = shoot.baseline && !poseError ? 'outOfFrame' : 'calibrating';
+      else openPauseMenu();
     }
   };
 
   const onPose = (f: PoseFrame | null) => {
     const now = performance.now();
     frame = f;
-    vis = visibility.update(f, now);
-    recorder.add(f, now);
     // always run the detectors so their state stays continuous; only *apply* them while playing
-    if (f) {
-      flapOut = flap.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible);
-      shootOut = shoot.update(f, vis.parts.torso.visible);
-      glideOut = glide.update(f, vis.parts.leftArm.visible, vis.parts.rightArm.visible, flapOut);
-      debug.record(now, flapOut, shootOut);
+    const reading = detectors.update(f, now);
+    vis = reading.vis;
+    recorder.add(f, now);
+    if (reading.flap && reading.shoot && reading.tilt && reading.pointing) {
+      ({ flap: flapOut, shoot: shootOut, tilt: tiltOut, pointing: pointingOut } = reading);
+      debug.record(now, reading.flap, reading.shoot);
     }
+    // someone off to the side may be another person the tracker latched onto: make it look again for whoever
+    // is in front of the camera
+    if (vis.personDetected && !vis.centred && now - lastRedetectT >= config.visibility.redetectEveryMs) {
+      lastRedetectT = now;
+      tracker?.redetect();
+    }
+    // nobody in front of the camera any more: the big calibration dialog, as at the start
+    if ((state === 'countdown' || state === 'playing' || state === 'outOfFrame') && !vis.playerPresent) recalibrate();
 
     switch (state) {
       case 'calibrating':
         calibStatus = calibration.update(f, vis);
         if (calibStatus.done) {
-          shoot.calibrate(calibStatus.done);
+          detectors.shoot.calibrate(calibStatus.done);
           startCountdown();
         }
         break;
@@ -312,17 +441,12 @@ async function main() {
           state = 'outOfFrame';
           break;
         }
-        if (f && flapOut && shootOut && glideOut) {
-          poseControls = {
-            lift: flapOut.lift,
-            steer: flapOut.side,
-            wingPhase: flapOut.wingPhase,
-            flapping: false,
-            glideTilt: glideOut.gliding ? glideOut.tilt : null,
-          };
+        {
+          const controls = controlsFrom(reading);
+          if (!controls) break;
+          poseControls = controls;
           lastPoseT = now;
-          // mirrored view: the player's left is on the screen's left, so the poo flies towards the raised leg
-          if (shootOut.triggered) game.requestPoo(shootOut.raisedLeg === 'left' ? -1 : shootOut.raisedLeg === 'right' ? 1 : 0);
+          if (reading.shoot?.triggered) game.requestPoo();
         }
         break;
     }
@@ -349,19 +473,27 @@ async function main() {
     }
     updateCamera();
 
-    const poseFresh = state === 'playing' && now - lastPoseT < 300;
+    const poseFresh = state === 'playing' && now - lastPoseT < POSE_STALE_MS;
     game.controls = keyboard.apply(poseFresh ? poseControls : noControls());
-    // during gameOver the game runs only to drop the "Game Over" sign in
-    game.paused = manualPause || !(state === 'playing' || state === 'outOfFrame' || state === 'keyboard' || state === 'gameOver');
+    // during gameOver the game runs only to slide the "Game Over" sign through
+    game.paused = manualPause || menuOpen || !(state === 'playing' || state === 'keyboard' || state === 'gameOver');
     game.showPausedText = manualPause;
+    // the countdown keeps the calibration dialog's dimming, so it doesn't flicker in between
+    game.dimmed = menuOpen || state === 'calibrating' || state === 'countdown';
     splash.visible = state === 'menu';
+    // the title screen showing up plays its theme from the start; leaving it fades the theme out
+    if (splash.visible && !menuShown) audio.playTheme();
+    if (!splash.visible && menuShown) audio.stopTheme(config.audio.themeFadeMs);
+    menuShown = splash.visible;
+    // not over the instructions' demonstration
+    language.visible = splash.visible && !demoOn;
+    // only the title screen lets Esc leave full screen; in the game it opens the pause menu
+    fullscreen.lockEscape = !splash.visible;
     game.root.visible = !splash.visible;
-    help.hidden = state === 'menu' || state === 'loading';
+    demo.root.visible = splash.visible && demoOn;
+    demoReplay.update(app.ticker.deltaMS);
 
-    const mode = state === 'keyboard' || poseError ? 'keyboard' : 'pose';
-    const rec = recorder.recording ? `  ● REC ${recorder.seconds.toFixed(0)}s` : '';
-    const fps = tracker ? `  ${tracker.fps.toFixed(0)} fps` : '';
-    const statusText = `${mode}${fps}${rec}`;
+    const statusText = recorder.recording ? `● REC ${recorder.seconds.toFixed(0)}s` : '';
     if (status.textContent !== statusText) status.textContent = statusText;
 
     debug.draw({
@@ -370,15 +502,18 @@ async function main() {
       vis,
       flap: flapOut,
       shoot: shootOut,
-      glide: glideOut,
+      tilt: tiltOut,
+      pointing: pointingOut,
       fps: tracker?.fps ?? 0,
       inferenceMs: tracker?.inferenceMs ?? 0,
       now,
     });
   });
 
-  // splash screen first; the pose model loads in the background, the camera starts with the game
-  state = 'menu';
+  // splash screen first (testing a level from the URL: straight to calibration); the pose model loads in the background,
+  // the camera starts with the game
+  if (testLevelName) recalibrate();
+  else state = 'menu';
   try {
     const t = await PoseTracker.create(video);
     t.onFrame = onPose;
@@ -387,7 +522,7 @@ async function main() {
   } catch (e) {
     console.error(e);
     const msg = e instanceof Error ? e.message : String(e);
-    poseError = `Could not start pose tracking: ${msg}`;
+    poseError = t('Could not start pose tracking: {error}', { error: msg });
     clearTimeout(retryTimer);
     cameraOff();
   }

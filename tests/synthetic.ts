@@ -9,6 +9,8 @@ export interface SynthPose {
   /** leg swung out sideways, deg from straight down (the person's own side) */
   legLeft?: number;
   legRight?: number;
+  /** upper body (head, shoulders, arms) leaning sideways from the hips, deg (+ = towards the person's left); the legs stay put */
+  lean?: number;
   /** body size relative to the default, scaled about the feet (< 1 = stepped back) */
   scale?: number;
   /** legs out of frame (low visibility, positions still estimated) */
@@ -62,6 +64,17 @@ export function synthPose(p: SynthPose): PoseFrame {
   };
   leg(1, p.legLeft ?? 0, L.leftHip, L.leftKnee, L.leftAnkle);
   leg(-1, p.legRight ?? 0, L.rightHip, L.rightKnee, L.rightAnkle);
+  // lean: rotate the upper body about the hip centre, in undistorted space
+  if (p.lean) {
+    const a = (p.lean * Math.PI) / 180;
+    const cx = 0.5 * ASPECT;
+    const cy = lm[L.leftHip].y;
+    for (const i of [L.nose, L.leftEye, L.rightEye, L.leftShoulder, L.rightShoulder, L.leftElbow, L.rightElbow, L.leftWrist, L.rightWrist]) {
+      const dx = lm[i].x * ASPECT - cx;
+      const dy = lm[i].y - cy;
+      lm[i] = { ...lm[i], x: (cx + dx * Math.cos(a) - dy * Math.sin(a)) / ASPECT, y: cy + dx * Math.sin(a) + dy * Math.cos(a) };
+    }
+  }
   // legs out of frame: MediaPipe still estimates them, just with low visibility
   if (p.hideLegs) for (const i of [L.leftKnee, L.leftAnkle, L.rightKnee, L.rightAnkle]) lm[i] = { ...lm[i], v: 0.3 };
   if (p.hideHips) for (const i of [L.leftHip, L.rightHip, L.leftKnee, L.leftAnkle, L.rightKnee, L.rightAnkle]) lm[i] = { ...lm[i], y: 1.05, v: 0.3 };

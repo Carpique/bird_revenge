@@ -1,6 +1,9 @@
 import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
+import basicSsl from '@vitejs/plugin-basic-ssl';
+import { levelThumbnails } from './tools/level-thumbnails';
+import { tutorialRecordings } from './tools/tutorial-recordings';
 
 const AUDIO_DIR = 'public/assets/audio';
 
@@ -31,8 +34,14 @@ function audioFiles(): Plugin {
   };
 }
 
-export default defineConfig({
-  base: './',
-  plugins: [audioFiles()],
-  server: { port: 5173, open: true },
+// `npm run dev:lan`: HTTPS on the local network, so phones and tablets can use the camera
+// (browsers only allow the camera on https or localhost). The certificate is self-signed.
+// The build is served by GitHub Pages from the repo's subpath (see DEPLOYMENT.md).
+export default defineConfig(({ command, mode }) => {
+  const lan = mode === 'lan';
+  return {
+    base: command === 'build' ? '/bird_revenge/' : './',
+    plugins: [audioFiles(), levelThumbnails(), tutorialRecordings(), ...(lan ? [basicSsl()] : [])],
+    server: { port: 5173, open: !lan, host: lan },
+  };
 });

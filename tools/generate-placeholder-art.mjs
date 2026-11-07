@@ -1,12 +1,12 @@
 // Generates the hand-drawn-looking PLACEHOLDER art into public/assets/ using Rough.js.
 // Run with `npm run art`. Replace the generated files with real drawings any time —
 // the game only knows the file paths listed in src/characters/*.ts and src/scenery/scenery.ts.
+// (Level obstacles aren't images: the game draws them from the level's shapes, see src/level/LevelView.ts.)
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import rough from 'roughjs';
-import { scenery } from '../src/scenery/scenery.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = (p) => join(root, 'public', 'assets', p);
@@ -33,6 +33,7 @@ function write(path, content) {
 }
 
 const o = (seed, extra = {}) => ({ seed, stroke: INK, strokeWidth: 2.2, roughness: 1.4, bowing: 1.2, ...extra });
+const ink = o;
 
 const rot = (pts, deg, [cx, cy]) => {
   const a = (deg * Math.PI) / 180;
@@ -140,6 +141,130 @@ const walk = [
 walk.forEach((p, i) => write(`villain/walk_${i}.svg`, villain({ ...p, seed: 100 + i * 31 })));
 write('villain/hit.svg', villain({ legA: 10, legB: -10, armA: 150, armB: -150, seed: 300, splat: true }));
 
+// ---------------------------------------------------------------- ghost (the villain's other look: same frame, faces right)
+// a ball under a bed sheet, floating a little above its feet (the bottom of the frame); the hem waves as it goes
+const sheet = '#f6f8fc', sheetFold = '#aab6cc', GHOST_INK = '#3a4256';
+
+/** `phase` 0..1: where the hem's wave (and the bob up and down) is; `hit`: a poo on its head, mouth open in shock */
+function ghost({ phase, seed, hit = false }) {
+  const d = [];
+  const go = (s, extra = {}) => o(s, { stroke: GHOST_INK, roughness: 0.9, bowing: 0.8, ...extra });
+  const t = phase * Math.PI * 2;
+  const bob = Math.sin(t) * 3;
+  const cx = 48, R = 30, headY = 46 + bob;
+  const hemY = 126 + bob;
+  // the sheet's sides flare out and sway a little, trailing behind (it moves to the right)
+  const sway = Math.sin(t + 0.6) * 2.5;
+  const left = cx - R - 8 + sway, right = cx + R + 8 + sway * 0.6;
+  // the hem: scallops whose dips travel along it
+  const n = 4, w = (right - left) / n;
+  let hem = '';
+  for (let i = n - 1; i >= 0; i--) {
+    const x0 = left + (i + 1) * w, x1 = left + i * w;
+    const dip = 8 + Math.sin(t * 1 + i * 1.7) * 4;
+    hem += ` Q ${x0 - w / 2} ${hemY + dip + Math.cos(t + i) * 2} ${x1} ${hemY - 2 + Math.sin(t + i * 1.3) * 2}`;
+  }
+  const body =
+    `M ${cx - R} ${headY} A ${R} ${R} 0 0 1 ${cx + R} ${headY}` +
+    ` C ${cx + R + 2} ${headY + 34} ${right - 2} ${hemY - 26} ${right} ${hemY - 2}` +
+    hem +
+    ` C ${left - 2} ${hemY - 26} ${cx - R - 2} ${headY + 34} ${cx - R} ${headY} Z`;
+  d.push(gen.path(body, go(seed + 1, { fill: sheet, fillStyle: 'solid' })));
+  // folds: from under the head down into the hem, swinging with it
+  for (const [i, fx] of [[0, -14], [1, 6], [2, 22]]) {
+    const top = [cx + fx * 0.6, headY + 30];
+    const mid = [cx + fx + Math.sin(t + i * 1.7) * 3, hemY - 24];
+    const end = [cx + fx * 1.15 + Math.sin(t + i * 1.7 + 0.8) * 4, hemY + 2];
+    d.push(gen.curve([top, mid, end], go(seed + 2 + i, { stroke: sheetFold, strokeWidth: 1.6 })));
+  }
+  // eyes: two black holes, looking the way it goes
+  d.push(gen.ellipse(cx + 2, headY - 2, 11, 17, go(seed + 6, { fill: '#111', fillStyle: 'solid', strokeWidth: 1 })));
+  d.push(gen.ellipse(cx + 18, headY - 2, 11, 17, go(seed + 7, { fill: '#111', fillStyle: 'solid', strokeWidth: 1 })));
+  if (hit) {
+    const poo = '#7a5230';
+    d.push(gen.ellipse(cx + 2, headY - R + 2, 40, 16, o(seed + 20, { fill: poo, fillStyle: 'solid' })));
+    d.push(gen.polygon([[cx - 14, headY - R + 4], [cx - 16, headY - R + 22], [cx - 10, headY - R + 6]], o(seed + 21, { fill: poo, fillStyle: 'solid' })));
+    d.push(gen.polygon([[cx + 12, headY - R + 6], [cx + 16, headY - R + 26], [cx + 18, headY - R + 6]], o(seed + 22, { fill: poo, fillStyle: 'solid' })));
+    d.push(gen.ellipse(cx + 10, headY + 18, 10, 13, go(seed + 23, { fill: '#111', fillStyle: 'solid', strokeWidth: 1 })));
+  }
+  return svg(V_W, V_H, d);
+}
+
+// float frames: one full wave of the hem (the animation loops). All drawn with the same seed, so the sketchy lines
+// wobble the same way in each and only the sheet moves; different seeds make the outlines flicker from frame to frame.
+const GHOST_FRAMES = 6;
+for (let i = 0; i < GHOST_FRAMES; i++) write(`ghost/float_${i}.svg`, ghost({ phase: i / GHOST_FRAMES, seed: 1200 }));
+write('ghost/hit.svg', ghost({ phase: 0.25, seed: 1300, hit: true }));
+
+// ---------------------------------------------------------------- glue (what the ghost throws: a glowing green blob)
+{
+  const glue = '#9dff4f', glueInk = '#2f7d16';
+  const d = [
+    gen.path('M 9 20 C 6 11 15 5 21 8 C 27 4 34 12 30 19 C 33 26 26 31 20 29 C 14 33 6 28 9 20 Z', o(1400, { fill: glue, fillStyle: 'solid', stroke: glueInk, strokeWidth: 1.8, roughness: 0.8 })),
+    // drips trailing off it
+    gen.path('M 12 27 Q 10 33 13 34 Q 16 33 15 28', o(1401, { fill: glue, fillStyle: 'solid', stroke: glueInk, strokeWidth: 1.4, roughness: 0.6 })),
+    gen.circle(25, 33, 3.5, o(1402, { fill: glue, fillStyle: 'solid', stroke: glueInk, strokeWidth: 1.2, roughness: 0.5 })),
+    // a shine
+    gen.curve([[14, 14], [17, 11], [21, 11]], o(1403, { stroke: '#eaffd6', strokeWidth: 2.2, roughness: 0.5 })),
+  ];
+  // the fluorescent glow: a soft green halo behind the blob
+  const glow =
+    '<defs><radialGradient id="glow"><stop offset="0.45" stop-color="#9dff4f" stop-opacity="0.75"/><stop offset="1" stop-color="#9dff4f" stop-opacity="0"/></radialGradient></defs>\n' +
+    '<circle cx="20" cy="20" r="20" fill="url(#glow)"/>\n';
+  write('glue/glue.svg', svg(40, 40, d).replace('<g ', `${glow}<g `));
+}
+
+// ---------------------------------------------------------------- bat (seen from the front, centre at the middle)
+const BAT_W = 140, BAT_H = 90;
+/** a bat flying its route: dusky grey-purple, inked black */
+const BAT_PLAIN = { fur: '#4a3a5c', wing: '#6b5a80', ink: INK };
+/** a homing bat (no route), told apart by its colour: dark purple all over, outline too */
+const BAT_HOMING = { fur: '#4b1d73', wing: '#7a3fb0', ink: '#2a0f45' };
+
+/** `wing`: how far the wings are raised (deg, + = up); `hit`: wings folded, dazed, a poo on its head; `colours`: BAT_PLAIN or BAT_HOMING */
+function bat({ wing, seed, hit = false, colours = BAT_PLAIN }) {
+  const d = [];
+  const { fur: batFur, wing: batWing } = colours;
+  const o = (seed, extra = {}) => ink(seed, { stroke: colours.ink, ...extra });
+  const cx = BAT_W / 2, cy = 50;
+  // one wing, drawn for the right side and mirrored: from the shoulder out to the tip, scalloped along the bottom
+  const wingShape = [[0, -8], [22, -16], [46, -14], [60, -4], [50, 2], [44, 12], [34, 6], [26, 16], [16, 8], [6, 12], [0, 8]];
+  for (const side of [1, -1]) {
+    const pts = rot(wingShape.map(([x, y]) => [x * (hit ? 0.45 : 1), y]), wing, [0, 0]).map(([x, y]) => [cx + side * (12 + x), cy - 6 + y]);
+    d.push(gen.polygon(pts, o(seed + (side > 0 ? 1 : 2), { fill: batWing, fillStyle: 'cross-hatch', hachureGap: 5, fillWeight: 1.1 })));
+  }
+  // body, head, ears
+  d.push(gen.ellipse(cx, cy + 4, 28, 36, o(seed + 3, { fill: batFur, fillStyle: 'hachure', hachureGap: 3.5, fillWeight: 1.5 })));
+  d.push(gen.polygon([[cx - 12, cy - 22], [cx - 14, cy - 38], [cx - 3, cy - 26]], o(seed + 4, { fill: batFur, fillStyle: 'solid' })));
+  d.push(gen.polygon([[cx + 12, cy - 22], [cx + 14, cy - 38], [cx + 3, cy - 26]], o(seed + 5, { fill: batFur, fillStyle: 'solid' })));
+  d.push(gen.circle(cx, cy - 18, 26, o(seed + 6, { fill: batFur, fillStyle: 'hachure', hachureGap: 3.5, fillWeight: 1.5 })));
+  if (hit) {
+    // dazed: x eyes, an open mouth, and the bird's poo on top
+    for (const ex of [cx - 6, cx + 6]) {
+      d.push(gen.line(ex - 3, cy - 23, ex + 3, cy - 17, o(seed + 7, { stroke: '#fff', strokeWidth: 2 })));
+      d.push(gen.line(ex + 3, cy - 23, ex - 3, cy - 17, o(seed + 8, { stroke: '#fff', strokeWidth: 2 })));
+    }
+    d.push(gen.circle(cx, cy - 9, 5, o(seed + 9, { fill: '#c0392b', fillStyle: 'solid', strokeWidth: 1 })));
+    const poo = '#7a5230';
+    d.push(gen.ellipse(cx, cy - 32, 30, 12, o(seed + 10, { fill: poo, fillStyle: 'solid' })));
+    d.push(gen.polygon([[cx - 12, cy - 30], [cx - 14, cy - 18], [cx - 9, cy - 29]], o(seed + 11, { fill: poo, fillStyle: 'solid' })));
+  } else {
+    // glowing eyes, little fangs
+    d.push(gen.circle(cx - 6, cy - 20, 6, o(seed + 7, { fill: '#f7d35a', fillStyle: 'solid', strokeWidth: 1 })));
+    d.push(gen.circle(cx + 6, cy - 20, 6, o(seed + 8, { fill: '#f7d35a', fillStyle: 'solid', strokeWidth: 1 })));
+    d.push(gen.polygon([[cx - 5, cy - 10], [cx - 3, cy - 5], [cx - 1, cy - 10]], o(seed + 9, { fill: '#fff', fillStyle: 'solid', strokeWidth: 1 })));
+    d.push(gen.polygon([[cx + 1, cy - 10], [cx + 3, cy - 5], [cx + 5, cy - 10]], o(seed + 10, { fill: '#fff', fillStyle: 'solid', strokeWidth: 1 })));
+  }
+  return svg(BAT_W, BAT_H, d);
+}
+
+// fly frames: a full wingbeat, wings up -> down -> back up (the animation loops)
+[30, 5, -25, 5].forEach((wing, i) => write(`bat/fly_${i}.svg`, bat({ wing, seed: 900 + i * 17 })));
+write('bat/hit.svg', bat({ wing: 60, seed: 980, hit: true }));
+// the homing bat: the same drawings, in its own colours
+[30, 5, -25, 5].forEach((wing, i) => write(`bat/homing/fly_${i}.svg`, bat({ wing, seed: 900 + i * 17, colours: BAT_HOMING })));
+write('bat/homing/hit.svg', bat({ wing: 60, seed: 980, hit: true, colours: BAT_HOMING }));
+
 // ---------------------------------------------------------------- poo
 const pooC = '#7a5230';
 write('poo/falling.svg', svg(34, 36, [
@@ -189,41 +314,3 @@ write('scenery/cloud_1.svg', cloud(620, [[52, 70, 52], [94, 52, 70], [142, 46, 7
   write('scenery/ground.svg', svg(W, H + 20, d, 12));
 }
 
-// ---------------------------------------------------------------- trees (layout and perch branches come from src/scenery/scenery.ts)
-const GROUND_Y = 640;
-const bark = '#8a6440', leaves = '#7fae5e', leavesInk = '#4f7a3a';
-
-function tree(t, seed) {
-  // world -> image coordinates
-  const p = ([x, y]) => [x - t.left, y - t.top];
-  const d = [];
-  const fill = (s, color, extra = {}) => o(s, { fill: color, fillStyle: 'hachure', hachureGap: 5, fillWeight: 1.4, ...extra });
-  // branches first, so the trunk covers where they join it
-  t.branches.forEach((b, i) => {
-    const dir = Math.sign(b.to[0] - b.from[0]);
-    const back = [b.from[0] - dir * 14, b.from[1]];
-    // tapered: thick at the trunk, thin at the tip; the top edge is where the bird sits
-    d.push(gen.polygon([p(back), p(b.to), p([b.to[0], b.to[1] + 6]), p([back[0], back[1] + 18])], fill(seed + 10 + i * 7, bark, { hachureAngle: 20 })));
-    // a twig and a little bunch of leaves past the tip
-    const twig = [b.to[0] - dir * 30, b.to[1] + 2];
-    d.push(gen.line(...p(twig), ...p([twig[0] + dir * 22, twig[1] - 26]), o(seed + 11 + i * 7, { strokeWidth: 2.4, stroke: bark })));
-    d.push(gen.ellipse(...p([twig[0] + dir * 26, twig[1] - 32]), 34, 24, fill(seed + 12 + i * 7, leaves, { stroke: leavesInk, strokeWidth: 1.8 })));
-    d.push(gen.ellipse(...p([b.to[0] + dir * 12, b.to[1] + 8]), 30, 20, fill(seed + 13 + i * 7, leaves, { stroke: leavesInk, strokeWidth: 1.8 })));
-  });
-  // trunk, from just under the grass up to the crown
-  const w = t.trunkWidth;
-  d.push(gen.polygon([
-    p([t.trunkX - w / 2 - 8, GROUND_Y + 14]),
-    p([t.trunkX - w / 2, GROUND_Y - 30]),
-    p([t.trunkX - w * 0.2, t.trunkTop]),
-    p([t.trunkX + w * 0.2, t.trunkTop]),
-    p([t.trunkX + w / 2, GROUND_Y - 30]),
-    p([t.trunkX + w / 2 + 8, GROUND_Y + 14]),
-  ], fill(seed + 1, bark, { hachureAngle: 80, hachureGap: 6 })));
-  // a knot in the bark
-  d.push(gen.ellipse(...p([t.trunkX + 4, GROUND_Y - 120]), 10, 16, o(seed + 2, { strokeWidth: 1.6 })));
-  // crown
-  t.crown.forEach(([x, y, size], i) => d.push(gen.circle(...p([x, y]), size, fill(seed + 50 + i, leaves, { stroke: leavesInk, strokeWidth: 2, hachureGap: 6 }))));
-  return svg(t.width, t.height, d);
-}
-scenery.trees.forEach((t, i) => write(t.image.replace(/^assets\//, ''), tree(t, 900 + i * 100)));

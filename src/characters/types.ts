@@ -21,4 +21,9 @@ export interface CharacterDef<A extends string = string> {
   facing: 'left' | 'right';
   animations: Record<A, AnimationDef>;
   defaultAnimation: A;
+  /**
+   * Draw the faint outline behind the art (its look: `BACKING` in render/backing.ts), so it stands out on dark skies;
+   * 'small': a narrower one, for small things.
+   */
+  backing?: boolean | 'small';
 }

@@ -1,6 +1,6 @@
 import { config } from '../config';
 import type { PoseFrame } from '../pose/types';
-import { hipAbduction, type Side } from './geometry';
+import { hipAbduction } from './geometry';
 
 export interface ShootBaseline {
   /** standing hip abduction per leg, degrees (legs are rarely exactly in line with the torso) */
@@ -12,22 +12,23 @@ export interface ShootOutput {
   /** hip abduction above the standing baseline, degrees, per leg (the player's own side) */
   left: number;
   right: number;
-  /** the larger of the two: what is compared against the thresholds */
+  /**
+   * the legs' spread above the standing baseline, their sum: what is compared against the thresholds. Leaning the
+   * upper body sideways tilts the torso axis, which adds to one leg's angle what it takes from the other's, so the
+   * sum ignores it; a leg swinging out raises it all the same
+   */
   angle: number;
   shooting: boolean;
   /** true on the single frame the shoot is entered (and cooldown allowed it) → drop a poo */
   triggered: boolean;
-  /** which leg is raised (the player's own side), or null when both are out about equally */
-  raisedLeg: Side | null;
 }
 
 /**
  * "Shoot" pose detector with hysteresis: a leg raised sideways. Uses only the hip angles (thigh vs.
  * torso axis), which need just the hips and knees; when the legs are out of frame MediaPipe still
  * places the knees, and a leg swung out shows in the hips. Angles are taken relative to the standing
- * baseline recorded at calibration. Either leg out past `angleEnter` fires; `raisedLeg` tells which
- * one when they differ by more than `legRaiseMin` (two legs out, e.g. a wide squat, gives null).
- * Fires once per shoot.
+ * baseline recorded at calibration. The legs' spread (either leg out, or both) past `angleEnter` fires, once per
+ * shoot; leaning the upper body (flying sideways) doesn't change it.
  */
 export class ShootDetector {
   baseline: ShootBaseline | null = null;
@@ -46,10 +47,8 @@ export class ShootDetector {
     const b = this.baseline ?? { left: 0, right: 0 };
     const left = rawLeft - b.left;
     const right = rawRight - b.right;
-    const angle = Math.max(left, right);
-    const diff = left - right;
-    const raisedLeg = diff > cfg.legRaiseMin ? 'left' : diff < -cfg.legRaiseMin ? 'right' : null;
-    const out: ShootOutput = { left, right, angle, shooting: this.shooting, triggered: false, raisedLeg };
+    const angle = left + right;
+    const out: ShootOutput = { left, right, angle, shooting: this.shooting, triggered: false };
     if (!this.baseline || !hipsVisible) return out;
 
     if (!this.shooting) {
@@ -59,7 +58,7 @@ export class ShootDetector {
           out.triggered = true;
           this.lastTrigger = f.t;
         }
-      } else if (Math.abs(left) < cfg.angleExit && Math.abs(right) < cfg.angleExit) {
+      } else if (Math.abs(angle) < cfg.angleExit) {
         // standing: slowly re-learn the baseline (stance and camera angle drift a little)
         const k = cfg.baselineAdaptRate;
         b.left += k * (rawLeft - b.left);

@@ -1,11 +1,14 @@
 import { config } from '../config';
 import { L, PART_LANDMARKS, PART_NAMES, REQUIRED_PARTS, type PartName } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
+import { t } from '../ui/i18n';
 import { isVisible } from './geometry';
 
 export interface PartStatus {
   /** raw: visible in this frame */
   raw: boolean;
+  /** why it isn't (e.g. `leftElbow v=0.42`, `rightWrist off-frame`), null when it is */
+  problem: string | null;
   /** smoothed 0..1 */
   score: number;
   /** debounced decision used by the game */
@@ -14,8 +17,12 @@ export interface PartStatus {
 
 export interface VisibilityOutput {
   personDetected: boolean;
+  /** the person's torso is near the middle of the frame (debounced); false without a person */
+  centred: boolean;
+  /** a person detected and centred: somebody to play is in front of the camera */
+  playerPresent: boolean;
   parts: Record<PartName, PartStatus>;
-  /** all REQUIRED_PARTS visible: enough of the player in view to play */
+  /** the player present and all REQUIRED_PARTS visible: enough of the player in view to play */
   inFrame: boolean;
   /** upper-body bounding box in normalised image coords (not mirrored), if a person is detected */
   box: { minX: number; maxX: number; minY: number; maxY: number } | null;
@@ -37,6 +44,9 @@ export class VisibilityMonitor {
   private parts = {} as Record<PartName, PartTimer>;
   private personDetected = false;
   private lastPersonT = -Infinity;
+  private centred = false;
+  private offCentreSince: number | null = null;
+  private centredSince: number | null = null;
 
   constructor() {
     this.reset();
@@ -44,9 +54,12 @@ export class VisibilityMonitor {
 
   reset() {
     for (const p of PART_NAMES) {
-      this.parts[p] = { status: { raw: false, score: 0, visible: false }, belowSince: null, aboveSince: null };
+      this.parts[p] = { status: { raw: false, problem: 'no person', score: 0, visible: false }, belowSince: null, aboveSince: null };
     }
     this.personDetected = false;
+    this.centred = false;
+    this.offCentreSince = null;
+    this.centredSince = null;
   }
 
   update(f: PoseFrame | null, now: number): VisibilityOutput {
@@ -61,7 +74,8 @@ export class VisibilityMonitor {
     for (const name of PART_NAMES) {
       const timer = this.parts[name];
       const st = timer.status;
-      st.raw = !!f && PART_LANDMARKS[name].every((i) => isVisible(f.lm[i], cfg.minLandmarkVisibility, cfg.frameMargin));
+      st.problem = partProblem(f, name);
+      st.raw = st.problem === null;
       st.score = cfg.emaAlpha * (st.raw ? 1 : 0) + (1 - cfg.emaAlpha) * st.score;
 
       if (st.score < cfg.lostBelow) {
@@ -79,11 +93,58 @@ export class VisibilityMonitor {
       if (!st.visible && timer.aboveSince !== null && now - timer.aboveSince >= cfg.recoverAfterMs) st.visible = true;
     }
 
+    // off centre needs to last a while, in case a fast move swings the torso out briefly
+    if (f) {
+      if (isCentred(f)) {
+        this.offCentreSince = null;
+        this.centredSince ??= now;
+      } else {
+        this.centredSince = null;
+        this.offCentreSince ??= now;
+      }
+      if (this.centred && this.offCentreSince !== null && now - this.offCentreSince >= cfg.offCentreAfterMs) this.centred = false;
+      if (!this.centred && this.centredSince !== null && now - this.centredSince >= cfg.recoverAfterMs) this.centred = true;
+    }
+    if (!this.personDetected) this.centred = false;
+    const centred = this.centred;
+    const playerPresent = this.personDetected && centred;
+
     const parts = Object.fromEntries(PART_NAMES.map((n) => [n, { ...this.parts[n].status }])) as Record<PartName, PartStatus>;
-    const inFrame = this.personDetected && REQUIRED_PARTS.every((n) => parts[n].visible);
+    const inFrame = playerPresent && REQUIRED_PARTS.every((n) => parts[n].visible);
     const box = f ? upperBodyBox(f) : null;
-    return { personDetected: this.personDetected, parts, inFrame, box, hint: makeHint(this.personDetected, parts, box, f) };
+    const hint = makeHint(this.personDetected, centred, parts, box, f);
+    return { personDetected: this.personDetected, centred, playerPresent, parts, inFrame, box, hint };
   }
+}
+
+/** Why `name` doesn't count as visible in `f`, or null if it does. */
+function partProblem(f: PoseFrame | null, name: PartName): string | null {
+  if (!f) return 'no person';
+  const cfg = config.visibility;
+  for (const i of PART_LANDMARKS[name]) {
+    const p = f.lm[i];
+    if (p.v < cfg.minLandmarkVisibility) return `${LANDMARK_NAMES[i]} v=${p.v.toFixed(2)}`;
+    if (!isVisible(p, cfg.minLandmarkVisibility, cfg.frameMargin)) return `${LANDMARK_NAMES[i]} off-frame`;
+  }
+  if (name === 'leftArm' && !forearmInFrame(f, L.leftElbow, L.leftWrist)) return 'left forearm off-frame';
+  if (name === 'rightArm' && !forearmInFrame(f, L.rightElbow, L.rightWrist)) return 'right forearm off-frame';
+  return null;
+}
+
+/** The torso's centre (shoulders and hips) lies within `visibility.maxOffCentre` of the frame's middle. */
+function isCentred(f: PoseFrame): boolean {
+  const x = (f.lm[L.leftShoulder].x + f.lm[L.rightShoulder].x + f.lm[L.leftHip].x + f.lm[L.rightHip].x) / 4;
+  return Math.abs(x - 0.5) <= config.visibility.maxOffCentre;
+}
+
+const LANDMARK_NAMES: Record<number, string> = Object.fromEntries(Object.entries(L).map(([k, i]) => [i, k]));
+
+/** The first `visibility.forearmInFrame` of the forearm (elbow → estimated wrist) lies inside the frame. */
+function forearmInFrame(f: PoseFrame, elbow: number, wrist: number): boolean {
+  const { forearmInFrame: k, frameMargin: m } = config.visibility;
+  const e = f.lm[elbow], w = f.lm[wrist];
+  const x = e.x + k * (w.x - e.x), y = e.y + k * (w.y - e.y);
+  return x >= m && x <= 1 - m && y >= m && y <= 1 - m;
 }
 
 function upperBodyBox(f: PoseFrame) {
@@ -104,25 +165,27 @@ function upperBodyBox(f: PoseFrame) {
 
 function makeHint(
   person: boolean,
+  centred: boolean,
   parts: Record<PartName, PartStatus>,
   box: VisibilityOutput['box'],
   f: PoseFrame | null,
 ): string | null {
-  if (!person) return 'Step in front of the camera';
+  if (!person) return t('Step in front of the camera');
+  if (!centred) return t('Move to the middle of the picture');
   const cfg = config.visibility;
   const armsLost = !parts.leftArm.visible || !parts.rightArm.visible;
   const h = box ? box.maxY - box.minY : 0;
   // hips below the frame edge: too close (or camera too high)
   const hipsBelow = !!f && Math.max(f.lm[L.leftHip].y, f.lm[L.rightHip].y) > 1 - cfg.frameMargin;
-  if (!parts.torso.visible && hipsBelow) return 'Step back — your hips are out of view';
+  if (!parts.torso.visible && hipsBelow) return t('Step back — your hips are out of view');
   if (box && armsLost) {
     // box is in camera coords; on the mirrored screen left/right swap
     const centre = 1 - (box.minX + box.maxX) / 2;
-    if (centre < 0.4) return 'Move right — an arm is out of view';
-    if (centre > 0.6) return 'Move left — an arm is out of view';
-    return 'Step back — your arms are out of view';
+    if (centre < 0.4) return t('Move right — an arm is out of view');
+    if (centre > 0.6) return t('Move left — an arm is out of view');
+    return t('Step back — your arms are out of view');
   }
-  if (!parts.torso.visible) return 'Face the camera';
-  if (box && h < cfg.minUpperBodyHeight) return 'Come a bit closer';
+  if (!parts.torso.visible) return t('Face the camera');
+  if (box && h < cfg.minUpperBodyHeight) return t('Come a bit closer');
   return null;
 }

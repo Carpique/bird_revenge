@@ -1,16 +1,18 @@
 {
-  "name": "pooping-birds",
+  "name": "bird-revenge",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/copy-mediapipe-wasm.mjs",
     "dev": "vite",
+    "dev:lan": "vite --mode lan",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "art": "node tools/generate-placeholder-art.mjs"
+    "art": "node tools/generate-placeholder-art.mjs",
+    "tiled-icons": "node tools/tiled-icons.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.21",
@@ -18,10 +20,13 @@
     "lil-gui": "^0.20.0",
     "matter-js": "^0.20.0",
     "pixi.js": "^8.6.0",
+    "poly-decomp": "^0.3.0",
     "roughjs": "^4.6.6"
   },
   "devDependencies": {
     "@types/matter-js": "^0.19.8",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "puppeteer": "^25.16.0",
     "typescript": "^5.6.0",
     "vite": "^6.3.0",
     "vitest": "^3.1.0"

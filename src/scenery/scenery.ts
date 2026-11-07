@@ -1,29 +1,7 @@
-/** A branch the bird can sit on: its top edge, from where it leaves the trunk to its tip (world px). */
-export interface Branch {
-  from: [number, number];
-  to: [number, number];
-}
-
-export interface Tree {
-  image: string;
-  /** top-left corner of the image in the world; the image is drawn 1:1 */
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  /** trunk centre line and width at the ground; it tapers up to `trunkTop` */
-  trunkX: number;
-  trunkWidth: number;
-  trunkTop: number;
-  /** leafy crown around the top of the trunk, as circles [x, y, diameter] */
-  crown: [number, number, number][];
-  branches: Branch[];
-}
-
 /**
  * Background layout. Positions are in world pixels (1280 x 720).
  * Swap the images for real art any time; set `driftSpeed` to 0 for static clouds.
- * Keep this file free of imports: the art generator (`npm run art`) loads it directly with Node.
+ * What's in the way of the bird (shelves, branches, crates) comes from the level (`src/levels/`).
  */
 export const scenery = {
   skyColor: '#eaf3f6',
@@ -34,34 +12,23 @@ export const scenery = {
     { image: 'assets/scenery/cloud_0.svg', x: 1000, y: 260, height: 70, driftSpeed: 8 },
   ],
   /**
-   * A tree on each side, almost up to the clouds. The bird can perch on the branches (landing from above);
-   * the lowest ones are well above the villain's head (ground 640, villain 130 tall).
-   * The tree images are generated from this data by `npm run art`, so rerun it after changing the trees.
+   * Each level's time of day (`timeOfDay` in Tiled) colours the background. The sky: a gradient from `horizon` (at the
+   * ground) up to `top` (at the world's top edge). `tint` darkens the clouds and the ground; `clouds` is their opacity.
+   * `between`: more colours on the way, at 0 (top) .. 1 (horizon); `behindGround`: the colour behind the ground (which
+   * lets it show through), `horizon` if not given. The sun shows in the afternoon; the moon and the stars at night, the moon where the sun would be.
    */
-  trees: [
-    {
-      image: 'assets/scenery/tree_left.svg',
-      left: 0, top: 10, width: 300, height: 650,
-      trunkX: 46, trunkWidth: 56, trunkTop: 170,
-      crown: [[10, 200, 130], [70, 225, 90], [140, 205, 100], [190, 175, 80], [120, 150, 120], [40, 130, 130], [90, 95, 100], [20, 75, 80]],
-      branches: [
-        { from: [66, 450], to: [250, 436] },
-        { from: [62, 362], to: [220, 346] },
-        { from: [60, 280], to: [190, 266] },
-      ],
+  timesOfDay: {
+    morning: { horizon: '#fff3dc', top: '#6aa8e0', tint: '#ffffff', clouds: 1, sun: false, moon: false, stars: 0 },
+    afternoon: {
+      horizon: '#acd4ec', top: '#d8edf8', tint: '#ffffff', clouds: 1, sun: true, moon: false, stars: 0,
+      // light blue at the very top, the main blue from a fifth of the way down, darkening towards the ground
+      between: [[0.19, '#badcef'], [0.65, '#badcef']] as [number, string][],
+      behindGround: '#edf2ea',
     },
-    {
-      image: 'assets/scenery/tree_right.svg',
-      left: 980, top: 10, width: 300, height: 650,
-      trunkX: 1234, trunkWidth: 56, trunkTop: 170,
-      crown: [[1270, 210, 130], [1205, 240, 90], [1140, 220, 100], [1090, 190, 80], [1160, 160, 120], [1240, 140, 130], [1190, 105, 100], [1260, 80, 80]],
-      branches: [
-        { from: [1214, 468], to: [1040, 454] },
-        { from: [1218, 384], to: [1070, 368] },
-        { from: [1220, 300], to: [1095, 286] },
-      ],
-    },
-  ] as Tree[],
+    evening: { horizon: '#8877b4', top: '#2a3a9a', tint: '#b1aac8', clouds: 0.8, sun: false, moon: false, stars: 0 },
+    night: { horizon: '#2e418d', top: '#19276b', tint: '#6876a3', clouds: 0.45, sun: false, moon: true, stars: 140 },
+  },
+  moon: { height: 110, color: '#f4f1de', glow: '#c9d6ff' },
   ground: {
     image: 'assets/scenery/ground.svg',
     /** distance from the top of the ground image to the drawn ground line */
@@ -70,5 +37,5 @@ export const scenery = {
 };
 
 export function sceneryImages(): string[] {
-  return [scenery.sun.image, scenery.ground.image, ...scenery.clouds.map((c) => c.image), ...scenery.trees.map((t) => t.image)];
+  return [scenery.sun.image, scenery.ground.image, ...scenery.clouds.map((c) => c.image)];
 }

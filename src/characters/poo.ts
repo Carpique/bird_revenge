@@ -10,7 +10,11 @@ export const pooDef = {
     splat: { frames: ['assets/poo/splat.svg'], fps: 1 },
   },
   defaultAnimation: 'falling',
+  backing: true,
 } satisfies CharacterDef<'falling' | 'splat'>;
+
+/** The bat's poo: the same drawings, smaller, outlined so it shows on dark skies. */
+export const batPooDef = { ...pooDef, id: 'bat-poo', displayHeight: 15, backing: 'small' } satisfies CharacterDef<'falling' | 'splat'>;
 
 /** how long a splat stays (on the ground or a branch), fading out over the last third */
 export const splatLifetimeMs = 4500;

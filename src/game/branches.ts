@@ -1,4 +1,4 @@
-import type { Branch } from '../scenery/scenery';
+import type { Branch } from '../level/types';
 
 /** y of the branch's top edge at `x`, or null when `x` is past either end */
 export function branchTopAt(br: Branch, x: number): number | null {
