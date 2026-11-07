@@ -1,4 +1,5 @@
 import { Application } from 'pixi.js';
+import { countLevelView } from './analytics';
 import { audio } from './audio/audio';
 import { config, loadSavedConfig } from './config';
 import { Game } from './game/Game';
@@ -157,6 +158,7 @@ async function main() {
   game.onLevelComplete = () => {
     if (!testLevelName) markCompleted(game.level.name);
     game.startNextLevel(testLevelName ? game.level : nextLevel(allLevels, game.level.name));
+    if (!testLevelName) countLevelView(game.level.name);
   };
   // saving the level being played in Tiled while the dev server runs swaps it in, without reloading the page
   onLevelEdited((next) => {
@@ -228,11 +230,13 @@ async function main() {
   // a game from the level select starts on the level picked (none to pick: the first level)
   splash.onStart = (level) => {
     if (level) game.reset(level);
+    if (!testLevelName) countLevelView(game.level.name);
     recalibrate();
   };
   // the training letters, A to Z and round, until quit from the pause menu (which goes back to the first level)
   splash.onTraining = () => {
     game.reset(allLevels.get(TRAINING) ?? levels.get(TRAINING));
+    countLevelView(game.level.name);
     recalibrate();
   };
   game.onGameOver = () => {
