@@ -222,24 +222,13 @@ async function main() {
     state = 'calibrating';
   };
 
-  // left for the level select by "Start over": how the game was being played, to carry on the same way, without
-  // calibrating again (still calibrating then: null, calibrate as usual)
-  let startOverMode: 'pose' | 'keyboard' | null = null;
-
   // a game from the level select starts on the level picked (none to pick: the first level)
   splash.onStart = (level) => {
     if (level) game.reset(level);
-    const mode = startOverMode;
-    startOverMode = null;
-    if (mode === 'pose') startCountdown();
-    else if (mode === 'keyboard') {
-      state = 'keyboard';
-      audio.startMusic();
-    } else recalibrate();
+    recalibrate();
   };
   // the training letters, A to Z and round, until quit from the pause menu (which goes back to the first level)
   splash.onTraining = () => {
-    startOverMode = null;
     game.reset(allLevels.get(TRAINING) ?? levels.get(TRAINING));
     recalibrate();
   };
@@ -357,17 +346,14 @@ async function main() {
     menuOpen = false;
     countdownEnd += performance.now() - menuOpenedAt; // the countdown carries on where it was
   };
-  // "Start over": back to the level select, the level being played selected
+  // "Start over": back to the level select, the level being played selected (and calibrating again from there)
   pauseMenu.onRestart = () => {
     const current = game.level.name;
-    const mode = state === 'keyboard' ? 'keyboard' : state === 'calibrating' ? null : 'pose';
     pauseMenu.onQuit();
-    startOverMode = mode;
     splash.showLevels(current);
   };
   pauseMenu.onQuit = () => {
     menuOpen = false;
-    startOverMode = null;
     // a new game from the menu starts from the first level (the latest version of it, if edited meanwhile)
     const first = firstLevel();
     game.reset(allLevels.get(first.name) ?? first);
