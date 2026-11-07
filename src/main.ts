@@ -493,10 +493,7 @@ async function main() {
     demo.root.visible = splash.visible && demoOn;
     demoReplay.update(app.ticker.deltaMS);
 
-    const mode = state === 'keyboard' || poseError ? 'keyboard' : 'pose';
-    const rec = recorder.recording ? `  ● REC ${recorder.seconds.toFixed(0)}s` : '';
-    const fps = tracker ? `  ${tracker.fps.toFixed(0)} fps` : '';
-    const statusText = `${mode}${fps}${rec}`;
+    const statusText = recorder.recording ? `● REC ${recorder.seconds.toFixed(0)}s` : '';
     if (status.textContent !== statusText) status.textContent = statusText;
 
     debug.draw({
