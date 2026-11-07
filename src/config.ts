@@ -56,6 +56,15 @@ export const config = {
     armLostAfterMs: 800,
     recoverAfterMs: 300,
     noPersonAfterMs: 500,
+    /**
+     * the torso's centre (between shoulders and hips) further than this (fraction of frame width) from the middle is
+     * off centre: the player has wandered off, or the tracker has picked someone else in the room
+     */
+    maxOffCentre: 0.25,
+    /** off centre this long: nobody counts as in front of the camera (calibration dialog) */
+    offCentreAfterMs: 600,
+    /** while off centre, the pose tracker forgets who it follows and looks again, at most this often */
+    redetectEveryMs: 1500,
     /** nose→hips height as fraction of frame height, below which we hint "come closer" */
     minUpperBodyHeight: 0.22,
   },

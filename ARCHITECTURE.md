@@ -130,6 +130,8 @@ Even with heuristics we need recorded data: to tune thresholds, to test detector
   - part is declared *recovered* when it stays above ~0.7 for ≥ ~300 ms.
   - The overlay appears only when at least one required part is lost; it disappears only when all required parts are recovered.
   - No person detected at all is a separate state ("Step in front of the camera").
+- **Centred** [DECIDED]: the torso's centre (shoulders + hips) must lie within `visibility.maxOffCentre` (25% of the width) of the frame's middle; off centre for ≥ `offCentreAfterMs` counts as nobody in front of the camera ("Move to the middle of the picture"). With several people in view MediaPipe (`numPoses: 1`) keeps following whoever it found first, so someone at the edge is likely the wrong person: while off centre the tracker is reset (`PoseTracker.redetect`, the graph rebuilt, like covering the camera for a moment) at most every `redetectEveryMs`, so it looks again for whoever stands in front.
+- **Nobody in front** (no person, or off centre) during the countdown or the game brings back the big calibration dialog (and calibration), as at the start; the small box below is only for parts of a centred player out of view.
 - Also estimated: **distance / position hints** from the upper-body bounding box (nose→hips height as a fraction of frame height, horizontal centre) and the hip position → "step back — your hips are out of view", "come closer", "move left/right".
 - While a part is lost, the gesture detectors ignore it (e.g. no flap signal from an arm out of frame).
 

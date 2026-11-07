@@ -77,6 +77,17 @@ export class PoseTracker {
     this.running = false;
   }
 
+  /**
+   * Forget the person being tracked and look for one afresh on the next frame (like covering the camera for a
+   * moment): MediaPipe otherwise keeps following whoever it found first, even someone else at the edge of the
+   * picture. Rebuilding the graph with the options unchanged does that, without loading the model again.
+   */
+  redetect() {
+    this.landmarker.setOptions({}).catch((e) => console.warn('pose tracker reset failed', e));
+    this.filters.forEach((f) => f.reset());
+    this.occlusion.reset();
+  }
+
   private process() {
     const video = this.video;
     if (video.readyState < 2 || video.videoWidth === 0) return;

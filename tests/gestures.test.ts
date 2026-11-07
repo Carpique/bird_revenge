@@ -278,6 +278,24 @@ describe('VisibilityMonitor', () => {
     expect(back[back.length - 1].inFrame).toBe(true);
   });
 
+  it('reports a person off to the side as not present, after a while', () => {
+    const m = new VisibilityMonitor();
+    run(m, frames(1000, () => ({})));
+    const shift = (dx: number) => (f: ReturnType<typeof frames>[number]) => ({ ...f, lm: f.lm.map((p) => ({ ...p, x: p.x + dx })) });
+    const brief = run(m, frames(300, () => ({}), 1000).map(shift(0.35)));
+    expect(brief.every((o) => o.playerPresent)).toBe(true);
+    run(m, frames(500, () => ({}), 1300));
+    const long = run(m, frames(1000, () => ({}), 1800).map(shift(-0.35)));
+    const last = long[long.length - 1];
+    expect(last.personDetected).toBe(true);
+    expect(last.centred).toBe(false);
+    expect(last.playerPresent).toBe(false);
+    expect(last.inFrame).toBe(false);
+    expect(last.hint).toMatch(/middle/);
+    const back = run(m, frames(1000, () => ({}), 2800));
+    expect(back[back.length - 1].inFrame).toBe(true);
+  });
+
   it('reports no person after frames stop', () => {
     const m = new VisibilityMonitor();
     run(m, frames(1000, () => ({})));

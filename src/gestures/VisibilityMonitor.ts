@@ -17,8 +17,12 @@ export interface PartStatus {
 
 export interface VisibilityOutput {
   personDetected: boolean;
+  /** the person's torso is near the middle of the frame (debounced); false without a person */
+  centred: boolean;
+  /** a person detected and centred: somebody to play is in front of the camera */
+  playerPresent: boolean;
   parts: Record<PartName, PartStatus>;
-  /** all REQUIRED_PARTS visible: enough of the player in view to play */
+  /** the player present and all REQUIRED_PARTS visible: enough of the player in view to play */
   inFrame: boolean;
   /** upper-body bounding box in normalised image coords (not mirrored), if a person is detected */
   box: { minX: number; maxX: number; minY: number; maxY: number } | null;
@@ -40,6 +44,9 @@ export class VisibilityMonitor {
   private parts = {} as Record<PartName, PartTimer>;
   private personDetected = false;
   private lastPersonT = -Infinity;
+  private centred = false;
+  private offCentreSince: number | null = null;
+  private centredSince: number | null = null;
 
   constructor() {
     this.reset();
@@ -50,6 +57,9 @@ export class VisibilityMonitor {
       this.parts[p] = { status: { raw: false, problem: 'no person', score: 0, visible: false }, belowSince: null, aboveSince: null };
     }
     this.personDetected = false;
+    this.centred = false;
+    this.offCentreSince = null;
+    this.centredSince = null;
   }
 
   update(f: PoseFrame | null, now: number): VisibilityOutput {
@@ -83,10 +93,27 @@ export class VisibilityMonitor {
       if (!st.visible && timer.aboveSince !== null && now - timer.aboveSince >= cfg.recoverAfterMs) st.visible = true;
     }
 
+    // off centre needs to last a while, in case a fast move swings the torso out briefly
+    if (f) {
+      if (isCentred(f)) {
+        this.offCentreSince = null;
+        this.centredSince ??= now;
+      } else {
+        this.centredSince = null;
+        this.offCentreSince ??= now;
+      }
+      if (this.centred && this.offCentreSince !== null && now - this.offCentreSince >= cfg.offCentreAfterMs) this.centred = false;
+      if (!this.centred && this.centredSince !== null && now - this.centredSince >= cfg.recoverAfterMs) this.centred = true;
+    }
+    if (!this.personDetected) this.centred = false;
+    const centred = this.centred;
+    const playerPresent = this.personDetected && centred;
+
     const parts = Object.fromEntries(PART_NAMES.map((n) => [n, { ...this.parts[n].status }])) as Record<PartName, PartStatus>;
-    const inFrame = this.personDetected && REQUIRED_PARTS.every((n) => parts[n].visible);
+    const inFrame = playerPresent && REQUIRED_PARTS.every((n) => parts[n].visible);
     const box = f ? upperBodyBox(f) : null;
-    return { personDetected: this.personDetected, parts, inFrame, box, hint: makeHint(this.personDetected, parts, box, f) };
+    const hint = makeHint(this.personDetected, centred, parts, box, f);
+    return { personDetected: this.personDetected, centred, playerPresent, parts, inFrame, box, hint };
   }
 }
 
@@ -102,6 +129,12 @@ function partProblem(f: PoseFrame | null, name: PartName): string | null {
   if (name === 'leftArm' && !forearmInFrame(f, L.leftElbow, L.leftWrist)) return 'left forearm off-frame';
   if (name === 'rightArm' && !forearmInFrame(f, L.rightElbow, L.rightWrist)) return 'right forearm off-frame';
   return null;
+}
+
+/** The torso's centre (shoulders and hips) lies within `visibility.maxOffCentre` of the frame's middle. */
+function isCentred(f: PoseFrame): boolean {
+  const x = (f.lm[L.leftShoulder].x + f.lm[L.rightShoulder].x + f.lm[L.leftHip].x + f.lm[L.rightHip].x) / 4;
+  return Math.abs(x - 0.5) <= config.visibility.maxOffCentre;
 }
 
 const LANDMARK_NAMES: Record<number, string> = Object.fromEntries(Object.entries(L).map(([k, i]) => [i, k]));
@@ -132,11 +165,13 @@ function upperBodyBox(f: PoseFrame) {
 
 function makeHint(
   person: boolean,
+  centred: boolean,
   parts: Record<PartName, PartStatus>,
   box: VisibilityOutput['box'],
   f: PoseFrame | null,
 ): string | null {
   if (!person) return t('Step in front of the camera');
+  if (!centred) return t('Move to the middle of the picture');
   const cfg = config.visibility;
   const armsLost = !parts.leftArm.visible || !parts.rightArm.visible;
   const h = box ? box.maxY - box.minY : 0;

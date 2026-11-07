@@ -43,6 +43,8 @@ import { wakeLock } from './ui/wakeLock';
  *   and a pose game's gameOver — not in the menu or keyboard play
  *   calibrating shows a dialog over the paused game (also camera loading / camera errors)
  *   outOfFrame pauses the game (no "Pause" sign, just the small pose box) until the player is back
+ *   nobody in front of the camera (no person, or one off to the side) in countdown / playing / outOfFrame:
+ *   calibrating again, with the big dialog
  *   calibrating → keyboard (Esc; pose is ignored)
  *   Esc in a game (countdown, playing, outOfFrame, keyboard) opens the pause menu over the frozen game:
  *   keep playing, start over from the level select, or quit to the menu
@@ -94,6 +96,7 @@ async function main() {
   let calibStatus: CalibrationStatus | null = null;
   let poseControls: Controls = noControls();
   let lastPoseT = 0;
+  let lastRedetectT = -Infinity;
   let tracker: PoseTracker | null = null;
 
   /** the window is unfocused / hidden, or the game is paused: nothing runs */
@@ -410,6 +413,14 @@ async function main() {
       ({ flap: flapOut, shoot: shootOut, tilt: tiltOut, pointing: pointingOut } = reading);
       debug.record(now, reading.flap, reading.shoot);
     }
+    // someone off to the side may be another person the tracker latched onto: make it look again for whoever
+    // is in front of the camera
+    if (vis.personDetected && !vis.centred && now - lastRedetectT >= config.visibility.redetectEveryMs) {
+      lastRedetectT = now;
+      tracker?.redetect();
+    }
+    // nobody in front of the camera any more: the big calibration dialog, as at the start
+    if ((state === 'countdown' || state === 'playing' || state === 'outOfFrame') && !vis.playerPresent) recalibrate();
 
     switch (state) {
       case 'calibrating':
