@@ -42,7 +42,7 @@ const PL = {
   'Camera API not available (the page must be served from localhost or https).':
     'Kamera jest niedostępna (strona musi być otwarta przez localhost lub https).',
   'Could not start pose tracking: {error}': 'Nie udało się uruchomić śledzenia ruchu: {error}',
-  'Lower your arms like the outline': 'Opuść ręce jak na obrysie',
+  'Raise your arms like the outline': 'Podnieś ręce jak na obrysie',
   'Stand up straight': 'Stań prosto',
   'Put your legs down': 'Postaw obie nogi na ziemi',
   'Hold still…': 'Nie ruszaj się…',

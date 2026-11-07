@@ -74,8 +74,8 @@ export const config = {
     holdMs: 1200,
     /** max hip movement (fraction of torso length) during the hold */
     maxMovement: 0.08,
-    /** require both hands below the shoulders, like the outline */
-    requireArmsDown: true,
+    /** require both hands raised above the shoulders and spread wider than them (an X), like the outline */
+    requireArmsUp: true,
   },
 
   flap: {

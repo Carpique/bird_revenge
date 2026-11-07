@@ -82,15 +82,15 @@ const MINI_SCALE = 0.5;
 
 /**
  * Ideal pose outline, in MIRRORED display coordinates of the camera image (0..1).
- * The player's left side is on the screen's left (like a mirror). Arms lowered, a bit away
- * from the body.
+ * The player's left side is on the screen's left (like a mirror). An X: arms raised and spread,
+ * legs apart (the raised hands must be in view, as flapping lifts them).
  */
 type Figure = Record<PartName, { kind: 'circle'; c: P; r: number } | { kind: 'path' | 'polygon'; pts: P[] }>;
 const OUTLINE: Figure = {
   head: { kind: 'circle', c: [0.5, 0.2], r: 0.055 },
   torso: { kind: 'polygon', pts: [[0.455, 0.3], [0.545, 0.3], [0.535, 0.56], [0.465, 0.56]] },
-  leftArm: { kind: 'path', pts: [[0.455, 0.3], [0.425, 0.43], [0.4, 0.55]] },
-  rightArm: { kind: 'path', pts: [[0.545, 0.3], [0.575, 0.43], [0.6, 0.55]] },
+  leftArm: { kind: 'path', pts: [[0.455, 0.3], [0.405, 0.19], [0.36, 0.08]] },
+  rightArm: { kind: 'path', pts: [[0.545, 0.3], [0.595, 0.19], [0.64, 0.08]] },
   leftLeg: { kind: 'path', pts: [[0.47, 0.56], [0.455, 0.73], [0.44, 0.9]] },
   rightLeg: { kind: 'path', pts: [[0.53, 0.56], [0.545, 0.73], [0.56, 0.9]] },
 };

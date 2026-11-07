@@ -15,8 +15,8 @@ export interface CalibrationStatus {
 }
 
 /**
- * Calibration: player stands in the outline (at least torso and arms in view), arms lowered, legs
- * straight, and holds still. We then record the standing hip angles.
+ * Calibration: player stands in the outline (at least torso and arms in view), arms raised and spread
+ * in an X (so the raised hands are known to be in view), legs straight, and holds still. We then record the standing hip angles.
  */
 export class Calibration {
   private holdStart: number | null = null;
@@ -36,9 +36,10 @@ export class Calibration {
     if (!f || !vis.inFrame) return fail(vis.hint ?? t('Get into view'));
 
     const lm = f.lm;
-    if (cfg.requireArmsDown) {
-      const armsDown = lm[L.leftWrist].y > lm[L.leftShoulder].y && lm[L.rightWrist].y > lm[L.rightShoulder].y;
-      if (!armsDown) return fail(t('Lower your arms like the outline'));
+    if (cfg.requireArmsUp) {
+      const raised = lm[L.leftWrist].y < lm[L.leftShoulder].y && lm[L.rightWrist].y < lm[L.rightShoulder].y;
+      const spread = Math.abs(lm[L.leftWrist].x - lm[L.rightWrist].x) > Math.abs(lm[L.leftShoulder].x - lm[L.rightShoulder].x);
+      if (!raised || !spread) return fail(t('Raise your arms like the outline'));
     }
     // off-frame legs are estimated straight, so this only bites when the knees are in view
     if (kneeAngle(f, 'left') < 160 || kneeAngle(f, 'right') < 160) return fail(t('Stand up straight'));
