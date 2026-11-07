@@ -64,8 +64,9 @@ async function drawThumbnails(config: ResolvedConfig): Promise<Record<string, st
     await server.listen();
     const base = server.resolvedUrls?.local[0];
     if (!base) throw new Error('the dev server has no local URL');
-    // WebGL in software, so it works without a GPU too
-    browser = await puppeteer.launch({ headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+    // WebGL in software, so it works without a GPU too; CI runners (GitHub Actions' Ubuntu) can't use Chrome's sandbox
+    const args = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', ...(process.env.CI ? ['--no-sandbox'] : [])];
+    browser = await puppeteer.launch({ headless: true, args });
     const page = await browser.newPage();
     const errors: string[] = [];
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));

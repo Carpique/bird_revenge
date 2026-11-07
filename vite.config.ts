@@ -36,10 +36,11 @@ function audioFiles(): Plugin {
 
 // `npm run dev:lan`: HTTPS on the local network, so phones and tablets can use the camera
 // (browsers only allow the camera on https or localhost). The certificate is self-signed.
-export default defineConfig(({ mode }) => {
+// The build is served by GitHub Pages from the repo's subpath (see DEPLOYMENT.md).
+export default defineConfig(({ command, mode }) => {
   const lan = mode === 'lan';
   return {
-    base: './',
+    base: command === 'build' ? '/bird_revenge/' : './',
     plugins: [audioFiles(), levelThumbnails(), tutorialRecordings(), ...(lan ? [basicSsl()] : [])],
     server: { port: 5173, open: !lan, host: lan },
   };
