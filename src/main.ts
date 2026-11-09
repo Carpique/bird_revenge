@@ -14,6 +14,7 @@ import type { ShootOutput } from './gestures/ShootDetector';
 import type { VisibilityOutput } from './gestures/VisibilityMonitor';
 import { noControls, type Controls } from './input/controls';
 import { Keyboard } from './input/keyboard';
+import { TouchControls } from './input/touchControls';
 import { controlsFrom, POSE_STALE_MS, PoseDetectors } from './input/poseControls';
 import { startCamera, stopCamera } from './pose/camera';
 import { PoseTracker } from './pose/PoseTracker';
@@ -48,7 +49,8 @@ import { wakeLock } from './ui/wakeLock';
  *   outOfFrame pauses the game (no "Pause" sign, just the small pose box) until the player is back
  *   nobody in front of the camera (no person, or one off to the side) in countdown / playing / outOfFrame:
  *   calibrating again, with the big dialog
- *   calibrating → keyboard (Esc; pose is ignored)
+ *   calibrating → keyboard (Esc or "No camera"; pose is ignored): on a touch screen with on-screen controls. No camera
+ *   to be had (blocked, none, no camera API, the pose model failed): straight on to keyboard instead of calibrating
  *   Esc in a game (countdown, playing, outOfFrame, keyboard) opens the pause menu over the frozen game:
  *   keep playing, start over from the level select, or quit to the menu
  *   playing / outOfFrame / keyboard → gameOver (last life lost) → new game: countdown, or keyboard again
@@ -89,6 +91,8 @@ async function main() {
   let poseError: string | null = null;
   /** the camera stopped working after it had started; it's being retried */
   let cameraError: Msg | null = null;
+  /** the camera has started at least once (so a missing camera may just be waking up) */
+  let cameraStarted = false;
   let manualPause = false;
   /** the pause menu (Esc in a game) is open */
   let menuOpen = false;
@@ -131,8 +135,6 @@ async function main() {
     // the pause menu hides the countdown and the out-of-frame box
     if (menuOpen) gs.mode = 'hidden';
     else if (state === 'loading') Object.assign(gs, { mode: 'loading', message: t('Loading…') });
-    else if (state === 'calibrating' && poseError)
-      Object.assign(gs, { mode: 'calibrate', title: t('No camera'), message: poseError, error: true, hint: escHint });
     else if (state === 'calibrating' && cameraError)
       Object.assign(gs, { mode: 'calibrate', title: t(cameraError), message: t('Reconnecting…'), hint: escHint });
     else if (state === 'calibrating' && (!cameraOn || !tracker))
@@ -224,6 +226,7 @@ async function main() {
   const language = new LanguageButton();
   new RotateHint(document.getElementById('rotate')!);
   const keyboard = new Keyboard();
+  const touch = new TouchControls(gameBox);
   const detectors = new PoseDetectors();
   const calibration = new Calibration();
 
@@ -233,6 +236,16 @@ async function main() {
     if (state !== 'calibrating') return;
     if (game.level.name === TRAINING || testLevelName) pauseMenu.onQuit();
     else pauseMenu.onRestart();
+  };
+
+  // without the camera: the keyboard, or on a touch screen the on-screen controls; no calibration or countdown
+  const playWithoutCamera = () => {
+    state = 'keyboard';
+    audio.startMusic();
+  };
+  guide.showNoCamera = TouchControls.available;
+  guide.onNoCamera = () => {
+    if (state === 'calibrating') playWithoutCamera();
   };
 
   const startCountdown = () => {
@@ -314,6 +327,7 @@ async function main() {
         } catch (e) {
           console.error(e);
           if (isPermissionError(e)) poseError = t('Camera access was blocked');
+          else if (!cameraStarted && isNoCameraError(e)) poseError = t('Camera unavailable');
           else if (!navigator.mediaDevices?.getUserMedia) poseError = t('Camera API not available (the page must be served from localhost or https).');
           else {
             cameraError ??= 'Camera unavailable';
@@ -322,6 +336,7 @@ async function main() {
           return;
         }
         cameraOn = true;
+        cameraStarted = true;
         cameraError = null;
         retryDelay = 500;
         if (!wantCamera()) return syncPose(); // no longer wanted while the camera was starting
@@ -404,6 +419,7 @@ async function main() {
   wakeLock.set(!suspended);
 
   keyboard.onPoo = () => game.requestPoo();
+  touch.onPoo = () => game.requestPoo();
   keyboard.onPause = () => {
     if (manualPause) setPaused(false);
     else if (canPause()) setPaused(true);
@@ -418,10 +434,7 @@ async function main() {
     else if (state === 'gameOver') return;
     else if (k === 'c' && tracker) recalibrate();
     else if (k === 'escape' && !game.showingSign) {
-      if (state === 'calibrating') {
-        state = 'keyboard';
-        audio.startMusic(); // keyboard play skips calibration and the countdown
-      }
+      if (state === 'calibrating') playWithoutCamera();
       else openPauseMenu();
     }
   };
@@ -490,6 +503,8 @@ async function main() {
     const now = performance.now();
     audio.update();
     if (state === 'countdown' && now >= countdownEnd) state = 'playing';
+    // no camera to be had: the game goes on without it
+    if (state === 'calibrating' && poseError) playWithoutCamera();
     if (state === 'gameOver' && now >= gameOverEnd) {
       game.reset();
       if (keyboardAfterGameOver) state = 'keyboard';
@@ -498,7 +513,8 @@ async function main() {
     updateCamera();
 
     const poseFresh = state === 'playing' && now - lastPoseT < POSE_STALE_MS;
-    game.controls = keyboard.apply(poseFresh ? poseControls : noControls());
+    touch.visible = state === 'keyboard' && !menuOpen && !manualPause && !game.showingSign;
+    game.controls = keyboard.apply(touch.apply(poseFresh ? poseControls : noControls()));
     // during gameOver the game runs only to slide the "Game Over" sign through
     game.paused = manualPause || menuOpen || !(state === 'playing' || state === 'keyboard' || state === 'gameOver');
     game.showPausedText = manualPause;
@@ -568,6 +584,12 @@ async function main() {
     clearTimeout(retryTimer);
     cameraOff();
   }
+}
+
+/** no camera on the device (or none that fits) */
+function isNoCameraError(e: unknown) {
+  const name = e instanceof Error ? e.name : '';
+  return /NotFound|DevicesNotFound|Overconstrained/i.test(name);
 }
 
 function isPermissionError(e: unknown) {

@@ -30,7 +30,8 @@ const PL = {
   'Get in position': 'Ustaw Się',
   'Get back in frame!': 'Wróć do kadru!',
   'Get into view': 'Wejdź w kadr',
-  'No camera': 'Brak kamery',
+  // the calibration dialog's button beside "Back": play with the on-screen controls (or the keyboard)
+  'No camera': 'Bez Kamery',
   'Press Esc to play with the keyboard': 'Naciśnij Esc, żeby grać na klawiaturze',
   'Reconnecting…': 'Ponowne łączenie…',
   '{error} – reconnecting…': '{error} – ponowne łączenie…',

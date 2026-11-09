@@ -52,3 +52,19 @@ body.in-game .corner-popup { top: calc(100% + 8px); }
 body .lil-gui.autoPlace { top: 60px; max-height: calc(100% - 60px); }
 #status { position: fixed; left: 8px; bottom: 6px; pointer-events: none; white-space: pre;
   font: 300 11px/1 system-ui, -apple-system, sans-serif; color: rgba(0,0,0,0.35); }
+/* on-screen controls without the camera on a touch screen (TouchControls): a stick lower right, a poo button lower
+   left, at the same height; both fade out while the stick is held */
+#touch { position: absolute; inset: 0; pointer-events: none; z-index: 1001; }
+#touch[hidden] { display: none; }
+.touch-pad { position: absolute; bottom: max(5%, env(safe-area-inset-bottom)); height: 34%; max-height: 190px; aspect-ratio: 1;
+  pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  border-radius: 50%; background: rgba(255,255,255,0.18); border: 3px solid rgba(255,255,255,0.55);
+  box-sizing: border-box; transition: opacity 0.15s; }
+.touch-stick { right: max(4%, env(safe-area-inset-right)); }
+.touch-fire { left: max(4%, env(safe-area-inset-left)); }
+/* 44% of the pad: keep in step with KNOB_SIZE in touchControls.ts */
+.touch-knob { position: absolute; left: 50%; top: 50%; width: 44%; height: 44%; transform: translate(-50%, -50%);
+  border-radius: 50%; background: rgba(255,255,255,0.5); border: 2px solid rgba(255,255,255,0.8); box-sizing: border-box; }
+.touch-fire .touch-knob { background: rgba(122,74,38,0.55); border-color: rgba(255,255,255,0.7); }
+.touch-fire.pressed .touch-knob { background: rgba(122,74,38,0.85); transform: translate(-50%, -50%) scale(0.9); }
+#touch.steering .touch-pad { opacity: 0; }
