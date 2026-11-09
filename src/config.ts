@@ -288,8 +288,13 @@ export const config = {
     tiltDeadZone: 15,
     /** once drifting, keeps drifting down to `tiltDeadZone` minus this (deg), so it doesn't flicker at the edge */
     tiltHysteresis: 5,
-    /** pointing: the two arms may differ in direction by up to this (deg) and still count as pointing together */
-    parallelMax: 40,
+    /**
+     * pointing: the two arms may differ in direction by up to this (deg) and still count as pointing together.
+     * 40 -> 50: on the recordings of play 7-10% of the time the arms were 40-60 deg apart, matching no pose, and the
+     * bird dropped to rest after `ambiguousMs`; at 50 it rests ~11-15% less and flies ~22-30% more, with no more
+     * flicker, the flying direction a little less steady (the average of two arms further apart)
+     */
+    parallelMax: 50,
     /** a new pose must hold this long (ms) before the bird follows it (100 -> 60: ~20 ms faster, no more flicker on the recordings) */
     enterMs: 60,
     /** arms matching no pose keep the current one for this long (ms), then the bird rests */
