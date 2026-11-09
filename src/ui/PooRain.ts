@@ -24,7 +24,7 @@ const MAX_SPIN = Math.PI;
 interface Drop {
   sprite: Sprite;
   plane: (typeof PLANES)[number];
-  /** px/s, the plane's speed varied at random */
+  /** px/s, the plane's speed varied at random (before `size`) */
   speed: number;
   /** rad/s, positive clockwise */
   spin: number;
@@ -40,6 +40,8 @@ export class PooRain extends Container {
   private clip = new Graphics();
   /** the screen (`view`) the clip was drawn for */
   private clipped = { left: 0, top: 0, right: 0 };
+  /** every poo's size, and with it its speed, 1 = as in `PLANES` */
+  private size = 1;
 
   constructor() {
     super();
@@ -51,7 +53,6 @@ export class PooRain extends Container {
       for (let i = 0; i < plane.count; i++) {
         const sprite = new Sprite(tex(pooDef.animations.falling.frames[0]));
         sprite.anchor.set(pooDef.anchor.x, pooDef.anchor.y);
-        sprite.scale.set((pooDef.displayHeight / sprite.texture.height) * plane.scale);
         sprite.alpha = plane.alpha;
         // a random starting angle and spin, kept for good: the poo turns the same way at the same rate
         // through every fall
@@ -62,6 +63,22 @@ export class PooRain extends Container {
         this.respawn(drop, Math.random() * WORLD.groundY);
       }
     }
+    this.resize(1);
+  }
+
+  /**
+   * Every poo `size` times as big as in `PLANES` (and as fast, so they look the same, only closer). Changing it scatters
+   * them afresh over the screen above the ground (`view`), which may have changed shape too.
+   */
+  setSize(size: number) {
+    if (size === this.size) return;
+    this.resize(size);
+    for (const drop of this.drops) this.respawn(drop, view.top + Math.random() * (WORLD.groundY - view.top));
+  }
+
+  private resize(size: number) {
+    this.size = size;
+    for (const { sprite, plane } of this.drops) sprite.scale.set((pooDef.displayHeight / sprite.texture.height) * plane.scale * size);
   }
 
   /** Back to falling, at height `y`, a random x and a slightly random speed (it keeps its spin). */
@@ -83,7 +100,7 @@ export class PooRain extends Container {
     const dt = Math.min(dtMs, MAX_DT_MS);
     for (const drop of this.drops) {
       const { sprite } = drop;
-      sprite.y += (drop.speed * dt) / 1000;
+      sprite.y += (drop.speed * this.size * dt) / 1000;
       sprite.rotation += (drop.spin * dt) / 1000;
       // fully sunk behind the ground line (its farthest corner from the anchor, whichever way it's
       // turned): start again just above the top, at a random delay so the planes don't fall in waves
@@ -91,7 +108,7 @@ export class PooRain extends Container {
         Math.max(sprite.anchor.x, 1 - sprite.anchor.x) * sprite.width,
         Math.max(sprite.anchor.y, 1 - sprite.anchor.y) * sprite.height,
       );
-      if (sprite.y - reach >= WORLD.groundY) this.respawn(drop, view.top - sprite.height - Math.random() * WORLD.groundY * 0.5);
+      if (sprite.y - reach >= WORLD.groundY) this.respawn(drop, view.top - sprite.height - Math.random() * WORLD.groundY * 0.5 * this.size);
     }
   }
 }

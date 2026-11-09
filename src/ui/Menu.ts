@@ -35,7 +35,7 @@ export class Menu extends Container {
   highlight = true;
   /** the items not highlighted in the title's colours instead of black */
   titleColours = false;
-  /** the items' size, 1 = full */
+  /** the items' size, 1 = full; their spacing and the birds beside them grow with it (set before `setItems`) */
   itemScale = 1;
 
   constructor(private glow = false) {
@@ -44,7 +44,6 @@ export class Menu extends Container {
       const bird = new CharacterSprite<keyof typeof birdDef.animations>(birdDef);
       bird.play('flap');
       bird.setFacing(facing);
-      bird.scale.set(0.6);
       this.cursors.push(bird);
     }
     this.addChild(this.list, ...this.cursors);
@@ -58,7 +57,7 @@ export class Menu extends Container {
       const label = t(item.label);
       const text = this.glow ? new GlowText(label, this.plainStyle) : new Text({ text: label, style: this.plainStyle });
       if (text instanceof Text) text.anchor.set(0.5);
-      text.position.set(x, top + i * 82);
+      text.position.set(x, top + i * 82 * this.itemScale);
       text.eventMode = 'static';
       text.cursor = 'pointer';
       text.on('pointerover', () => this.select(i));
@@ -71,7 +70,10 @@ export class Menu extends Container {
   /** Highlight item `i` (wrapping round); none for -1 (the level select's grid has the keys instead). */
   select(i: number) {
     this.selected = i === -1 ? -1 : (i + this.items.length) % this.items.length;
-    for (const c of this.cursors) c.visible = this.cursorsShown && this.selected !== -1;
+    for (const c of this.cursors) {
+      c.visible = this.cursorsShown && this.selected !== -1;
+      c.scale.set(0.6 * this.itemScale);
+    }
     this.list.children.forEach((c, j) => {
       const text = c as Text | GlowText;
       const on = this.highlight && j === this.selected;
@@ -115,9 +117,10 @@ export class Menu extends Container {
     this.t += dtMs;
     const item = this.list.children[this.selected] as Text | GlowText | undefined;
     if (!item) return;
-    const bob = Math.sin(this.t / 220) * 6;
-    const gap = 30 + item.width / 2;
-    this.cursors[0].position.set(item.x - gap - 30, item.y + bob);
-    this.cursors[1].position.set(item.x + gap + 30, item.y - bob);
+    const k = this.itemScale;
+    const bob = Math.sin(this.t / 220) * 6 * k;
+    const gap = 60 * k + item.width / 2;
+    this.cursors[0].position.set(item.x - gap, item.y + bob);
+    this.cursors[1].position.set(item.x + gap, item.y - bob);
   }
 }

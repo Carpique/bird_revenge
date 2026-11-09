@@ -4,7 +4,7 @@ import { config, WORLD } from '../config';
 import { Ground } from '../game/Ground';
 import type { Thumbnails } from '../level/thumbnails';
 import type { LevelDef } from '../level/types';
-import { fitWorld } from '../render/fitWorld';
+import { fitWorld, isPortrait, view } from '../render/fitWorld';
 import { bigTextStyle } from './fonts';
 import { GlowText } from './GlowText';
 import { i18n, t } from './i18n';
@@ -24,6 +24,16 @@ interface PageItem extends MenuItem {
  * menus' items, never highlighted, in the title's colours.
  */
 const INSTRUCTIONS_BACK = { x: WORLD.width / 2, y: 685, scale: 0.7 };
+
+/**
+ * The title screen on a screen held upright: as wide as the screen, the ground at `groundAt` of its height; the title
+ * (`titleY`) and the menu (`menuY`) that far down the sky (the screen's top to the ground), the title `titleScale` times
+ * as big (if it fits), the menu's items `menuScale`, the poo rain's `rainScale`. The level select, unchanged, in the
+ * middle of the sky.
+ */
+const PORTRAIT = { groundAt: 0.8, titleY: 0.3, menuY: 0.5, titleScale: 1.2, menuScale: 1.4, rainScale: 2 };
+/** where the main menu's first item is on a landscape screen (world px) */
+const MENU_TOP = 370;
 
 /**
  * The instructions page's start, ms one after another: "Watch" over the dimmed, frozen demonstration without its pose
@@ -72,6 +82,8 @@ export class SplashScreen extends Container {
   private watch: GlowText;
   /** ms into the instructions page's start (`WATCH`); null once the demonstration plays, or elsewhere */
   private watchMs: number | null = null;
+  /** laid out for a screen held upright (`PORTRAIT`) */
+  private portrait = false;
 
   /**
    * `levels`: the level select's list, asked for each time it opens; `overlay`: the canvas drawn over the game (the pose
@@ -116,11 +128,19 @@ export class SplashScreen extends Container {
 
     root.addChild(title, watch, this.menu, this.levelSelect);
     this.title = title;
+    this.place();
 
     window.addEventListener('keydown', (e) => this.onKey(e));
     app.ticker.add((ticker) => {
-      fitWorld(app, root);
+      const portrait = isPortrait(app.screen.width, app.screen.height);
+      fitWorld(app, root, portrait ? PORTRAIT.groundAt : undefined);
       if (!this.visible) return;
+      if (portrait !== this.portrait) {
+        this.portrait = portrait;
+        rain.setSize(portrait ? PORTRAIT.rainScale : 1);
+        this.showPage(this.page);
+      }
+      this.place();
       ground.fit();
       if (this.levelSelect.visible) this.levelSelect.update(ticker.deltaMS);
       else this.menu.animate(ticker.deltaMS);
@@ -140,10 +160,29 @@ export class SplashScreen extends Container {
     const relabel = () => {
       title.text = t('Bird Revenge');
       watch.text = t('Watch');
+      this.place();
       this.showPage(this.page);
     };
     i18n.onChange(relabel);
     relabel();
+  }
+
+  /** The title, the main menu and the level select where the screen's shape puts them (`PORTRAIT`); call after `fitWorld`. */
+  private place() {
+    const title = this.title;
+    if (!this.portrait) {
+      title.scale.set(1);
+      title.y = 170;
+      this.menu.y = this.levelSelect.y = 0;
+      return;
+    }
+    const sky = WORLD.groundY - view.top;
+    title.scale.set(1);
+    title.scale.set(Math.min(PORTRAIT.titleScale, (WORLD.width * 0.96) / title.width));
+    title.y = view.top + sky * PORTRAIT.titleY;
+    // the instructions' "Back" stays on the ground
+    this.menu.y = this.page === 'instructions' ? 0 : view.top + sky * PORTRAIT.menuY - MENU_TOP;
+    this.levelSelect.y = view.top + sky / 2 - WORLD.height / 2;
   }
 
   /** Open straight on the level select, with `current` selected (if it's in the list; otherwise as from "Start"). */
@@ -189,9 +228,10 @@ export class SplashScreen extends Container {
     // the instructions' one item: smaller, in the title's colours, never highlighted, without the flying birds
     this.menu.cursorsShown = this.menu.highlight = !instructions;
     this.menu.titleColours = instructions;
-    this.menu.itemScale = instructions ? INSTRUCTIONS_BACK.scale : 1;
+    this.menu.itemScale = instructions ? INSTRUCTIONS_BACK.scale : this.portrait ? PORTRAIT.menuScale : 1;
     if (instructions) this.menu.setItems(this.items, INSTRUCTIONS_BACK.y, 0, INSTRUCTIONS_BACK.x);
-    else this.menu.setItems(this.items, 370, Math.max(0, keep));
+    else this.menu.setItems(this.items, MENU_TOP, Math.max(0, keep));
+    this.place();
   }
 
   /**

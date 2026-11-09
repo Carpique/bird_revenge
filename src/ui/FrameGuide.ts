@@ -1,4 +1,4 @@
-import type { Container } from 'pixi.js';
+import { Rectangle, type Container } from 'pixi.js';
 import rough from 'roughjs';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { L, PART_NAMES, REQUIRED_PARTS, type PartName } from '../pose/landmarks';
@@ -6,6 +6,7 @@ import type { PoseFrame } from '../pose/types';
 import { worldFit } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
 import { WORLD } from '../config';
+import { audio } from '../audio/audio';
 import { BIG_FILL, BIG_OUTLINE, bigTextStyle, GLOW, INK, TEXT_FONT as FONT } from './fonts';
 import { GlowText } from './GlowText';
 import { t } from './i18n';
@@ -64,13 +65,16 @@ const PANEL = {
   demo: { height: 0.85 },
 };
 
-/** Calibration dialog height, title included, as a fraction of the screen's height... */
-const DIALOG_HEIGHT = 0.88;
+/** Calibration dialog height, title and "Back" included, as a fraction of the screen's height... */
+const DIALOG_HEIGHT = 0.94;
 /** ...and its width / height: portrait, like the pose it shows. */
 const DIALOG_ASPECT = 0.75;
 /** world px: the title's size (the level select's) and the space under it */
 const DIALOG_TITLE = 110;
 const TITLE_GAP = 24;
+/** world px: the dialog's "Back" under the panel (like the instructions page's), and the space above it */
+const DIALOG_BACK = 38;
+const BACK_GAP = 14;
 /** world px: the countdown's digits, as big as the game's big signs ("Game Over") */
 const COUNTDOWN_SIZE = 180;
 
@@ -131,6 +135,9 @@ function posedFigure(f: PoseFrame, cam: Rect): Figure {
 export class FrameGuide {
   private ctx: CanvasRenderingContext2D;
   private rc: ReturnType<typeof rough.canvas>;
+  /** the canvas's size, in CSS px */
+  private W = 1;
+  private H = 1;
   /** offscreen, the player's figure drawn opaque, then laid over the panel see-through (rough.js's strokes overlap) */
   private layer = document.createElement('canvas');
   private layerRc = rough.canvas(this.layer);
@@ -138,6 +145,10 @@ export class FrameGuide {
   private title = new GlowText('', bigTextStyle(DIALOG_TITLE));
   /** the countdown's digit, styled like the titles */
   private countdown = new GlowText('', bigTextStyle(COUNTDOWN_SIZE));
+  /** the dialog's "Back", under the panel: tapped, `onBack` */
+  private back = new GlowText('', bigTextStyle(DIALOG_BACK, FONT));
+  /** the calibration dialog's "Back" was chosen */
+  onBack: () => void = () => {};
 
   /** `stage`: the game's (unscaled), for the dialog's title, on top of everything else there */
   constructor(
@@ -149,11 +160,27 @@ export class FrameGuide {
     this.rc = rough.canvas(canvas);
     this.title.visible = false;
     this.countdown.visible = false;
+    this.back.visible = false;
+    this.back.eventMode = 'static';
+    this.back.cursor = 'pointer';
+    this.back.on('pointertap', () => {
+      audio.play('button');
+      this.onBack();
+    });
+  }
+
+  /** `item` on top of the game's stage */
+  private onTop(item: Container) {
+    if (this.stage.children.at(-1) !== item) this.stage.addChild(item);
+    item.visible = true;
   }
 
   draw(s: GuideState, now: number) {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const W = window.innerWidth, H = window.innerHeight;
+    // as big as the game's canvas, which may not fill the window (a phone held upright)
+    const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
+    this.W = W;
+    this.H = H;
     if (this.canvas.width !== Math.round(W * dpr) || this.canvas.height !== Math.round(H * dpr)) {
       this.canvas.width = Math.round(W * dpr);
       this.canvas.height = Math.round(H * dpr);
@@ -165,6 +192,7 @@ export class FrameGuide {
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.title.visible = false;
     this.countdown.visible = false;
+    this.back.visible = false;
     if (s.mode === 'hidden') return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -216,12 +244,19 @@ export class FrameGuide {
     title.scale.set(k * Math.min(1, (W * 0.95) / (k * title.width)));
     const titleH = title.textHeight * title.scale.y;
     const gap = TITLE_GAP * k;
-    const total = Math.max(360 + titleH + gap, H * DIALOG_HEIGHT);
-    const h = total - titleH - gap, w = Math.min(W * 0.9, h * DIALOG_ASPECT);
+    const back = this.back;
+    back.text = t('Back');
+    back.scale.set(k);
+    const backH = back.textHeight * k, backGap = BACK_GAP * k;
+    const total = H * DIALOG_HEIGHT;
+    const h = total - titleH - gap - backGap - backH, w = Math.min(W * 0.9, h * DIALOG_ASPECT);
     const top = (H - total) / 2;
     title.position.set(W / 2, top + titleH / 2);
-    if (this.stage.children.at(-1) !== title) this.stage.addChild(title); // on top
-    title.visible = true;
+    this.onTop(title);
+    back.position.set(W / 2, top + total - backH / 2);
+    // easy to tap: the whole width of the panel, from the panel's edge to the screen's bottom (in its own scale)
+    back.hitArea = new Rectangle(-w / 2 / k, -(backGap + backH / 2) / k, w / k, (backGap + backH / 2 + (H - top - total) + backH / 2) / k);
+    this.onTop(back);
 
     const box: Rect = { x: (W - w) / 2, y: top + titleH + gap, w, h };
     this.drawPanel(box, 1, s, now, { message: s.message ?? '', hint: s.hint, error: s.error, progress: s.progress ?? 0 });
@@ -234,8 +269,7 @@ export class FrameGuide {
     if (digit.text !== text) digit.text = text;
     digit.scale.set(worldFit(W, H).scale);
     digit.position.set(W / 2, H / 2);
-    if (this.stage.children.at(-1) !== digit) this.stage.addChild(digit); // on top
-    digit.visible = true;
+    this.onTop(digit);
   }
 
   /** The small "get back in frame" box in the lower right corner during the game: the dialog's panel, smaller. */
@@ -280,7 +314,7 @@ export class FrameGuide {
     const ctx = this.ctx;
     const { border, text, bar } = PANEL;
     // world px -> screen px
-    const k = worldFit(window.innerWidth, window.innerHeight).scale * scale;
+    const k = worldFit(this.W, this.H).scale * scale;
     ctx.beginPath();
     ctx.roundRect(box.x, box.y, box.w, box.h, border.radius * k);
     ctx.fillStyle = PANEL.background;

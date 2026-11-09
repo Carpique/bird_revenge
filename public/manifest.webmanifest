@@ -1,0 +1,10 @@
+{
+  "name": "Bird Revenge",
+  "short_name": "Bird Revenge",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#eaf3f6",
+  "theme_color": "#eaf3f6"
+}

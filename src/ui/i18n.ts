@@ -56,6 +56,11 @@ const PL = {
   'Face the camera': 'Stań przodem do kamery',
   'Come a bit closer': 'Podejdź trochę bliżej',
 
+  // a phone held upright, and full screen on an iPhone
+  'Turn your phone sideways': 'Obróć telefon poziomo',
+  'To play full screen, tap Share, then “Add to Home Screen”.':
+    'Aby grać na pełnym ekranie, stuknij „Udostępnij”, a potem „Do ekranu początkowego”.',
+
   // corner buttons (screen-reader labels)
   'Full screen': 'Pełny ekran',
   'Exit full screen': 'Zamknij pełny ekran',
