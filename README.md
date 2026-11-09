@@ -83,4 +83,8 @@ skips the start screen and plays only that level, again each time it's completed
 npm test
 ```
 
-Gesture detectors are tested on synthetic poses (`tests/synthetic.ts`), no camera needed.
+Gesture detectors are tested on synthetic poses (`tests/synthetic.ts`), no camera needed. `tests/replay/` replays recorded pose
+sessions (the tutorial's, and any put in `tests/replay/recordings/`) through the real tracking pipeline and the game's rules on the
+pose stream (`src/input/poseSession.ts`), with perturbations (lost frames, hitches, low visibility, jitter, ...), and pins what the
+game does: `npx vitest run tests/replay/metrics.test.ts` prints the numbers for comparing before / after a change in tracking.
+Deploys run the tests and the type check first (`.github/workflows/deploy.yml`).

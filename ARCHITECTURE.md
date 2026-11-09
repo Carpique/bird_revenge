@@ -224,10 +224,12 @@ src/characters/, src/scenery/   art definition files (§6)
 src/render/                 assets.ts (loads everything named in the definitions), CharacterSprite.ts, fitWorld.ts (scales the 1280x720 world onto the screen, standing on its bottom: a taller screen shows more sky; a phone held upright shows the game in a 16:9 box as wide as the screen, `body.boxed`, while the title screen fills it with its own layout)
 src/input/                  controls.ts (Controls interface), keyboard.ts
 src/input/poseControls.ts   the gesture detectors fed one pose frame at a time, and the controls they give (live game and tutorial replay)
+src/input/poseSession.ts    the game's rules on the pose stream (calibrating / countdown / playing / outOfFrame changes, recalibration, controls and their staleness, redetect), pure, used by main.ts and the replay tests
 src/tutorial/               recording.ts (recorded pose stream format), PoseReplay.ts (plays one in a Game, deterministic loops), index.ts (loads the saved recordings, *.json)
 src/dev/                    dev-only pages, not in the build: tutorial-recorder.html (+ tutorialRecorder.ts, ClipTimeline.ts, debugTrace.ts)
 src/ui/                     SplashScreen.ts (title + menu), Passersby.ts (characters crossing the title screen), LevelSelect.ts, i18n.ts (English → Polish texts), LanguageButton.ts (flag), FrameGuide.ts (calibration dialog, out-of-frame corner box, countdown overlay), fonts.ts, DebugPanel.ts (D), Tuning.ts (G), Recorder.ts (R)
 tests/                      synthetic.ts (synthetic pose generator), gestures.test.ts
+tests/replay/               replay harness (harness.ts, scenarios.ts; recordings/ for more recordings): recorded pose sessions through the real filters, detectors and PoseSession, with perturbations; behaviour.test.ts pins current behaviour, metrics.test.ts prints the metrics table
 tools/generate-placeholder-art.mjs, tools/tutorial-recordings.ts (dev server: saves the recorder's recordings and debug traces), scripts/copy-mediapipe-wasm.mjs
 ```
 - The game knows nothing about poses: it reads a `Controls` object (`lift`, `tilt`, `hover`, `wingPhase`, `flapping`, `pointing`) and `requestPoo()`. Pose and keyboard both produce `Controls`.
