@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { config } from '../../src/config';
 import { PoseDetectors } from '../../src/input/poseControls';
 import { PoseSession } from '../../src/input/poseSession';
+import type { PoseFrame } from '../../src/pose/types';
 import { synthPose } from '../synthetic';
 import { allRecordings, cleanRun, sameControl, shift, simulate, tutorialRecording } from './harness';
 import { hitchScenario, nullGapScenario, runScenario, SCENARIOS, type Scenario } from './scenarios';
@@ -181,6 +182,15 @@ describe('visibility and landmark noise', () => {
     }
   });
 
+  it('off-centre by 0.35 for 4 s (longer than personGoneAfterMs): still only a soft pause, the person never left', () => {
+    for (const m of run(scenario('off-centre 0.35 for 4000 ms')).runs) {
+      expect(m.recalibrations).toBe(0);
+      expect(m.calibratingMs).toBe(0);
+      expect(m.outOfFrameMs).toBeGreaterThan(3000);
+      expect(m.recoveryMs!).toBeLessThan(1000);
+    }
+  });
+
   it('off-centre for good (0.35): the game never starts, the tracker is told to look again', () => {
     const far = runScenario(rec, { name: 'far', ms: 0, build: (f) => shift(f, 0.35) }, clean).mean;
     expect(far.calibratingMs!).toBeGreaterThan(60000);
@@ -246,6 +256,71 @@ describe('PoseSession', () => {
     // not while the camera is off (or before any frame)
     session.clear();
     expect(session.tick('playing', last + 60000).state).toBe('playing');
+  });
+
+  /** the standing person moved sideways by `dx` (off centre) */
+  const moved = (t: number, dx: number): PoseFrame => {
+    const f = synthPose({ t });
+    for (const p of f.lm) p.x += dx;
+    return f;
+  };
+
+  it('a stall longer than personGoneAfterMs recalibrates whichever comes first: the first frame or the ticker', () => {
+    const gone = config.visibility.personGoneAfterMs + 500;
+    // the frame first: it ends the gap, but the gap is judged before it renews anything
+    {
+      const { detectors, session, last } = playing();
+      const t = last + gone;
+      const step = session.update('playing', detectors.update(synthPose({ t }), t), t);
+      expect(step.recalibrate).toBe(true);
+      expect(step.state).toBe('calibrating');
+    }
+    // the ticker first
+    {
+      const { session, last } = playing();
+      const step = session.tick('playing', last + gone);
+      expect(step.recalibrate).toBe(true);
+      expect(step.state).toBe('calibrating');
+    }
+  });
+
+  it('off centre longer than personGoneAfterMs: a soft pause, not the calibration dialog; centred again: playing', () => {
+    const { detectors, session, last } = playing();
+    let state: string = 'playing';
+    let t = last + 33;
+    const seen = new Set<string>();
+    for (; t < last + config.visibility.personGoneAfterMs + 2000; t += 33) {
+      const step = session.update(state, detectors.update(moved(t, 0.35), t), t);
+      expect(step.recalibrate).toBe(false);
+      state = step.state;
+      seen.add(state);
+      // the ticker between frames agrees
+      const tick = session.tick(state, t + 16);
+      expect(tick.recalibrate).toBe(false);
+    }
+    expect([...seen]).toEqual(expect.arrayContaining(['outOfFrame']));
+    expect(seen.has('calibrating')).toBe(false);
+    let back = -1;
+    for (const t0 = t; t < t0 + 3000 && back < 0; t += 33) {
+      state = session.update(state, detectors.update(synthPose({ t }), t), t).state;
+      if (state === 'playing') back = t - t0;
+    }
+    expect(back).toBeGreaterThanOrEqual(0);
+  });
+
+  it('the detectors start afresh when the player is back after a spell off centre (the shoot calibration stays)', () => {
+    const detectors = warm();
+    const baseline = { left: 3, right: 4 };
+    detectors.shoot.calibrate(baseline);
+    const reset = vi.spyOn(detectors.pointing, 'reset');
+    let t = 2000;
+    for (; t < 3000; t += 33) detectors.update(synthPose({ t }), t);
+    expect(reset).not.toHaveBeenCalled();
+    for (; t < 5000; t += 33) detectors.update(moved(t, 0.35), t);
+    expect(reset).not.toHaveBeenCalled(); // nothing while away: the reset comes with the player
+    for (const t0 = t; t < t0 + 3000; t += 33) detectors.update(synthPose({ t }), t);
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(detectors.shoot.baseline).not.toBeNull(); // kept (it re-learns slowly while standing, so not equal)
   });
 
   it('a soft pause ends with the first good frame back, and the bird flies on that frame', () => {

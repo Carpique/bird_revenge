@@ -22,7 +22,8 @@ export interface PoseStep<S extends string> {
  *
  * Pose freshness is one thing here: the age of the latest good pose (a frame with the player in it, `lastGoodT`),
  * read through `poseGap`. Fresh (a short gap): the last controls keep applying. Lost: the game pauses softly
- * (outOfFrame, no penalty, calibration kept) and resumes once the player is back. Gone: the calibration dialog.
+ * (outOfFrame, no penalty, calibration kept) and resumes once the player is back. Gone (nobody in view at all, not
+ * just the player off centre): the calibration dialog.
  * The gap counts frames that came without the player and frames that did not come at all, so `tick` (between
  * frames, on the render ticker) is as much part of it as `update`.
  *
@@ -48,9 +49,17 @@ export class PoseSession {
     }
     const frame = !!reading.flap;
     const good = frame && vis.playerPresent;
+    // the gap that this frame ends is judged first: a frame arriving before the ticker after a long stall must
+    // not hide it (the outcome would depend on which callback the browser runs first)
+    const wasGone = this.lastGoodT !== null && this.isGone(now);
     if (frame) this.lastFrameT = now;
     // the first frame after a restart starts the count, a good one renews it
     if (good || this.lastGoodT === null) this.lastGoodT = now;
+    if (wasGone && this.active(state)) {
+      step.recalibrate = true;
+      step.state = 'calibrating';
+      return this.dropControls(step);
+    }
     if (this.byGap(step, now)) return this.dropControls(step);
     const s: string = state;
     switch (s) {
@@ -104,18 +113,32 @@ export class PoseSession {
     this.poseControls = noControls();
   }
 
-  /** What the gap does to the game: soft pause, or the calibration dialog. True when it decided (`step.state` set). */
+  /**
+   * What the gap does to the game: soft pause, or the calibration dialog. True when it decided (`step.state` set).
+   * The player not in the good place (off centre) but a person still in view only soft-pauses, however long; the
+   * calibration dialog needs nobody in view for `visibility.personGoneAfterMs`.
+   */
   private byGap<S extends string>(step: PoseStep<S>, now: number): boolean {
     const s: string = step.state;
-    if (s !== 'countdown' && s !== 'playing' && s !== 'outOfFrame') return false;
-    const gap = poseGap(now - this.lastGoodT!);
-    if (gap === 'gone') {
+    if (!this.active(s)) return false;
+    if (this.isGone(now)) {
       step.recalibrate = true;
       step.state = 'calibrating';
       return true;
     }
-    if (gap === 'lost' && s !== 'outOfFrame') step.state = 'outOfFrame';
-    return gap === 'lost';
+    if (poseGap(now - this.lastGoodT!) === 'fresh') return false;
+    if (s !== 'outOfFrame') step.state = 'outOfFrame';
+    return true;
+  }
+
+  /** Nobody in view (no frame with a person, the player or not) for `visibility.personGoneAfterMs`. */
+  private isGone(now: number): boolean {
+    const personT = Math.max(this.lastGoodT!, this.lastFrameT ?? -Infinity);
+    return poseGap(now - personT) === 'gone';
+  }
+
+  private active(s: string) {
+    return s === 'countdown' || s === 'playing' || s === 'outOfFrame';
   }
 
   private take<S extends string>(reading: PoseReading, step: PoseStep<S>) {

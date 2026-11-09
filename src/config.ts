@@ -95,9 +95,9 @@ export const config = {
     recoverAfterMs: 150,
     noPersonAfterMs: 500,
     /**
-     * no good pose (nobody found, the frames missing, or someone off centre) for this long (ms): nobody counts as in
-     * front of the camera and the calibration dialog comes up. Shorter gaps only pause the game softly ("Tracking
-     * lost", or the out-of-frame box), with the calibration kept.
+     * nobody in view (nobody found, or the frames missing) for this long (ms): nobody counts as in front of the
+     * camera and the calibration dialog comes up. Shorter gaps only pause the game softly ("Tracking lost", or the
+     * out-of-frame box), with the calibration kept. Someone in view but off centre only pauses softly, however long.
      */
     personGoneAfterMs: 3000,
     /**
@@ -107,7 +107,7 @@ export const config = {
      * as off centre too often, and it only pauses the game softly now.
      */
     maxOffCentre: 0.3,
-    /** off centre this long: the game pauses softly (the "move to the middle" hint); after `personGoneAfterMs` it recalibrates */
+    /** off centre this long: the game pauses softly (the "move to the middle" hint), for as long as it lasts */
     offCentreAfterMs: 600,
     /** while off centre, the pose tracker forgets who it follows and looks again, at most this often */
     redetectEveryMs: 1500,

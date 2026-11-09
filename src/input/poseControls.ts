@@ -27,24 +27,27 @@ export class PoseDetectors {
   readonly shoot = new ShootDetector();
   readonly tilt = new TiltDetector();
   readonly pointing = new PointingDetector();
-  /** when the detectors last saw a person; null: not since the start */
-  private lastFrameT: number | null = null;
+  /** when the detectors last saw the player (a person, centred: `playerPresent`); null: not since the start */
+  private lastPresentT: number | null = null;
 
   /**
    * `now`: ms, in the frames' time. Run on every frame, so the detectors' state stays continuous. After a gap
-   * without a person (`poseGap` not fresh: null frames, or none at all) their transient state is dropped, so it
-   * can't turn into a burst of wrong controls on the first frame back; the shoot calibration stays.
+   * without the player (`poseGap` not fresh: null frames, none at all, or only frames off centre, which soft-pause
+   * the game as well) their transient state is dropped when the player is back, so it can't turn into a burst of
+   * wrong controls on the first frame of play; the shoot calibration stays.
    */
   update(f: PoseFrame | null, now: number): PoseReading {
     const vis = this.visibility.update(f, now);
     if (!f) return { vis, flap: null, shoot: null, tilt: null, pointing: null };
-    if (this.lastFrameT !== null && poseGap(now - this.lastFrameT) !== 'fresh') {
-      this.flap.reset();
-      this.shoot.reset();
-      this.tilt.reset();
-      this.pointing.reset();
+    if (vis.playerPresent) {
+      if (this.lastPresentT !== null && poseGap(now - this.lastPresentT) !== 'fresh') {
+        this.flap.reset();
+        this.shoot.reset();
+        this.tilt.reset();
+        this.pointing.reset();
+      }
+      this.lastPresentT = now;
     }
-    this.lastFrameT = now;
     const left = vis.parts.leftArm.visible, right = vis.parts.rightArm.visible;
     const flap = this.flap.update(f, left, right);
     const shoot = this.shoot.update(f, vis.parts.torso.visible);

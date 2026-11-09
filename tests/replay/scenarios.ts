@@ -47,6 +47,7 @@ export const SCENARIOS: Scenario[] = [
   { name: 'off-centre 0.15', ms: 0, build: (f) => shift(f, 0.15) },
   { name: 'off-centre 0.3', ms: 0, build: (f) => shift(f, 0.3) },
   { name: 'off-centre 0.35 for 2000 ms', ms: 2000, build: (f, t0) => shift(f, 0.35, 0, t0, 2000) },
+  { name: 'off-centre 0.35 for 4000 ms', ms: 4000, build: (f, t0) => shift(f, 0.35, 0, t0, 4000) },
 ];
 
 /** where in the clip the perturbations are inserted (ms): spread over it, from the warm-up to a few seconds before its end */
