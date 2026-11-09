@@ -19,7 +19,9 @@ const POO_HEIGHT = 0.15;
 const POO_FROM = { x: 0.2, y: 0.72 };
 const POO_DROP = 6;
 /** then moved this share of the way towards the icon's lower left corner */
-const POO_SHIFT = 0.3;
+const POO_SHIFT = 0.12;
+/** and raised, as a share of the icon's height (clear of iOS's rounded corner) */
+const POO_RAISE = 0.06;
 /** and tilted clockwise, in degrees */
 const POO_TILT = 30;
 /** the bird's width as a share of the icon's (1: edge to edge) */
@@ -100,7 +102,7 @@ try {
         const ph = bh * o.pooHeight * scale, pw = (p.naturalWidth * ph) / p.naturalHeight;
         let pcx = ox + (fx * cos - fy * sin) * scale, pcy = oy + (fx * sin + fy * cos + o.pooDrop) * scale + ph / 2;
         pcx += (0 - pcx) * o.pooShift;
-        pcy += (size - pcy) * o.pooShift;
+        pcy += (size - pcy) * o.pooShift - size * o.pooRaise;
         g.save();
         g.translate(pcx, pcy);
         g.rotate((o.pooTilt * Math.PI) / 180);
@@ -117,6 +119,7 @@ try {
       size,
       { ...SKY, tilt: TILT, pooHeight: POO_HEIGHT, pooFrom: POO_FROM, pooDrop: POO_DROP,
         pooShift: POO_SHIFT,
+        pooRaise: POO_RAISE,
         pooTilt: POO_TILT,
         width: WIDTH, margin: MARGIN },
     );
