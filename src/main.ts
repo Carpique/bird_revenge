@@ -511,6 +511,7 @@ async function main() {
       calibStatus = calibration.update(f, vis);
       if (calibStatus.done) {
         detectors.shoot.calibrate(calibStatus.done);
+        blackBox.calibrated(now, calibStatus.done);
         startCountdown();
       }
     }

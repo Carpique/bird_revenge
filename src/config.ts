@@ -42,7 +42,7 @@ export const config = {
   telemetry: {
     /** two pose frames with a person in both, further apart than this (ms), count as a hitch of the camera or the model */
     hitchMs: 100,
-    /** the black box keeps this many seconds of the raw pose stream, to save with B (about 25 KB of memory per second). Change requires reload. */
+    /** the black box keeps this many seconds of the raw pose stream, to save with B (about 34 KB of memory per second). Change requires reload. */
     blackBoxSeconds: 60,
   },
 

@@ -44,7 +44,7 @@ export interface Recording {
 export function toRecording(name: string, rec: PoseRecording): Recording {
   const frames: TF[] = rec.frames.map((fr): TF => ({
     t: fr.t,
-    f: fr.lm && { t: fr.t, aspect: rec.aspect, lm: fr.lm.map(([x, y, v]) => ({ x, y, v })) },
+    f: fr.lm && { t: fr.t, aspect: rec.aspect, lm: fr.lm.map(([x, y, v, z]) => (z === undefined ? { x, y, v } : { x, y, v, z })) },
   }));
   return { name, rec, frames, startMs: rec.startMs, endMs: rec.endMs };
 }
@@ -179,7 +179,7 @@ export class SimTracker {
 
   process(f: PoseFrame | null): PoseFrame | null {
     if (!f) return null;
-    const raw = f.lm.map((p) => ({ x: p.x, y: p.y, z: 0, visibility: p.v }));
+    const raw = f.lm.map((p) => ({ x: p.x, y: p.y, z: p.z ?? 0, visibility: p.v }));
     return { ...f, lm: this.smoother.process(raw, f.aspect, f.t)! };
   }
 
@@ -223,6 +223,9 @@ export function simulate(rec: Recording, frames: TF[], opts: SimOptions = {}): S
   const tickMs = opts.tickMs ?? TICK_MS;
   const detectors = new PoseDetectors();
   if (rec.rec.baseline) detectors.shoot.calibrate({ ...rec.rec.baseline });
+  // later calibrations in the recording (a black-box dump): the shoot detector takes each baseline from its time on
+  const calibrations = [...(rec.rec.calibrations ?? [])].sort((a, b) => a.t - b.t);
+  let ci = 0;
   const session = new PoseSession();
   const tracker = new SimTracker();
   const out: SimResult = { ticks: [], events: [], triggers: [] };
@@ -237,6 +240,7 @@ export function simulate(rec: Recording, frames: TF[], opts: SimOptions = {}): S
     // the frames that arrived by now
     while (fi < frames.length && frames[fi].t <= tick) {
       const { t } = frames[fi];
+      while (ci < calibrations.length && calibrations[ci].t <= t) detectors.shoot.calibrate({ ...calibrations[ci++].baseline });
       const f = tracker.process(frames[fi++].f);
       const reading: PoseReading = detectors.update(f, t);
       const step = session.update(state, reading, t);

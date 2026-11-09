@@ -1,9 +1,10 @@
 import { config } from '../config';
+import type { ShootBaseline } from '../gestures/ShootDetector';
 import type { PoseRecording, RecordedFrame } from '../tutorial/recording';
 
 const N = 33;
-/** floats per frame: x, y, visibility per landmark */
-const STRIDE = N * 3;
+/** floats per frame: x, y, z, visibility per landmark (z: the arm stand-in compares the wrists' depths) */
+const STRIDE = N * 4;
 /** the most frames per second the buffer is sized for (a 60 Hz camera) */
 const MAX_FPS = 60;
 /** a longer gap between two frames is a pause (the camera was off), not part of one stream: what came before is dropped */
@@ -61,15 +62,20 @@ export interface BlackBoxDump extends PoseRecording {
 }
 
 /**
- * Ring buffer of the last `config.telemetry.blackBoxSeconds` of the raw pose stream, with the game state per frame,
- * so that after a failure in play (press B) the stream can be saved and replayed in the tests.
+ * Ring buffer of the last `config.telemetry.blackBoxSeconds` of the raw pose stream, with the game state per frame
+ * and the calibrations (the shoot detector's baseline), so that after a failure in play (press B) the stream can be
+ * saved and replayed in the tests. Frames older than the window are dropped by time, whatever the frame rate.
  *
- * Memory is bounded and allocated once: capacity = seconds * 60 fps frames, each 33 landmarks * 3 floats * 4 bytes
- * = 396 B of landmarks plus ~40 B of the rest. For 60 s that is 3600 frames, about 1.5 MB (a 30 fps camera fills
+ * Memory is bounded and allocated once: capacity = seconds * 60 fps frames, each 33 landmarks * 4 floats * 4 bytes
+ * = 528 B of landmarks plus ~40 B of the rest. For 60 s that is 3600 frames, about 2 MB (a 30 fps camera fills
  * half of it). `add` allocates nothing.
  */
 export class BlackBox {
   private readonly cap: number;
+  /** the window, ms: older frames are dropped */
+  private readonly windowMs: number;
+  /** calibrations (ms, frames' time): the one in force at the oldest frame, and those after it */
+  private calibrations: { t: number; baseline: ShootBaseline }[] = [];
   private readonly lm: Float32Array;
   private readonly t: Float64Array;
   private readonly ms: Float32Array;
@@ -84,6 +90,7 @@ export class BlackBox {
 
   constructor(seconds: number = config.telemetry.blackBoxSeconds) {
     this.cap = Math.max(2, Math.ceil(seconds * MAX_FPS));
+    this.windowMs = seconds * 1000;
     this.lm = new Float32Array(this.cap * STRIDE);
     this.t = new Float64Array(this.cap);
     this.ms = new Float32Array(this.cap);
@@ -102,7 +109,7 @@ export class BlackBox {
   }
 
   /** `raw`: MediaPipe's 33 landmarks for the frame, null: nobody. `t`: ms, the frame's time (increasing). */
-  add(t: number, raw: ArrayLike<{ x: number; y: number; visibility?: number }> | null, ctx: BlackBoxContext) {
+  add(t: number, raw: ArrayLike<{ x: number; y: number; z?: number; visibility?: number }> | null, ctx: BlackBoxContext) {
     if (this.n > 0 && t - this.t[this.at(this.n - 1)] > BLACK_BOX_GAP_MS) this.clear();
     const i = (this.head + this.n) % this.cap;
     if (this.n < this.cap) this.n++;
@@ -118,35 +125,52 @@ export class BlackBox {
       const o = i * STRIDE;
       for (let k = 0; k < N; k++) {
         const p = raw[k];
-        this.lm[o + k * 3] = p.x;
-        this.lm[o + k * 3 + 1] = p.y;
-        this.lm[o + k * 3 + 2] = p.visibility ?? 0;
+        this.lm[o + k * 4] = p.x;
+        this.lm[o + k * 4 + 1] = p.y;
+        this.lm[o + k * 4 + 2] = p.z ?? 0;
+        this.lm[o + k * 4 + 3] = p.visibility ?? 0;
       }
     }
     this.flags[i] = f;
     this.state[i] = this.stateIndex(ctx.state);
+    // the window is time, not frames: at 30 fps the ring would otherwise hold twice the seconds
+    while (this.n > 1 && this.t[this.head] < t - this.windowMs) {
+      this.head = (this.head + 1) % this.cap;
+      this.n--;
+    }
+  }
+
+  /** A calibration finished at `t` (ms, frames' time): the shoot detector's baseline from then on. */
+  calibrated(t: number, baseline: ShootBaseline) {
+    this.calibrations.push({ t, baseline: { ...baseline } });
+    this.pruneCalibrations();
   }
 
   clear() {
     this.head = 0;
     this.n = 0;
+    // the calibration still holds for the frames to come
+    this.calibrations = this.calibrations.slice(-1);
   }
 
   /** The buffer as a replayable dump (allocates: call on the hotkey, not per frame). Null when it is empty. */
   dump(info: { model: string; delegate: string; config: Record<string, unknown>; flapping: boolean }, now = new Date()): BlackBoxDump | null {
     if (this.n === 0) return null;
     const t0 = this.t[this.at(0)];
+    this.pruneCalibrations();
+    const before = this.calibrations.filter((c) => c.t <= t0);
+    const during = this.calibrations.filter((c) => c.t > t0);
     const frames: BlackBoxFrame[] = [];
     let last = -Infinity;
     for (let k = 0; k < this.n; k++) {
       const i = this.at(k);
       const f = this.flags[i];
-      let lm: [number, number, number][] | null = null;
+      let lm: [number, number, number, number][] | null = null;
       if (f & 1) {
         lm = [];
         for (let p = 0; p < N; p++) {
-          const o = i * STRIDE + p * 3;
-          lm.push([round(this.lm[o], 4), round(this.lm[o + 1], 4), round(this.lm[o + 2], 2)]);
+          const o = i * STRIDE + p * 4;
+          lm.push([round(this.lm[o], 4), round(this.lm[o + 1], 4), round(this.lm[o + 3], 2), round(this.lm[o + 2], 4)]);
         }
       }
       // times as whole ms from the first frame, kept increasing for the replay
@@ -169,7 +193,9 @@ export class BlackBox {
       level: 'black-box',
       aspect: this.aspect,
       flapping: info.flapping,
-      baseline: null,
+      // the baseline in force at the first frame, and the calibrations after it, so the replay shoots as the game did
+      baseline: before.length ? { ...before[before.length - 1].baseline } : null,
+      ...(during.length ? { calibrations: during.map((c) => ({ t: Math.round(c.t - t0), baseline: { ...c.baseline } })) } : {}),
       startMs: 0,
       endMs: last,
       frames,
@@ -181,6 +207,15 @@ export class BlackBox {
         config: info.config,
       },
     };
+  }
+
+  /** Keeps the calibration in force at the oldest frame and the later ones (a handful at most). */
+  private pruneCalibrations() {
+    if (this.n === 0) return;
+    const t0 = this.t[this.head];
+    let k = 0;
+    while (k + 1 < this.calibrations.length && this.calibrations[k + 1].t <= t0) k++;
+    if (k > 0) this.calibrations = this.calibrations.slice(k);
   }
 
   private at(k: number) {
@@ -214,6 +249,7 @@ export function parseBlackBox(json: unknown): PoseRecording {
     aspect: d.aspect,
     flapping: d.flapping ?? config.pointing.flapping,
     baseline: d.baseline ?? null,
+    ...(Array.isArray(d.calibrations) ? { calibrations: d.calibrations } : {}),
     startMs: d.startMs ?? 0,
     endMs: d.endMs ?? end,
     frames: d.frames.map((f) => ({ t: f.t, lm: f.lm })),
