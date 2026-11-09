@@ -38,10 +38,13 @@ export class PointingDetector {
   private pending: PointingMode | null = null;
   private pendingSince = 0;
   private ambiguousSince: number | null = null;
+  /** time of the last frame (ms), for the smoothing's time step */
+  private lastT: number | null = null;
 
   /** Back to resting with nothing pending (after a gap in the pose). */
   reset() {
     this.left = this.right = null;
+    this.lastT = null;
     this.intent = { mode: 'rest', dx: 0, dy: 0 };
     this.pending = null;
     this.pendingSince = 0;
@@ -49,7 +52,11 @@ export class PointingDetector {
   }
 
   update(f: PoseFrame, leftVisible: boolean, rightVisible: boolean): PointingOutput {
-    const a = config.pointing.smoothing;
+    // an EMA over time, not frames: the factor for this frame's time step (a slower camera: bigger steps)
+    const dt = this.lastT === null ? Infinity : Math.max(0, f.t - this.lastT);
+    this.lastT = f.t;
+    const tau = config.pointing.smoothingMs;
+    const a = tau <= 0 ? 1 : 1 - Math.exp(-dt / tau);
     const ema = (prev: Vec | null, v: Vec): Vec => {
       if (!prev) return v;
       const x = prev.x + a * (v.x - prev.x), y = prev.y + a * (v.y - prev.y);

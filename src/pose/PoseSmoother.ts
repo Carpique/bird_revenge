@@ -7,6 +7,9 @@ import { WristGate } from './WristGate';
 import type { Landmark } from './types';
 
 const N = 33;
+/** the elbows, wrists and hands (MediaPipe's 13..22): they steer the bird, so they get `smoothing.armBeta` */
+const FIRST_ARM = 13;
+const LAST_ARM = 22;
 
 /**
  * The tracker's landmark pipeline: the arm stand-in (`ArmOcclusion`), the wrist gate (`WristGate`), then one One-Euro filter per coordinate.
@@ -43,7 +46,7 @@ export class PoseSmoother {
       const fx = this.filters[i * 2];
       const fy = this.filters[i * 2 + 1];
       fx.minCutoff = fy.minCutoff = s.minCutoff;
-      fx.beta = fy.beta = s.beta;
+      fx.beta = fy.beta = i >= FIRST_ARM && i <= LAST_ARM ? s.armBeta : s.beta;
       fx.dCutoff = fy.dCutoff = s.dCutoff;
       lm[i] = { x: fx.filter(pts[i].x, tSec), y: fy.filter(pts[i].y, tSec), v: pts[i].visibility ?? 0 };
     }

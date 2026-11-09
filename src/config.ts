@@ -46,8 +46,15 @@ export const config = {
     blackBoxSeconds: 60,
   },
 
-  /** One-Euro filter applied to landmark coordinates (lower minCutoff = smoother but laggier). */
-  smoothing: { minCutoff: 2.0, beta: 0.3, dCutoff: 1.0 },
+  /**
+   * One-Euro filter applied to landmark coordinates (lower minCutoff = smoother but laggier). `beta` opens the filter
+   * up for fast movements (cutoff = minCutoff + beta * speed, speed in image heights per second). `armBeta` is the
+   * one for the elbows, wrists and hands, which steer the bird: at 0.3 it barely opened (a wrist at 0.6 /s: 2.2 Hz
+   * instead of 2), so a quick turn of the arms lagged like a slow one; 10 takes ~45 ms off every change of
+   * direction on the recordings of play (tests/replay/recordings), mode flicker unchanged. The rest (hips, knees:
+   * the shoot gesture) keeps `beta` 0.3: opened up too, their noise fires spurious poos.
+   */
+  smoothing: { minCutoff: 2.0, beta: 0.3, armBeta: 10, dCutoff: 1.0 },
 
   /**
    * One arm hidden behind the other (both pointing to one side turn the body sideways): MediaPipe loses the far
@@ -265,8 +272,12 @@ export const config = {
   pointing: {
     /** off (default): pointing control. on: flapping + tilt + hover */
     flapping: false,
-    /** EMA factor for the arm directions per pose frame (lower = steadier, laggier) */
-    smoothing: 0.4,
+    /**
+     * time constant (ms) of the smoothing of the arm directions, on top of the One-Euro filter (higher = steadier,
+     * laggier). In ms, not per frame, so a slower camera doesn't make it laggier. 35: like an EMA factor of 0.7 at
+     * 23 fps; the old 0.4 per frame (~95 ms at 23 fps) added ~60 ms of delay to every change of direction.
+     */
+    smoothingMs: 35,
     /** arms within this (deg) of straight down are hanging: rest */
     restCone: 35,
     /** T: each arm may be raised or lowered this much (deg) from level */
@@ -279,16 +290,19 @@ export const config = {
     tiltHysteresis: 5,
     /** pointing: the two arms may differ in direction by up to this (deg) and still count as pointing together */
     parallelMax: 40,
-    /** a new pose must hold this long (ms) before the bird follows it */
-    enterMs: 100,
+    /** a new pose must hold this long (ms) before the bird follows it (100 -> 60: ~20 ms faster, no more flicker on the recordings) */
+    enterMs: 60,
     /** arms matching no pose keep the current one for this long (ms), then the bird rests */
     ambiguousMs: 400,
     /** flying speed while pointing, px per physics step */
     cruiseSpeed: 7,
     /** tilted T: sideways speed, px per physics step */
     driftSpeed: 1.8,
-    /** how quickly the bird reaches its speed (or stops, in the hover), px/s² */
-    accel: 1800,
+    /**
+     * how quickly the bird reaches its speed (or stops, in the hover), px/s². 1800 -> 3600: half the cruising speed
+     * in a new direction after ~100 ms instead of ~180 (a turn round takes ~230 ms instead of ~470)
+     */
+    accel: 3600,
     /** rest: fraction of the sideways and upward speed lost per physics step */
     restDrag: 0.08,
     /** Matter.js frictionAir while flying, hovering or drifting (rest: physics.birdAirFriction) */
