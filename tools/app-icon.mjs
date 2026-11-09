@@ -1,5 +1,5 @@
 // Draws the home-screen icon (`public/icons/*.png`): the bird flying upwards, dropping a poo, against the morning sky. iOS uses
-// `apple-touch-icon.png` (index.html) and rounds its corners itself; Android uses the manifest's icons.
+// `apple-touch-icon.png` (index.html); Android uses the manifest's icons. All are cut to a squircle here.
 // Run `npm run app-icon` after changing the bird's or the poo's art, or the morning sky (src/scenery/scenery.ts).
 // Uses headless Chrome (puppeteer), as the Tiled icons do.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -29,10 +29,13 @@ const WIDTH = 1;
 /** the least gap above and below the bird, as a share of the icon's height (shrinks it if it'd reach further) */
 const MARGIN = 0.03;
 
+/** the rounded icons' outline: a superellipse |x|^n + |y|^n = 1, close to iOS's continuous-corner icon shape */
+const SQUIRCLE = 5;
+
 const SIZES = [
-  { out: 'apple-touch-icon.png', size: 180 },
-  { out: 'icon-192.png', size: 192 },
-  { out: 'icon-512.png', size: 512 },
+  { out: 'apple-touch-icon.png', size: 180, rounded: true },
+  { out: 'icon-192.png', size: 192, rounded: true },
+  { out: 'icon-512.png', size: 512, rounded: true },
 ];
 
 const asset = (path) => readFile(new URL(`../public/assets/${path}`, import.meta.url), 'utf8');
@@ -43,9 +46,9 @@ await mkdir(outDir, { recursive: true });
 const browser = await puppeteer.launch({ headless: 'shell' });
 try {
   const page = await browser.newPage();
-  for (const { out, size } of SIZES) {
+  for (const { out, size, rounded } of SIZES) {
     const dataUrl = await page.evaluate(
-      async (bird, poo, size, o) => {
+      async (bird, poo, size, rounded, o) => {
         const load = async (svg) => {
           const img = new Image();
           img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
@@ -85,6 +88,18 @@ try {
         canvas.width = canvas.height = size;
         const g = canvas.getContext('2d');
 
+        // the squircle everything's clipped to (fine enough steps for a smooth antialiased edge)
+        if (rounded) {
+          const r = size / 2, steps = 720;
+          g.beginPath();
+          for (let i = 0; i < steps; i++) {
+            const t = (i / steps) * 2 * Math.PI, c = Math.cos(t), s = Math.sin(t);
+            g.lineTo(r + r * Math.sign(c) * Math.abs(c) ** (2 / o.squircle), r + r * Math.sign(s) * Math.abs(s) ** (2 / o.squircle));
+          }
+          g.closePath();
+          g.clip();
+        }
+
         // the sky: the top colour at the top, the horizon at the bottom
         const sky = g.createLinearGradient(0, 0, 0, size);
         sky.addColorStop(0, o.top);
@@ -117,7 +132,8 @@ try {
       bird,
       poo,
       size,
-      { ...SKY, tilt: TILT, pooHeight: POO_HEIGHT, pooFrom: POO_FROM, pooDrop: POO_DROP,
+      rounded,
+      { ...SKY, squircle: SQUIRCLE, tilt: TILT, pooHeight: POO_HEIGHT, pooFrom: POO_FROM, pooDrop: POO_DROP,
         pooShift: POO_SHIFT,
         pooRaise: POO_RAISE,
         pooTilt: POO_TILT,

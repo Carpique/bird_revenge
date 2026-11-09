@@ -10,6 +10,7 @@ import { GlowText } from './GlowText';
 import { i18n, t } from './i18n';
 import { LevelSelect } from './LevelSelect';
 import { Menu, type MenuItem } from './Menu';
+import { Passersby } from './Passersby';
 import { PooRain } from './PooRain';
 
 type Page = 'main' | 'instructions' | 'levels';
@@ -54,8 +55,8 @@ export interface LevelChoice {
 }
 
 /**
- * Title screen drawn in the game world (1280x720): sky, the game's ground, the title and the
- * main menu; "Start" opens the level select. Arrow keys / W S to move, Enter or Space to choose, Esc to go back;
+ * Title screen drawn in the game world (1280x720): sky, the game's ground with characters crossing it now and then
+ * (`Passersby`), the title and the main menu; "Start" opens the level select. Arrow keys / W S to move, Enter or Space to choose, Esc to go back;
  * mouse works too. "Instructions" shows no text: the title screen makes way for a demonstration (`onInstructions`),
  * leaving only "Back"; first "Watch" over it dimmed and frozen (`WATCH`), then it plays (`onDemoStart`).
  */
@@ -75,7 +76,7 @@ export class SplashScreen extends Container {
   private menu = new Menu(true);
   private title: GlowText;
   private levelSelect: LevelSelect;
-  /** the poo rain and the ground: hidden for the instructions' demonstration */
+  /** the poo rain, the ground and the characters crossing it: hidden for the instructions' demonstration */
   private backdrop = new Container();
   /** the dimming over the backdrop, or over the demonstration while "Watch" shows */
   private dim: Graphics;
@@ -105,7 +106,8 @@ export class SplashScreen extends Container {
     const dim = new Graphics().rect(-WORLD.width * 5, -WORLD.height * 5, WORLD.width * 11, WORLD.height * 11).fill('#000');
     dim.alpha = config.signDim;
     const ground = new Ground();
-    this.backdrop.addChild(rain, ground);
+    const passersby = new Passersby();
+    this.backdrop.addChild(rain, ground, passersby);
     root.addChild(this.backdrop, dim);
     this.dim = dim;
 
@@ -144,7 +146,10 @@ export class SplashScreen extends Container {
       ground.fit();
       if (this.levelSelect.visible) this.levelSelect.update(ticker.deltaMS);
       else this.menu.animate(ticker.deltaMS);
-      if (this.backdrop.visible) rain.update(ticker.deltaMS);
+      if (this.backdrop.visible) {
+        rain.update(ticker.deltaMS);
+        passersby.update(ticker.deltaMS);
+      }
       if (this.watchMs !== null) {
         const worldAt = WATCH.showMs + WATCH.fadeOutMs;
         if (this.watchMs < worldAt && this.watchMs + ticker.deltaMS >= worldAt) this.onWorldStart();

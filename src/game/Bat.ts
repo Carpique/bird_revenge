@@ -239,6 +239,13 @@ export class Bat {
     else this.v = { x: 0, y: 0 };
   }
 
+  /** Turns round on an open route, to fly back the way it came (towards the point it last passed). */
+  turnBack() {
+    if (this.def.loop || this.homing) return;
+    this.dir = this.dir > 0 ? -1 : 1;
+    this.target = Math.max(0, Math.min(this.target + this.dir, this.def.route.length - 1));
+  }
+
   /** The route point after the one it just reached. */
   private nextTarget(): number {
     const n = this.def.route.length;
