@@ -31,7 +31,7 @@ const INSTRUCTIONS_BACK = { x: WORLD.width / 2, y: 685, scale: 0.7 };
  * as big (if it fits), the menu's items `menuScale`, the poo rain's `rainScale`. The level select, unchanged, in the
  * middle of the sky.
  */
-const PORTRAIT = { groundAt: 0.8, titleY: 0.3, menuY: 0.5, titleScale: 1.2, menuScale: 1.4, rainScale: 2 };
+const PORTRAIT = { groundAt: 0.9, titleY: 0.3, menuY: 0.5, titleScale: 1.2, menuScale: 1.4, rainScale: 2 };
 /** where the main menu's first item is on a landscape screen (world px) */
 const MENU_TOP = 370;
 

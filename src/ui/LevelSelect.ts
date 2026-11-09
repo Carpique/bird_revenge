@@ -126,6 +126,8 @@ export class LevelSelect extends Container {
     panel.on('pointerup', () => (this.drag = null));
     panel.on('pointerupoutside', () => (this.drag = null));
 
+    // in the title's colours, like the instructions page's "Back": black is hard to see over the dimmed backdrop
+    this.back.titleColours = true;
     this.addChild(title, panel, this.back);
     window.addEventListener('wheel', (e) => this.onWheel(e), { passive: true });
 
