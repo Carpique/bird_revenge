@@ -88,6 +88,20 @@ describe('TrackingStats', () => {
     expect(s.outOfFrame).toEqual({});
   });
 
+  it('counts loop errors and watchdog re-arms, and forgets them on reset', () => {
+    const s = new TrackingStats();
+    s.error('detect', new Error('gpu lost'));
+    s.error('frame', 'plain string');
+    s.watchdog();
+    expect(s.errors).toEqual({ detect: 1, frame: 1 });
+    expect(s.lastError).toBe('frame: plain string');
+    expect(s.watchdogRearms).toBe(1);
+    s.reset();
+    expect(s.errors).toEqual({ detect: 0, frame: 0 });
+    expect(s.lastError).toBe('');
+    expect(s.watchdogRearms).toBe(0);
+  });
+
   it('names the causes from the visibility reading', () => {
     expect(recalCause({ personDetected: true })).toBe('offCentre');
     expect(recalCause({ personDetected: false })).toBe('noPerson');

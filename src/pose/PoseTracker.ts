@@ -1,5 +1,6 @@
 import { FilesetResolver, PoseLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { config } from '../config';
+import { FrameLoop, type LoopEnv } from './FrameLoop';
 import { PoseSmoother } from './PoseSmoother';
 import { TrackingStats } from './trackingStats';
 import type { PoseFrame } from './types';
@@ -27,9 +28,9 @@ export class PoseTracker {
   readonly stats = new TrackingStats();
 
   private lastTs = 0;
-  private running = false;
-  /** bumped on every start, so a frame callback left over from before a stop/start ends its loop */
-  private generation = 0;
+  private readonly loop: FrameLoop;
+  /** exceptions logged so far (the first few, then ever fewer: a failure on every frame must not flood the console) */
+  private logged = 0;
   private fpsCount = 0;
   private fpsT0 = performance.now();
 
@@ -37,7 +38,21 @@ export class PoseTracker {
     private landmarker: PoseLandmarker,
     private video: HTMLVideoElement,
     fellBack: boolean,
+    /** the clock and timers of the frame loop (tests pass fakes) */
+    loopEnv?: LoopEnv,
   ) {
+    this.loop = new FrameLoop(
+      video,
+      () => this.process(),
+      {
+        onError: (e) => this.report('frame', e),
+        onWatchdog: (ms) => {
+          this.stats.watchdog();
+          console.warn(`pose loop: no frame for ${ms.toFixed(0)} ms while the video plays, armed again`);
+        },
+      },
+      loopEnv,
+    );
     this.stats.info = { model: config.pose.model, requested: config.pose.delegate, delegate: fellBack ? 'CPU' : config.pose.delegate, fellBack };
   }
 
@@ -62,23 +77,11 @@ export class PoseTracker {
   }
 
   start() {
-    if (this.running) return;
-    this.running = true;
-    const gen = ++this.generation;
-    const v = this.video as HTMLVideoElement & {
-      requestVideoFrameCallback?: (cb: () => void) => number;
-    };
-    const loop = () => {
-      if (!this.running || gen !== this.generation) return;
-      this.process();
-      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(loop);
-      else requestAnimationFrame(loop);
-    };
-    loop();
+    this.loop.start();
   }
 
   stop() {
-    this.running = false;
+    this.loop.stop();
     this.stats.interrupt(); // the pause is no hitch
   }
 
@@ -92,15 +95,29 @@ export class PoseTracker {
     this.smoother.reset();
   }
 
-  private process() {
+  /** counts an exception and logs it (the first 5, then the 10th, 100th...) */
+  private report(kind: 'detect' | 'frame', e: unknown) {
+    this.stats.error(kind, e);
+    const n = ++this.logged;
+    if (n <= 5 || Number.isInteger(Math.log10(n))) console.warn(`pose ${kind} failed (${n} so far)`, e);
+  }
+
+  /** One video frame; false: there was none to take. An exception in the model or in `onFrame` is counted, the frame dropped. */
+  private process(): boolean {
     const video = this.video;
-    if (video.readyState < 2 || video.videoWidth === 0) return;
+    if (video.readyState < 2 || video.videoWidth === 0) return false;
     let ts = performance.now();
     if (ts <= this.lastTs) ts = this.lastTs + 1;
     this.lastTs = ts;
 
     const t0 = performance.now();
-    const result = this.landmarker.detectForVideo(video, ts);
+    let result: ReturnType<PoseLandmarker['detectForVideo']>;
+    try {
+      result = this.landmarker.detectForVideo(video, ts);
+    } catch (e) {
+      this.report('detect', e);
+      return true;
+    }
     this.inferenceMs = performance.now() - t0;
 
     this.fpsCount++;
@@ -110,12 +127,17 @@ export class PoseTracker {
       this.fpsT0 = ts;
     }
 
-    const raw = result.landmarks?.[0];
-    this.raw = raw && raw.length >= N ? raw : null;
-    this.stats.frame(ts, this.inferenceMs, this.raw !== null);
-    // nobody: the smoothing is left as it is, a short gap does not interrupt it (`PoseSmoother`)
-    const aspect = video.videoWidth / video.videoHeight;
-    const lm = this.smoother.process(this.raw, aspect, ts);
-    this.onFrame(lm && { t: ts, lm, aspect });
+    try {
+      const raw = result.landmarks?.[0];
+      this.raw = raw && raw.length >= N ? raw : null;
+      this.stats.frame(ts, this.inferenceMs, this.raw !== null);
+      // nobody: the smoothing is left as it is, a short gap does not interrupt it (`PoseSmoother`)
+      const aspect = video.videoWidth / video.videoHeight;
+      const lm = this.smoother.process(this.raw, aspect, ts);
+      this.onFrame(lm && { t: ts, lm, aspect });
+    } catch (e) {
+      this.report('frame', e);
+    }
+    return true;
   }
 }

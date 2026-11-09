@@ -86,6 +86,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'pose.holdLastMs': [0, 1000, 10],
   'pose.minWristVisibility': [0, 1, 0.05],
   'pose.wristVisibilityMargin': [0, 0.5, 0.05],
+  'pose.watchdogMs': [300, 5000, 100],
   'pose.resetFiltersAfterMs': [0, 2000, 50],
   'physics.gravity': [0, 3, 0.05],
   'physics.birdAirFriction': [0, 0.2, 0.005],

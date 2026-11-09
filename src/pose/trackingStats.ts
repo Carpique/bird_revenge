@@ -53,6 +53,12 @@ export class TrackingStats {
   readonly recalibrations: Record<RecalCause, number> = { noPerson: 0, offCentre: 0, manual: 0 };
   /** episodes of the player being out of frame, by the body part that was missing */
   readonly outOfFrame: Record<string, number> = {};
+  /** exceptions caught in the frame loop: in the model's detect call, and after it (smoothing, `onFrame`); the loop carries on */
+  readonly errors = { detect: 0, frame: 0 };
+  /** the message of the latest one ('' for none) */
+  lastError = '';
+  /** times the watchdog found the frame loop dead while the video played, and armed it again */
+  watchdogRearms = 0;
   /** processed frames per second, over the last second or so */
   fps = 0;
   /** what the tracker runs on; null until it exists */
@@ -112,6 +118,17 @@ export class TrackingStats {
     return this.nullSince >= 0 ? now - this.nullSince : 0;
   }
 
+  /** An exception in the frame loop (`kind`: where it came from). */
+  error(kind: 'detect' | 'frame', e: unknown) {
+    this.errors[kind]++;
+    this.lastError = `${kind}: ${e instanceof Error ? e.message : String(e)}`;
+  }
+
+  /** The watchdog armed the frame loop again. */
+  watchdog() {
+    this.watchdogRearms++;
+  }
+
   recalibration(cause: RecalCause) {
     this.recalibrations[cause]++;
   }
@@ -135,6 +152,8 @@ export class TrackingStats {
     this.frames = this.nullFrames = this.hitches = 0;
     this.longestNullMs = this.longestHitchMs = 0;
     this.nullRuns.fill(0);
+    this.errors.detect = this.errors.frame = this.watchdogRearms = 0;
+    this.lastError = '';
     for (const k of RECAL_CAUSES) this.recalibrations[k] = 0;
     for (const k of Object.keys(this.outOfFrame)) delete this.outOfFrame[k];
     this.inferenceN = 0;

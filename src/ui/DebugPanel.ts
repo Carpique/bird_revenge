@@ -201,6 +201,9 @@ function trackingLines(st: TrackingStats | null, now: number): string[] {
     `null      ${st.nullFrames}/${st.frames} fr` + (cur ? `  now ${cur.toFixed(0)} ms` : '') + (st.longestNullMs ? `  max ${st.longestNullMs.toFixed(0)}` : ''),
     nulls ? `  runs    ${nulls}` : '',
     `hitches   ${st.hitches}` + (st.longestHitchMs ? `  max ${st.longestHitchMs.toFixed(0)} ms` : ''),
+    st.errors.detect || st.errors.frame || st.watchdogRearms
+      ? `loop      errors ${st.errors.detect}+${st.errors.frame}  rearm ${st.watchdogRearms}` + (st.lastError ? `  ${st.lastError.slice(0, 40)}` : '')
+      : '',
     `recal     ` + RECAL_CAUSES.map((c) => `${c}:${st.recalibrations[c]}`).join(' '),
     oof ? `outframe  ${oof}` : '',
   ];

@@ -29,6 +29,11 @@ export const config = {
     minWristVisibility: 0.5,
     /** a wrist taken as a stand-in is trusted again at `minWristVisibility` plus this, so one hovering around the threshold does not flip */
     wristVisibilityMargin: 0.1,
+    /**
+     * the video is playing but no frame has been handled for this long (ms): the frame callbacks are taken to be dead
+     * (the browser dropped them) and the loop is armed again (`FrameLoop`; counted in the debug panel as "rearm")
+     */
+    watchdogMs: 1000,
     /** a gap this long (ms) without a good pose resets the smoothing filters: the person may have moved a lot meanwhile */
     resetFiltersAfterMs: 500,
   },
