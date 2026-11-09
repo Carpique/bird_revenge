@@ -86,6 +86,25 @@ class GameAudio {
     if (this.themes.length) this.theme.src = url(this.themes[0]);
     this.theme.loop = true;
 
+    // the lock screen / Control Center player (iOS) can start the elements on its own, e.g. the music
+    // on the title screen, where it then plays over the theme: only the game decides what plays
+    this.music.addEventListener('play', () => {
+      // muted: `unlockMusic` playing it silently
+      if (this.suspended || (!this.musicWanted && !this.music.muted)) this.music.pause();
+    });
+    this.theme.addEventListener('play', () => {
+      if (this.suspended || !this.themeWanted) this.theme.pause();
+    });
+    if ('mediaSession' in navigator) {
+      for (const action of ['play', 'pause', 'stop', 'seekbackward', 'seekforward', 'previoustrack', 'nexttrack'] as const) {
+        try {
+          navigator.mediaSession.setActionHandler(action, () => {});
+        } catch {
+          // action not supported here
+        }
+      }
+    }
+
     const unlock = () => {
       if (this.suspended) return;
       void sound.context.audioContext.resume();
