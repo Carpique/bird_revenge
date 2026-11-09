@@ -19,6 +19,7 @@ import { startCamera, stopCamera } from './pose/camera';
 import { PoseTracker } from './pose/PoseTracker';
 import type { PoseFrame } from './pose/types';
 import { loadAllAssets } from './render/assets';
+import { isPortrait } from './render/fitWorld';
 import { scenery } from './scenery/scenery';
 import { DebugPanel } from './ui/DebugPanel';
 import { loadFonts } from './ui/fonts';
@@ -28,6 +29,7 @@ import { t, type Msg } from './ui/i18n';
 import { LanguageButton } from './ui/LanguageButton';
 import { PauseMenu } from './ui/PauseMenu';
 import { Recorder } from './ui/Recorder';
+import { RotateHint } from './ui/RotateHint';
 import { loadRecording } from './tutorial';
 import { PoseReplay } from './tutorial/PoseReplay';
 import { TUTORIAL_LEVEL, type PoseRecording } from './tutorial/recording';
@@ -61,19 +63,23 @@ async function main() {
   loadSavedConfig();
 
   const app = new Application();
+  const gameBox = document.getElementById('game')!;
   await app.init({
-    resizeTo: window,
+    // the box, not the window: a phone held upright shows the game in a 16:9 box (see `boxed` below)
+    resizeTo: gameBox,
     antialias: true,
     autoDensity: true,
     resolution: Math.min(2, window.devicePixelRatio || 1),
     background: scenery.skyColor,
   });
-  document.getElementById('game')!.appendChild(app.canvas);
+  gameBox.appendChild(app.canvas);
 
   const video = document.getElementById('camera') as HTMLVideoElement;
   const guide = new FrameGuide(document.getElementById('guide') as HTMLCanvasElement, video, app.stage);
 
   let state: AppState = 'loading';
+  /** a keyboard to press Esc on is likely (not a phone or a tablet) */
+  const escHint = matchMedia('(hover: hover) and (pointer: fine)').matches ? t('Press Esc to play with the keyboard') : undefined;
   /** camera / pose model status, shown in the calibration dialog (already translated) */
   let poseError: string | null = null;
   /** the camera stopped working after it had started; it's being retried */
@@ -121,9 +127,9 @@ async function main() {
     if (menuOpen) gs.mode = 'hidden';
     else if (state === 'loading') Object.assign(gs, { mode: 'loading', message: t('Loading…') });
     else if (state === 'calibrating' && poseError)
-      Object.assign(gs, { mode: 'calibrate', title: t('No camera'), message: poseError, error: true, hint: t('Press Esc to play with the keyboard') });
+      Object.assign(gs, { mode: 'calibrate', title: t('No camera'), message: poseError, error: true, hint: escHint });
     else if (state === 'calibrating' && cameraError)
-      Object.assign(gs, { mode: 'calibrate', title: t(cameraError), message: t('Reconnecting…'), hint: t('Press Esc to play with the keyboard') });
+      Object.assign(gs, { mode: 'calibrate', title: t(cameraError), message: t('Reconnecting…'), hint: escHint });
     else if (state === 'calibrating' && (!cameraOn || !tracker))
       Object.assign(gs, { mode: 'calibrate', message: t(cameraOn ? 'Loading pose model…' : 'Starting camera…') });
     else if (state === 'calibrating')
@@ -211,9 +217,18 @@ async function main() {
   const fullscreen = new FullscreenButton(corner);
   const volume = new VolumeButton(corner);
   const language = new LanguageButton();
+  new RotateHint(document.getElementById('rotate')!);
   const keyboard = new Keyboard();
   const detectors = new PoseDetectors();
   const calibration = new Calibration();
+
+  // the calibration dialog's "Back" (the only way out on a phone): to the level select, the level selected, or from
+  // training (or a level tested from the URL) to the title screen
+  guide.onBack = () => {
+    if (state !== 'calibrating') return;
+    if (game.level.name === TRAINING || testLevelName) pauseMenu.onQuit();
+    else pauseMenu.onRestart();
+  };
 
   const startCountdown = () => {
     audio.startMusic();
@@ -494,6 +509,13 @@ async function main() {
     // only the title screen lets Esc leave full screen; in the game it opens the pause menu
     fullscreen.lockEscape = !splash.visible;
     game.root.visible = !splash.visible;
+    // a phone held upright: the game (and the instructions' demonstration) in a 16:9 box as wide as the screen,
+    // with a hint to turn it; the title screen fills it, laid out for it
+    const boxed = isPortrait(window.innerWidth, window.innerHeight) && (!splash.visible || demoOn);
+    if (document.body.classList.contains('boxed') !== boxed) {
+      document.body.classList.toggle('boxed', boxed);
+      app.resize();
+    }
     demo.root.visible = splash.visible && demoOn;
     demoReplay.update(app.ticker.deltaMS);
 

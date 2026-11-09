@@ -1,4 +1,5 @@
 import { audio } from '../audio/audio';
+import { isPortrait } from '../render/fitWorld';
 import { i18n, t } from './i18n';
 
 const ENTER_ICON =
@@ -13,30 +14,97 @@ interface KeyboardLock {
 }
 const keyboardLock = (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard;
 
+/** The Fullscreen API, also Safari's older prefixed one (iPad); iPhone Safari has neither (only for videos). */
+const doc = document as Document & {
+  webkitFullscreenEnabled?: boolean;
+  webkitFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | void;
+};
+const root = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
+const fullscreenEnabled = () => !!(document.fullscreenEnabled || doc.webkitFullscreenEnabled);
+const fullscreenElement = () => document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+const requestFullscreen = () =>
+  Promise.resolve(root.requestFullscreen ? root.requestFullscreen() : root.webkitRequestFullscreen?.()).catch(() => {});
+const exitFullscreen = () =>
+  Promise.resolve(document.exitFullscreen ? document.exitFullscreen() : doc.webkitExitFullscreen?.()).catch(() => {});
+
+/** iPhone / iPad (an iPad says it's a Mac, but has a touch screen) */
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+/** started from the home screen: already as full screen as it gets */
+const isInstalled = () =>
+  matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches ||
+  (navigator as Navigator & { standalone?: boolean }).standalone === true;
+/** a phone or a tablet */
+const isTouch = matchMedia('(pointer: coarse)').matches;
+const landscape = () => !isPortrait(window.innerWidth, window.innerHeight);
+
 /**
  * Fullscreen toggle in the top-right corner, always visible. The button never takes focus, so
  * Space keeps pausing the game instead of clicking the button again.
+ * On a phone or a tablet turned sideways, the first tap goes full screen by itself, like a video app (browsers allow it
+ * only on a tap), and turning it upright again leaves it. Leaving full screen by hand while sideways is respected until
+ * it's turned upright. Where pages can't go full screen (iPhone Safari) the button explains adding the game to the home
+ * screen, which opens it without the browser's bars.
  */
 export class FullscreenButton {
   private button = document.createElement('button');
+  private tip = document.createElement('div');
   private escapeLocked = false;
+  /** full screen was entered by turning the device sideways (so turning it back leaves it) */
+  private autoEntered = false;
+  /** the next tap goes full screen (turned sideways, and not left by hand since) */
+  private autoArmed = false;
 
   constructor(parent: HTMLElement) {
+    const wrap = document.createElement('div');
+    wrap.id = 'fullscreen';
     const b = this.button;
-    b.id = 'fullscreen';
     b.className = 'corner-button';
     b.type = 'button';
     b.tabIndex = -1;
-    if (!document.fullscreenEnabled) b.hidden = true;
+    if (isInstalled() || (!fullscreenEnabled() && !isIOS)) wrap.hidden = true;
     b.addEventListener('mousedown', (e) => e.preventDefault());
     b.addEventListener('click', () => this.toggle());
-    document.addEventListener('fullscreenchange', () => {
-      this.update();
-      this.applyEscapeLock();
+    this.tip.className = 'corner-popup';
+    this.tip.hidden = true;
+    wrap.append(b, this.tip);
+    document.addEventListener('pointerdown', (e) => {
+      if (!wrap.contains(e.target as Node)) this.tip.hidden = true;
     });
+    for (const event of ['fullscreenchange', 'webkitfullscreenchange']) {
+      document.addEventListener(event, () => {
+        // left by hand while sideways: not again until turned upright and back
+        if (!fullscreenElement() && landscape()) this.autoArmed = false;
+        if (!fullscreenElement()) this.autoEntered = false;
+        this.update();
+        this.applyEscapeLock();
+      });
+    }
+    if (isTouch && fullscreenEnabled()) {
+      let wasLandscape = landscape();
+      this.autoArmed = wasLandscape;
+      window.addEventListener('resize', () => {
+        const now = landscape();
+        if (now === wasLandscape) return;
+        wasLandscape = now;
+        this.autoArmed = now;
+        if (!now && this.autoEntered) void exitFullscreen();
+      });
+      // the button's own tap toggles it instead
+      window.addEventListener(
+        'pointerup',
+        (e) => {
+          if (!this.autoArmed || !landscape() || fullscreenElement() || wrap.contains(e.target as Node)) return;
+          this.autoArmed = false;
+          this.autoEntered = true;
+          void requestFullscreen();
+        },
+        true,
+      );
+    }
     i18n.onChange(() => this.update());
     this.update();
-    parent.appendChild(b);
+    parent.appendChild(wrap);
   }
 
   /**
@@ -51,21 +119,26 @@ export class FullscreenButton {
 
   private applyEscapeLock() {
     if (!keyboardLock) return;
-    if (this.escapeLocked && document.fullscreenElement) keyboardLock.lock(['Escape']).catch(() => {});
+    if (this.escapeLocked && fullscreenElement()) keyboardLock.lock(['Escape']).catch(() => {});
     else keyboardLock.unlock();
   }
 
   private toggle() {
     audio.play('button');
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void document.documentElement.requestFullscreen().catch(() => {});
+    if (!fullscreenEnabled()) this.tip.hidden = !this.tip.hidden;
+    else if (fullscreenElement()) void exitFullscreen();
+    else {
+      this.autoEntered = false;
+      void requestFullscreen();
+    }
   }
 
   private update() {
-    const full = !!document.fullscreenElement;
+    const full = !!fullscreenElement();
     this.button.setAttribute('aria-label', t(full ? 'Exit full screen' : 'Full screen'));
     this.button.innerHTML =
       `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" ` +
       `stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${full ? EXIT_ICON : ENTER_ICON}</svg>`;
+    this.tip.textContent = t('To play full screen, tap Share, then “Add to Home Screen”.');
   }
 }
