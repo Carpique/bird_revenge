@@ -514,6 +514,17 @@ async function main() {
     // only the title screen lets Esc leave full screen; in the game it opens the pause menu
     fullscreen.lockEscape = !splash.visible;
     game.root.visible = !splash.visible;
+    // the corner buttons: the volume one only on the title screen, the fullscreen one down on the ground in the game
+    if (document.body.classList.contains('in-game') === splash.visible) document.body.classList.toggle('in-game', !splash.visible);
+    if (!splash.visible) {
+      // over the game's slot for it, at the end of the hearts' row, scaled with the world
+      const box = app.canvas.getBoundingClientRect();
+      const s = game.root.scale.x;
+      const slot = game.fullscreenSlot;
+      corner.style.setProperty('--fs-x', `${box.left + game.root.x + slot.x * s}px`);
+      corner.style.setProperty('--fs-y', `${box.top + game.root.y + slot.y * s}px`);
+      corner.style.setProperty('--fs-size', `${slot.size * s}px`);
+    }
     // a phone held upright: the game (and the instructions' demonstration) in a 16:9 box as wide as the screen,
     // with a hint to turn it; the title screen fills it, laid out for it
     const boxed = isPortrait(window.innerWidth, window.innerHeight) && (!splash.visible || demoOn);

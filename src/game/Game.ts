@@ -12,7 +12,7 @@ import { tex } from '../render/assets';
 import { BACKING, showBackingsFor, spriteBacking, textBacking } from '../render/backing';
 import { fitWorld, view } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
-import { bigTextStyle, TEXT_FONT as FONT } from '../ui/fonts';
+import { BIG_FILL, bigTextStyle, TEXT_FONT as FONT } from '../ui/fonts';
 import { GlowText } from '../ui/GlowText';
 import { i18n, t } from '../ui/i18n';
 import { Apple } from './Apple';
@@ -40,6 +40,10 @@ interface Popup {
  * The game world: PixiJS for drawing, Matter.js for physics, fixed 60 Hz simulation.
  * Knows nothing about cameras or poses — it just reads `controls` and `requestPoo()`.
  */
+/** the fullscreen icon's size and its gap after the hearts, in world px */
+const FULLSCREEN_ICON = 48;
+const FULLSCREEN_GAP = 14;
+
 export class Game {
   readonly root = new Container();
   paused = true;
@@ -189,7 +193,8 @@ export class Game {
     this.coinText.x = coinIcon.width + 8;
     this.coinBox.addChild(spriteBacking(coinIcon, small), coinIcon, textBacking(this.coinText, small), this.coinText);
     this.coinBox.y = 14;
-    this.hearts.position.set(WORLD.width - 24, 14);
+    // the fullscreen icon (a DOM button, placed over `fullscreenSlot`) ends the row, after a gap
+    this.hearts.position.set(WORLD.width - 24 - FULLSCREEN_ICON - FULLSCREEN_GAP, 14);
     this.buildHearts();
     this.pausedText = bigText('');
     this.gameOverText = bigText('');
@@ -778,15 +783,24 @@ export class Game {
     this.onGameOver?.();
   }
 
-  /** One heart per life, right-aligned in the corner. */
+  /** Where the fullscreen icon goes, in world px: at the end of the hearts' row, in the top-right corner. */
+  get fullscreenSlot() {
+    return { x: WORLD.width - 24 - FULLSCREEN_ICON, y: this.hearts.y + 2, size: FULLSCREEN_ICON };
+  }
+
+  /** One heart per life, right-aligned in the corner, left of the fullscreen icon; each with a backing, like the score. */
   private buildHearts() {
-    for (const c of this.hearts.removeChildren()) c.destroy();
+    for (const c of this.hearts.removeChildren()) c.destroy({ children: true });
     const n = config.player.lives;
+    const stroke = 5;
     for (let i = 0; i < n; i++) {
-      const heart = new Text({ text: '♥', style: { fontFamily: FONT, fontSize: 40, fill: '#c0392b', stroke: { color: '#fff', width: 5 } } });
+      const heart = new Text({ text: '♥', style: { fontFamily: FONT, fontSize: 40, fill: '#c0392b', stroke: { color: BIG_FILL, width: stroke } } });
       heart.anchor.set(1, 0);
-      heart.x = -(n - 1 - i) * 40;
-      this.hearts.addChild(heart);
+      const slot = new Container();
+      slot.x = -(n - 1 - i) * 40;
+      // the backing reaches past the yellow outline, not just past the glyph
+      slot.addChild(textBacking(heart, BACKING.smallWidth + stroke / 2), heart);
+      this.hearts.addChild(slot);
     }
   }
 
