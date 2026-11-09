@@ -39,7 +39,8 @@ const isTouch = matchMedia('(pointer: coarse)').matches;
 const landscape = () => !isPortrait(window.innerWidth, window.innerHeight);
 
 /**
- * Fullscreen toggle in the top-right corner, always visible. The button never takes focus, so
+ * Fullscreen toggle, always visible: in the top-right corner on the title screen, in the game a bare icon in the
+ * bottom-right one, over the ground (style.css, `body.in-game`). The button never takes focus, so
  * Space keeps pausing the game instead of clicking the button again.
  * On a phone or a tablet turned sideways, the first tap goes full screen by itself, like a video app (browsers allow it
  * only on a tap), and turning it upright again leaves it. Leaving full screen by hand while sideways is respected until
@@ -136,9 +137,11 @@ export class FullscreenButton {
   private update() {
     const full = !!fullscreenElement();
     this.button.setAttribute('aria-label', t(full ? 'Exit full screen' : 'Full screen'));
+    // two layers: an outline under the icon, shown only in the game (see style.css)
+    const icon = full ? EXIT_ICON : ENTER_ICON;
     this.button.innerHTML =
-      `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" ` +
-      `stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${full ? EXIT_ICON : ENTER_ICON}</svg>`;
+      `<svg viewBox="-2 -2 28 28" width="28" height="28" fill="none" stroke-linecap="round" stroke-linejoin="round">` +
+      `<g class="icon-shadow">${icon}</g><g class="icon-outline">${icon}</g><g class="icon-fill">${icon}</g></svg>`;
     this.tip.textContent = t('To play full screen, tap Share, then “Add to Home Screen”.');
   }
 }

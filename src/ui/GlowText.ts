@@ -36,6 +36,11 @@ export class GlowText extends Container {
     return this.body.height;
   }
 
+  /** width of the text itself, without the halo */
+  get textWidth() {
+    return this.body.width;
+  }
+
   /** restyle the text (the halo stays) */
   setStyle(style: TextStyleOptions) {
     this.body.style = style;

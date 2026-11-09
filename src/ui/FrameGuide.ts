@@ -75,6 +75,8 @@ const TITLE_GAP = 24;
 /** world px: the dialog's "Back" under the panel (like the instructions page's), and the space above it */
 const DIALOG_BACK = 38;
 const BACK_GAP = 14;
+/** world px: the space between "Back" and "No camera", side by side under the panel, centred on it */
+const BUTTONS_GAP = 50;
 /** world px: the countdown's digits, as big as the game's big signs ("Game Over") */
 const COUNTDOWN_SIZE = 180;
 
@@ -149,6 +151,11 @@ export class FrameGuide {
   private back = new GlowText('', bigTextStyle(DIALOG_BACK, FONT));
   /** the calibration dialog's "Back" was chosen */
   onBack: () => void = () => {};
+  /** beside "Back": play without the camera; tapped, `onNoCamera` */
+  private noCamera = new GlowText('', bigTextStyle(DIALOG_BACK, FONT));
+  onNoCamera: () => void = () => {};
+  /** offer "No camera" (a touch screen; with a keyboard, Esc does it) */
+  showNoCamera = false;
 
   /** `stage`: the game's (unscaled), for the dialog's title, on top of everything else there */
   constructor(
@@ -160,13 +167,17 @@ export class FrameGuide {
     this.rc = rough.canvas(canvas);
     this.title.visible = false;
     this.countdown.visible = false;
-    this.back.visible = false;
-    this.back.eventMode = 'static';
-    this.back.cursor = 'pointer';
-    this.back.on('pointertap', () => {
-      audio.play('button');
-      this.onBack();
-    });
+    const button = (b: GlowText, tapped: () => void) => {
+      b.visible = false;
+      b.eventMode = 'static';
+      b.cursor = 'pointer';
+      b.on('pointertap', () => {
+        audio.play('button');
+        tapped();
+      });
+    };
+    button(this.back, () => this.onBack());
+    button(this.noCamera, () => this.onNoCamera());
   }
 
   /** `item` on top of the game's stage */
@@ -193,6 +204,7 @@ export class FrameGuide {
     this.title.visible = false;
     this.countdown.visible = false;
     this.back.visible = false;
+    this.noCamera.visible = false;
     if (s.mode === 'hidden') return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -253,9 +265,25 @@ export class FrameGuide {
     const top = (H - total) / 2;
     title.position.set(W / 2, top + titleH / 2);
     this.onTop(title);
-    back.position.set(W / 2, top + total - backH / 2);
-    // easy to tap: the whole width of the panel, from the panel's edge to the screen's bottom (in its own scale)
-    back.hitArea = new Rectangle(-w / 2 / k, -(backGap + backH / 2) / k, w / k, (backGap + backH / 2 + (H - top - total) + backH / 2) / k);
+    const y = top + total - backH / 2;
+    const hitTop = -(backGap + backH / 2) / k, hitH = (backGap + backH / 2 + (H - top - total) + backH / 2) / k;
+    // easy to tap: from the panel's bottom to the screen's, the whole width of the panel (in its own scale)
+    const hit = (b: GlowText, x0: number, x1: number) => (b.hitArea = new Rectangle((x0 - b.x) / k, hitTop, (x1 - x0) / k, hitH));
+    if (this.showNoCamera) {
+      // "Back" and "No camera" side by side, the gap between them in the middle of the panel; each tappable on its half
+      const noCamera = this.noCamera;
+      noCamera.text = t('No camera');
+      noCamera.scale.set(k);
+      const between = BUTTONS_GAP * k;
+      back.position.set(W / 2 - between / 2 - (back.textWidth * k) / 2, y);
+      noCamera.position.set(W / 2 + between / 2 + (noCamera.textWidth * k) / 2, y);
+      hit(back, Math.min(back.x - (back.textWidth * k) / 2, (W - w) / 2), W / 2);
+      hit(noCamera, W / 2, Math.max(noCamera.x + (noCamera.textWidth * k) / 2, (W + w) / 2));
+      this.onTop(noCamera);
+    } else {
+      back.position.set(W / 2, y);
+      hit(back, (W - w) / 2, (W + w) / 2);
+    }
     this.onTop(back);
 
     const box: Rect = { x: (W - w) / 2, y: top + titleH + gap, w, h };
