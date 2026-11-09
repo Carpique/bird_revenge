@@ -2,6 +2,7 @@ import { FilesetResolver, PoseLandmarker, type NormalizedLandmark } from '@media
 import { config } from '../config';
 import { ArmOcclusion } from './ArmOcclusion';
 import { OneEuroFilter } from './OneEuroFilter';
+import { TrackingStats } from './trackingStats';
 import type { Landmark, PoseFrame } from './types';
 
 const MODEL_URL = (variant: string) =>
@@ -23,6 +24,8 @@ export class PoseTracker {
   raw: NormalizedLandmark[] | null = null;
   /** stands in for an arm hidden behind the other; `occlusion.standIn` says how much, for the last frame */
   readonly occlusion = new ArmOcclusion();
+  /** local telemetry: null runs, hitches, inference times, delegate in use (debug panel) */
+  readonly stats = new TrackingStats();
 
   private filters: OneEuroFilter[] = [];
   private lastTs = 0;
@@ -35,7 +38,9 @@ export class PoseTracker {
   private constructor(
     private landmarker: PoseLandmarker,
     private video: HTMLVideoElement,
+    fellBack: boolean,
   ) {
+    this.stats.info = { model: config.pose.model, requested: config.pose.delegate, delegate: fellBack ? 'CPU' : config.pose.delegate, fellBack };
     for (let i = 0; i < N * 2; i++) this.filters.push(new OneEuroFilter());
   }
 
@@ -48,13 +53,15 @@ export class PoseTracker {
         numPoses: 1,
       });
     let landmarker: PoseLandmarker;
+    let fellBack = false;
     try {
       landmarker = await make(config.pose.delegate);
     } catch (e) {
       console.warn('GPU delegate failed, falling back to CPU', e);
       landmarker = await make('CPU');
+      fellBack = config.pose.delegate !== 'CPU';
     }
-    return new PoseTracker(landmarker, video);
+    return new PoseTracker(landmarker, video, fellBack);
   }
 
   start() {
@@ -75,6 +82,7 @@ export class PoseTracker {
 
   stop() {
     this.running = false;
+    this.stats.interrupt(); // the pause is no hitch
   }
 
   /**
@@ -108,6 +116,7 @@ export class PoseTracker {
 
     const raw = result.landmarks?.[0];
     this.raw = raw && raw.length >= N ? raw : null;
+    this.stats.frame(ts, this.inferenceMs, this.raw !== null);
     if (!raw || raw.length < N) {
       this.filters.forEach((f) => f.reset());
       this.occlusion.reset();

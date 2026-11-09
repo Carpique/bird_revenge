@@ -36,6 +36,7 @@ By default the arms steer the bird by **pointing** (directions as seen on screen
 
 Hotkeys: **D** debug panel · **G** tuning panel · **Esc** keyboard-only mode · **C** recalibrate ·
 **Space** / **P** pause in game (also automatic when the window loses focus; camera and pose tracking are switched off while paused or unfocused) · **R** start/stop recording landmarks to a JSON file.
+**B** save the black box: the last 60 s of MediaPipe's raw landmarks (before smoothing, with visibility and empty frames) plus the game state per frame, as `black-box-<time>.json` in the downloads. It stays on the device and is a pose recording the replay tests load directly (`parseBlackBox` in `src/pose/blackBox.ts`, `tests/replay/`). The debug panel (**D**) also shows local tracking telemetry: frame rate, inference time (p50 / p95), runs of frames without a person, hitches, recalibrations and out-of-frame episodes by cause, the model and delegate (and whether the GPU one fell back to CPU).
 
 ## Tuning
 

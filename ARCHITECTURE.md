@@ -215,7 +215,7 @@ Implemented in v0.1 (all numbers live in `src/config.ts`, tunable at runtime):
 index.html, src/style.css
 src/main.ts                 app state machine: loading → menu → calibrating → countdown → playing ⇄ outOfFrame (game keeps running, no pose controls); keyboard mode
 src/config.ts               every tunable number (+ save/load to localStorage)
-src/pose/                   camera.ts, PoseTracker.ts (MediaPipe, One-Euro smoothing), ArmOcclusion.ts (an arm hidden behind the other), landmarks.ts, types.ts
+src/pose/                   camera.ts, PoseTracker.ts (MediaPipe, One-Euro smoothing), trackingStats.ts (local telemetry for the debug panel: null runs, hitches, inference p50/p95, recalibrations by cause), blackBox.ts (ring buffer of the last 60 s of raw landmarks + game state, saved with **B** as a replayable pose recording), ArmOcclusion.ts (an arm hidden behind the other), landmarks.ts, types.ts
 src/gestures/               geometry.ts, FlapDetector.ts, TiltDetector.ts, PointingDetector.ts, ShootDetector.ts, VisibilityMonitor.ts, Calibration.ts  (pure TS, no DOM)
 src/game/                   Game.ts (Pixi stage + Matter engine + scoring), Bird.ts, flight.ts (tilt + hover physics), pointing.ts (pointing control), Villain.ts, Bat.ts, Poo.ts, Background.ts (sun, clouds + Ground), Ground.ts (shared with the splash), physics.ts
 src/level/                  types.ts (LevelDef), tiled.ts (Tiled map → LevelDef), build.ts (→ Matter bodies/constraints), LevelView.ts (Rough.js drawing), thumbnails.ts (level select pictures)

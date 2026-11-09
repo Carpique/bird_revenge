@@ -6,6 +6,7 @@ import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { config } from '../config';
 import { sideAmount } from '../game/flight';
 import { PART_NAMES, SKELETON } from '../pose/landmarks';
+import { NULL_RUN_LABELS, RECAL_CAUSES, type TrackingStats } from '../pose/trackingStats';
 import type { PoseFrame } from '../pose/types';
 
 interface Sample {
@@ -56,6 +57,10 @@ export class DebugPanel {
     pointing: PointingOutput | null;
     fps: number;
     inferenceMs: number;
+    /** the tracker's telemetry, null before it exists */
+    stats: TrackingStats | null;
+    /** seconds of raw pose stream in the black box (B saves it) */
+    blackBoxSeconds: number;
     now: number;
   }) {
     if (!this.visible) return;
@@ -146,6 +151,8 @@ export class DebugPanel {
     const lines = [
       `state     ${info.state}`,
       `pose      ${n(info.fps)} fps  ${n(info.inferenceMs, 1)} ms`,
+      ...trackingLines(info.stats, info.now),
+      `blackbox  ${info.blackBoxSeconds.toFixed(0)} s buffered (B saves)`,
       '',
       fl ? `arm  angle   vel  power strk  Hz  primed` : '',
       fl ? `L   ${n(fl.left.angle)} ${n(fl.left.velocity)} ${n(fl.left.power)} ${String(fl.left.strokes).padStart(4)} ${fl.left.frequency.toFixed(1).padStart(4)}  ${fl.left.primed ? '▲' : '·'}` : '',
@@ -178,4 +185,23 @@ export class DebugPanel {
     ];
     this.textEl.textContent = lines.join('\n');
   }
+}
+
+/** The tracker's telemetry in a few compact lines (see `TrackingStats`). */
+function trackingLines(st: TrackingStats | null, now: number): string[] {
+  if (!st) return [];
+  const { p50, p95 } = st.inferenceMs();
+  const i = st.info;
+  const cur = st.currentNullMs(now);
+  const nulls = Array.from(st.nullRuns, (c, k) => (c ? `${NULL_RUN_LABELS[k]}:${c}` : '')).filter(Boolean).join(' ');
+  const oof = Object.entries(st.outOfFrame).map(([k, c]) => `${k}:${c}`).join(' ');
+  return [
+    `infer     p50 ${p50.toFixed(1)}  p95 ${p95.toFixed(1)} ms`,
+    i ? `model     ${i.model} ${i.delegate}${i.fellBack ? ` (${i.requested} failed)` : ''}` : '',
+    `null      ${st.nullFrames}/${st.frames} fr` + (cur ? `  now ${cur.toFixed(0)} ms` : '') + (st.longestNullMs ? `  max ${st.longestNullMs.toFixed(0)}` : ''),
+    nulls ? `  runs    ${nulls}` : '',
+    `hitches   ${st.hitches}` + (st.longestHitchMs ? `  max ${st.longestHitchMs.toFixed(0)} ms` : ''),
+    `recal     ` + RECAL_CAUSES.map((c) => `${c}:${st.recalibrations[c]}`).join(' '),
+    oof ? `outframe  ${oof}` : '',
+  ];
 }

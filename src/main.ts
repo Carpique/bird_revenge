@@ -1,7 +1,7 @@
 import { Application, UPDATE_PRIORITY } from 'pixi.js';
 import { countLevelView } from './analytics';
 import { audio } from './audio/audio';
-import { config, loadSavedConfig } from './config';
+import { changedConfig, config, loadSavedConfig } from './config';
 import { Game } from './game/Game';
 import { firstLevel, gameLevels, levels, nextLevel, onLevelEdited, testLevelName, TRAINING } from './levels';
 import { markCompleted, unlockedLevels } from './levels/progress';
@@ -16,8 +16,11 @@ import { Keyboard } from './input/keyboard';
 import { TouchControls } from './input/touchControls';
 import { PoseDetectors } from './input/poseControls';
 import { PoseSession } from './input/poseSession';
+import { BlackBox } from './pose/blackBox';
 import { startCamera, stopCamera } from './pose/camera';
+import { REQUIRED_PARTS } from './pose/landmarks';
 import { PoseTracker } from './pose/PoseTracker';
+import { outOfFrameCause, recalCause } from './pose/trackingStats';
 import type { PoseFrame } from './pose/types';
 import { loadAllAssets } from './render/assets';
 import { isPortrait } from './render/fitWorld';
@@ -30,7 +33,7 @@ import { MenuButton } from './ui/MenuButton';
 import { t, type Msg } from './ui/i18n';
 import { LanguageButton } from './ui/LanguageButton';
 import { PauseMenu } from './ui/PauseMenu';
-import { Recorder } from './ui/Recorder';
+import { downloadJson, Recorder } from './ui/Recorder';
 import { RotateHint } from './ui/RotateHint';
 import { loadRecording } from './tutorial';
 import { PoseReplay } from './tutorial/PoseReplay';
@@ -218,6 +221,8 @@ async function main() {
   const debug = new DebugPanel(video);
   const tuning = new Tuning();
   const recorder = new Recorder();
+  // the last minute of the raw pose stream, saved with B (see `BlackBox`)
+  const blackBox = new BlackBox();
   const corner = document.getElementById('corner')!;
   const fullscreen = new FullscreenButton(corner);
   const menuButton = new MenuButton(corner);
@@ -430,11 +435,23 @@ async function main() {
     if (k === 'd') debug.toggle();
     else if (k === 'g') tuning.toggle();
     else if (k === 'r') recorder.toggle();
+    else if (k === 'b') {
+      const dump = blackBox.dump({
+        model: config.pose.model,
+        delegate: tracker?.stats.info?.delegate ?? config.pose.delegate,
+        config: changedConfig(),
+        flapping: config.pointing.flapping,
+      });
+      if (dump) downloadJson('black-box', dump);
+    }
     else if (k === 'm') volume.toggleMute();
     if (state === 'loading' || state === 'menu' || menuOpen) return;
     if (k === 'p') keyboard.onPause();
     else if (state === 'gameOver') return;
-    else if (k === 'c' && tracker) recalibrate();
+    else if (k === 'c' && tracker) {
+      tracker.stats.recalibration('manual');
+      recalibrate();
+    }
     else if (k === 'escape' && !game.showingSign) {
       if (state === 'calibrating') playWithoutCamera();
       else openPauseMenu();
@@ -459,9 +476,26 @@ async function main() {
     // what the frame means for the game (the rules are in `PoseSession`)
     const step = session.update(state, reading, now);
     if (step.redetect) tracker?.redetect();
+    // telemetry: why the game left or restarted play
+    if (step.recalibrate) tracker?.stats.recalibration(recalCause(vis));
+    else if (step.state === 'outOfFrame' && state !== 'outOfFrame') tracker?.stats.outOfFrameEpisode(outOfFrameCause(vis, REQUIRED_PARTS));
     state = step.state;
     if (step.recalibrate) recalibrate();
     if (step.shoot) game.requestPoo();
+    if (f) blackBox.aspect = f.aspect;
+    const ctl = session.controls(state, now);
+    blackBox.add(now, tracker?.raw ?? null, {
+      state,
+      personDetected: vis.personDetected,
+      centred: vis.centred,
+      playerPresent: vis.playerPresent,
+      inFrame: vis.inFrame,
+      lift: ctl.lift,
+      tilt: ctl.tilt,
+      hover: ctl.hover,
+      flapping: ctl.flapping,
+      inferenceMs: tracker?.inferenceMs ?? 0,
+    });
     // the calibration dialog, also on the frame that brought it up
     if (state === 'calibrating') {
       calibStatus = calibration.update(f, vis);
@@ -552,6 +586,8 @@ async function main() {
       pointing: pointingOut,
       fps: tracker?.fps ?? 0,
       inferenceMs: tracker?.inferenceMs ?? 0,
+      stats: tracker?.stats ?? null,
+      blackBoxSeconds: blackBox.seconds,
       now,
     });
   });
