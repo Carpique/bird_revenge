@@ -283,7 +283,9 @@ async function main() {
   /** states where the game is on screen and can be paused */
   let menuShown = false;
   const inGame = () => state === 'countdown' || state === 'playing' || state === 'outOfFrame' || state === 'keyboard' || state === 'gameOver';
-  let focused = document.hasFocus();
+  // assumed focused at first: iOS Safari's `document.hasFocus()` is false until the first tap, which would leave the
+  // game suspended on the loading screen; a page loaded in the background is caught by `document.hidden` instead
+  let focused = true;
   const windowActive = () => focused && !document.hidden;
 
   /** states that use the pose, so the camera has to run */
