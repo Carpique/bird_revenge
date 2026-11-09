@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "art": "node tools/generate-placeholder-art.mjs",
-    "tiled-icons": "node tools/tiled-icons.mjs"
+    "tiled-icons": "node tools/tiled-icons.mjs",
+    "app-icon": "node tools/app-icon.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.21",
