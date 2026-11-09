@@ -10,6 +10,14 @@ Make one with the dev-only recorder (`src/dev/tutorial-recorder.html` on the dev
 in front of the camera and playing normally, with nothing going wrong in it: the perturbations (null gaps, hitches,
 low visibility, ...) are added by the tests.
 
+Recordings of real play: press **B** in the game (the black box, `src/pose/blackBox.ts`) and copy the
+`black-box-<time>.json` here under a telling name (`<date>-<what>.json`). They hold MediaPipe's raw landmarks (no
+images), the calibration and the game state per frame. Besides the clean-recording checks they are measured by
+`latency.test.ts`: how quickly the bird follows a new pose of the arms, without flicker. Present:
+
+- `2026-11-09-gra.json`: a level played (calibration, countdown, play), 60 s, ~23 fps
+- `2026-11-09-trening.json`: practice, 60 s of play, ~23 fps
+
 A recording with a name other than the tutorial's gets no pinned shoot-trigger count; add one in
 `tests/replay/behaviour.test.ts` (`EXPECTED_TRIGGERS`) if it should have one.
 
