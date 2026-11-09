@@ -134,7 +134,8 @@ export class Villain {
   /** called when an apple leaves his hand, with the hand position and the way he faces (the apple must fly that way, or straight up/down) */
   onThrow: ((x: number, y: number, dir: 1 | -1) => void) | null = null;
 
-  constructor(def: VillainDef) {
+  /** `keepOnScreen`: false lets his path run past the screen's edges (the title screen's passers-by) */
+  constructor(def: VillainDef, private keepOnScreen = true) {
     this.kind = def.kind;
     this.hitbox = villainLooks[def.kind].hitbox;
     this.view = new CharacterSprite<VillainAnim>(villainLooks[def.kind].def);
@@ -277,8 +278,14 @@ export class Villain {
     return this.aimT !== null && this.aimT >= throwMs() - config.apple.windupMs;
   }
 
-  private turn() {
+  /** Turns round, to walk (and look) the other way. */
+  turn() {
     this.dir = this.dir > 0 ? -1 : 1;
+  }
+
+  /** the way he walks, and looks */
+  get facing() {
+    return this.dir;
   }
 
   /** Would the next step (of `speed` px) take his feet into an obstacle in front of him? */
@@ -296,6 +303,11 @@ export class Villain {
     return this.dir > 0 ? o.x0 - this.x : this.x - o.x1;
   }
 
+  /** x of his centre */
+  get centreX() {
+    return this.x;
+  }
+
   /** y of his feet: what he walks on */
   get feet() {
     return this.feetY;
@@ -305,8 +317,8 @@ export class Villain {
   private place({ x, y, path, throwDelay }: VillainDef) {
     this.throwDelay = throwDelay;
     this.feetY = Math.min(y, WORLD.groundY);
-    this.lo = Math.max(path.x0, MIN_X);
-    this.hi = Math.min(path.x1, MAX_X);
+    this.lo = this.keepOnScreen ? Math.max(path.x0, MIN_X) : path.x0;
+    this.hi = this.keepOnScreen ? Math.min(path.x1, MAX_X) : path.x1;
     if (this.lo > this.hi) this.lo = this.hi = (this.lo + this.hi) / 2;
     this.x = Math.max(this.lo, Math.min(x, this.hi));
     this.dir = Math.random() < 0.5 ? -1 : 1;
