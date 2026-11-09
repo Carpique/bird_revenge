@@ -39,6 +39,15 @@ export class PointingDetector {
   private pendingSince = 0;
   private ambiguousSince: number | null = null;
 
+  /** Back to resting with nothing pending (after a gap in the pose). */
+  reset() {
+    this.left = this.right = null;
+    this.intent = { mode: 'rest', dx: 0, dy: 0 };
+    this.pending = null;
+    this.pendingSince = 0;
+    this.ambiguousSince = null;
+  }
+
   update(f: PoseFrame, leftVisible: boolean, rightVisible: boolean): PointingOutput {
     const a = config.pointing.smoothing;
     const ema = (prev: Vec | null, v: Vec): Vec => {

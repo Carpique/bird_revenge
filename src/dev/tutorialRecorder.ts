@@ -6,7 +6,8 @@ import { Calibration } from '../gestures/Calibration';
 import type { ShootBaseline } from '../gestures/ShootDetector';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { noControls, type Controls } from '../input/controls';
-import { controlsFrom, POSE_STALE_MS, PoseDetectors } from '../input/poseControls';
+import { controlsFrom, PoseDetectors } from '../input/poseControls';
+import { poseGap } from '../pose/freshness';
 import { levels, onLevelEdited } from '../levels';
 import { startCamera } from '../pose/camera';
 import { PoseTracker } from '../pose/PoseTracker';
@@ -329,7 +330,7 @@ async function main() {
       }
     }
     if (mode === 'countdown' || mode === 'recording')
-      take.push(tracing ? traceLog.add(f, now - takeStart, r, tracker?.raw ?? null, tracker?.inferenceMs ?? 0, tracker?.occlusion.standIn) : toRecordedFrame(f, now - takeStart));
+      take.push(tracing ? traceLog.add(f, now - takeStart, r, tracker?.raw ?? null, tracker?.inferenceMs ?? 0, tracker?.smoother.occlusion.standIn) : toRecordedFrame(f, now - takeStart));
     // a debug trace runs until Esc: holding a pose still is what it's for
     if (mode === 'recording' && !tracing && standingStill(f, now)) stopRecording();
     if (mode === 'live' || mode === 'recording') {
@@ -354,7 +355,7 @@ async function main() {
       }
       if (now >= countdownEnd) startRecording();
     }
-    if (mode === 'live' || mode === 'recording') game.controls = now - lastPoseT < POSE_STALE_MS ? liveControls : noControls();
+    if (mode === 'live' || mode === 'recording') game.controls = poseGap(now - lastPoseT) === 'fresh' ? liveControls : noControls();
     replay.update(ticker.deltaMS);
     if (mode === 'review' && replay.recording) timeline.playhead = replay.time;
 

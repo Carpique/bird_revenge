@@ -63,19 +63,19 @@ describe('BlackBox', () => {
   });
 
   it('round-trips a synthetic dump through the replay harness', () => {
-    // 6 s of a person flapping, 1 s of nobody, 2 s of the person back
+    // 6 s of a person flapping, 4 s of nobody (long enough for a recalibration), 2 s of the person back
     const b = new BlackBox(60);
     const live: TF[] = [];
-    for (let i = 0; i < 270; i++) {
+    for (let i = 0; i < 340; i++) {
       const t = i * 33;
-      const gone = t >= 6000 && t < 7000;
+      const gone = t >= 6000 && t < 10000;
       const arm = 90 + 80 * Math.sin(t / 150);
       b.add(1000 + t, gone ? null : raw(t, arm), ctx({ playerPresent: !gone }));
       live.push({ t, f: gone ? null : { t, aspect: 16 / 9, lm: synthPose({ t, armLeft: arm, armRight: arm }).lm } });
     }
     const json = JSON.parse(JSON.stringify(b.dump(info)));
     const rec = toRecording('black-box', parseBlackBox(json));
-    expect(rec.frames).toHaveLength(270);
+    expect(rec.frames).toHaveLength(340);
     expect(rec.frames.filter((f) => f.f === null)).toHaveLength(live.filter((f) => f.f === null).length);
     expect(rec.frames[0].t).toBe(0);
 

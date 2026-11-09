@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { config } from '../../src/config';
 import { PoseDetectors } from '../../src/input/poseControls';
 import { PoseSession } from '../../src/input/poseSession';
 import { synthPose } from '../synthetic';
-import { allRecordings, cleanRun, tutorialRecording } from './harness';
+import { allRecordings, cleanRun, shift, tutorialRecording } from './harness';
 import { hitchScenario, nullGapScenario, runScenario, SCENARIOS, type Scenario } from './scenarios';
 
 /**
- * The game's CURRENT behaviour on a recorded session, pinned as metrics (the numbers are what the code does
- * today, with margins). A change that improves tracking on purpose flips the matching assertion in the same
- * commit. The metrics are explained in `harness.ts` (`Metrics`); `metrics.test.ts` prints them all.
+ * The game's behaviour on a recorded session, pinned as metrics (the numbers are what the code does, with
+ * margins). A change that improves tracking on purpose flips the matching assertion in the same commit. The metrics are explained in `harness.ts` (`Metrics`); `metrics.test.ts` prints them all.
  */
 
 /** shoot triggers in a clean replay of a recording, by name (a recording not listed here has none pinned) */
@@ -47,58 +47,56 @@ describe('clean recordings', () => {
 });
 
 describe('null frames (the tracker loses the person)', () => {
-  it('100 ms and 340 ms gaps: no recalibration, no soft pause', () => {
-    for (const ms of [100, 340]) {
-      const r = run(nullGapScenario(ms));
-      for (const m of r.runs) {
-        expect(m.recalibrations).toBe(0);
-        expect(m.outOfFrameMs).toBe(0);
-        expect(m.calibratingMs).toBe(0);
+  it('gaps up to 340 ms (within pose.holdLastMs): no pause, no recalibration, the bird keeps its controls', () => {
+    for (const ms of [34, 100, 340]) {
+      for (const m of run(nullGapScenario(ms)).runs) {
+        expect(m.recalibrations, `${ms} ms`).toBe(0);
+        expect(m.outOfFrameMs, `${ms} ms`).toBe(0);
+        expect(m.calibratingMs, `${ms} ms`).toBe(0);
+        expect(m.staleMs, `${ms} ms`).toBe(0);
+        // the held controls are the last good ones, off from the clean run for the length of the gap at most
+        expect(m.wrongMs, `${ms} ms`).toBeLessThan(ms + 100);
       }
     }
   });
 
-  it('a 340 ms gap leaves the bird without controls for 200 ms at most (the 300 ms staleness limit)', () => {
-    for (const m of run(nullGapScenario(340)).runs) expect(m.staleMs).toBeLessThan(200);
-  });
-
-  it('680 ms gap: recalibration (the big dialog, calibration hold and countdown), every time', () => {
-    const r = run(nullGapScenario(680));
-    for (const m of r.runs) {
-      expect(m.recalibrations).toBe(1);
-      // the dialog's hold + the countdown: the game is back in about 1.2 s + 2 s after the person is
-      expect(m.calibratingMs).toBeGreaterThan(3000);
-      expect(m.recoveryMs).toBeGreaterThan(3000);
-      expect(m.recoveryMs).toBeLessThan(4500);
+  it('510 to 2000 ms: a soft pause, the bird does not fall, no recalibration, back within a second', () => {
+    for (const ms of [510, 680, 1020, 1500, 2000]) {
+      for (const m of run(nullGapScenario(ms)).runs) {
+        expect(m.recalibrations, `${ms} ms`).toBe(0);
+        expect(m.calibratingMs, `${ms} ms`).toBe(0);
+        expect(m.outOfFrameMs, `${ms} ms`).toBeGreaterThan(ms - config.pose.holdLastMs - 100);
+        expect(m.staleMs, `${ms} ms`).toBeLessThan(80);
+        expect(m.recoveryMs, `${ms} ms`).not.toBeNull();
+        expect(m.recoveryMs!, `${ms} ms`).toBeLessThan(1000);
+      }
     }
   });
 
-  it('1500 ms gap: still one recalibration, and longer in the dialog', () => {
-    const r = run(nullGapScenario(1500));
-    for (const m of r.runs) expect(m.recalibrations).toBe(1);
-    expect(r.mean.calibratingMs!).toBeGreaterThan(run(nullGapScenario(680)).mean.calibratingMs!);
+  it('3.5 s: recalibration (the big dialog), as nobody is there any more', () => {
+    for (const m of run(nullGapScenario(3500)).runs) {
+      expect(m.recalibrations).toBe(1);
+      expect(m.calibratingMs).toBeGreaterThan(0);
+    }
   });
 });
 
 describe('hitches (no frames delivered, no callbacks)', () => {
-  it('680 ms: no recalibration (the monitor sees no gap), controls stale for about 400 ms', () => {
-    const r = run(hitchScenario(680));
-    for (const m of r.runs) {
-      expect(m.recalibrations).toBe(0);
+  it('340 ms: nothing happens at all', () => {
+    for (const m of run(hitchScenario(340)).runs) {
       expect(m.outOfFrameMs).toBe(0);
-      expect(m.staleMs).toBeGreaterThan(300);
-      expect(m.staleMs).toBeLessThan(520);
+      expect(m.staleMs).toBe(0);
     }
-    expect(r.mean.staleMs!).toBeGreaterThan(350);
-    expect(r.mean.staleMs!).toBeLessThan(480);
   });
 
-  it('1500 ms: still no recalibration, stale for the length less the 300 ms limit', () => {
-    const r = run(hitchScenario(1500));
-    for (const m of r.runs) {
-      expect(m.recalibrations).toBe(0);
-      expect(m.staleMs).toBeGreaterThan(1100);
-      expect(m.staleMs).toBeLessThan(1400);
+  it('680 ms and 1500 ms: the gap counts like null frames: soft pause, no fall, no recalibration', () => {
+    for (const ms of [680, 1500]) {
+      for (const m of run(hitchScenario(ms)).runs) {
+        expect(m.recalibrations, `${ms} ms`).toBe(0);
+        expect(m.staleMs, `${ms} ms`).toBe(0);
+        expect(m.outOfFrameMs, `${ms} ms`).toBeGreaterThan(ms - config.pose.holdLastMs - 100);
+        expect(m.recoveryMs!, `${ms} ms`).toBeLessThan(1000);
+      }
     }
   });
 });
@@ -134,12 +132,21 @@ describe('visibility and landmark noise', () => {
     expect(heavy.wrongMs!).toBeGreaterThan(light.wrongMs!);
   });
 
-  it('off-centre by 0.15: nothing happens; by 0.3: the player does not count as present', () => {
+  it('off-centre by 0.15: nothing happens; by 0.35 for 2 s: a soft pause, no recalibration', () => {
     const near = run(scenario('off-centre 0.15')).mean;
     expect(near.recalibrations).toBe(0);
     expect(near.calibratingMs).toBe(0);
-    const far = run(scenario('off-centre 0.3')).mean;
-    // the whole clip is spent behind the calibration dialog, the tracker is told to look again
+    for (const m of run(scenario('off-centre 0.35 for 2000 ms')).runs) {
+      expect(m.recalibrations).toBe(0);
+      expect(m.calibratingMs).toBe(0);
+      expect(m.outOfFrameMs).toBeGreaterThan(1000);
+      expect(m.staleMs).toBeLessThan(80);
+      expect(m.recoveryMs!).toBeLessThan(1000);
+    }
+  });
+
+  it('off-centre for good (0.35): the game never starts, the tracker is told to look again', () => {
+    const far = runScenario(rec, { name: 'far', ms: 0, build: (f) => shift(f, 0.35) }, clean).mean;
     expect(far.calibratingMs!).toBeGreaterThan(60000);
     expect(far.redetects!).toBeGreaterThan(30);
     expect(far.triggers).toBe(0);
@@ -154,35 +161,72 @@ describe('PoseSession', () => {
     return detectors;
   };
 
-  it('controls go stale 300 ms after the last frame, and only apply while playing', () => {
+  /** a session of a game playing, fed the standing person for a second */
+  const playing = () => {
     const detectors = warm();
     const session = new PoseSession();
     let state: string = 'outOfFrame';
     let t = 2000;
     for (; t < 3000; t += 33) state = session.update(state, detectors.update(synthPose({ t }), t), t).state;
     expect(state).toBe('playing');
-    const last = t - 33;
+    return { detectors, session, state, last: t - 33 };
+  };
+
+  it('controls apply while fresh (pose.holdLastMs after the last good frame), and only while playing', () => {
+    const { session, last } = playing();
+    const hold = config.pose.holdLastMs;
     expect(session.controls('playing', last + 100).pointing).not.toBeNull();
-    expect(session.controls('playing', last + 299).pointing).not.toBeNull();
-    expect(session.controls('playing', last + 300).pointing).toBeNull();
+    expect(session.controls('playing', last + hold - 1).pointing).not.toBeNull();
+    expect(session.controls('playing', last + hold).pointing).toBeNull();
     expect(session.controls('outOfFrame', last + 10).pointing).toBeNull();
     session.clear();
     expect(session.controls('playing', last + 10).pointing).toBeNull();
   });
 
-  it('no person for noPersonAfterMs sends a game in progress back to calibrating, not before', () => {
-    const detectors = warm();
-    const session = new PoseSession();
+  it('null frames: the last controls go on, then a soft pause, then the calibration dialog', () => {
+    const { detectors, session, last } = playing();
     let state: string = 'playing';
-    let recalibratedAt: number | null = null;
-    for (let t = 2000; t < 4000 && recalibratedAt === null; t += 33) {
+    const at: Record<string, number> = {};
+    for (let t = last + 33; t < last + 4000; t += 33) {
       const step = session.update(state, detectors.update(null, t), t);
+      if (step.state !== state) at[step.state] = t - last;
       state = step.state;
-      if (step.recalibrate) recalibratedAt = t - 2000;
+      if (t - last < config.pose.holdLastMs) expect(session.controls(state, t).pointing).not.toBeNull();
+      if (state === 'outOfFrame') expect(session.controls(state, t).pointing).toBeNull();
     }
-    expect(recalibratedAt).not.toBeNull();
-    expect(recalibratedAt!).toBeGreaterThanOrEqual(450);
-    expect(recalibratedAt!).toBeLessThan(600);
-    expect(state).toBe('calibrating');
+    expect(at.outOfFrame).toBeGreaterThanOrEqual(config.pose.holdLastMs);
+    expect(at.outOfFrame).toBeLessThan(config.pose.holdLastMs + 70);
+    expect(at.calibrating).toBeGreaterThanOrEqual(config.visibility.personGoneAfterMs);
+    expect(at.calibrating).toBeLessThan(config.visibility.personGoneAfterMs + 70);
+  });
+
+  it('no frames at all (a hitch): `tick` pauses and recalibrates on the same thresholds', () => {
+    const { session, last } = playing();
+    expect(session.tick('playing', last + config.pose.holdLastMs - 1).state).toBe('playing');
+    expect(session.tick('playing', last + config.pose.holdLastMs).state).toBe('outOfFrame');
+    const gone = session.tick('outOfFrame', last + config.visibility.personGoneAfterMs);
+    expect(gone.recalibrate).toBe(true);
+    expect(gone.state).toBe('calibrating');
+    // not while the camera is off (or before any frame)
+    session.clear();
+    expect(session.tick('playing', last + 60000).state).toBe('playing');
+  });
+
+  it('a soft pause ends with the first good frame back, and the bird flies on that frame', () => {
+    const { detectors, session, last } = playing();
+    let state: string = 'playing';
+    let t = last + 33;
+    for (; t < last + 1200; t += 33) state = session.update(state, detectors.update(null, t), t).state;
+    expect(state).toBe('outOfFrame');
+    // the monitor needs a while to count the parts as visible again: a few frames
+    let back = -1;
+    for (const t0 = t; t < t0 + 1500 && back < 0; t += 33) {
+      const step = session.update(state, detectors.update(synthPose({ t }), t), t);
+      state = step.state;
+      if (state === 'playing') back = t - t0;
+    }
+    expect(back).toBeGreaterThanOrEqual(0);
+    expect(back).toBeLessThan(800);
+    expect(session.controls('playing', t - 33).pointing).not.toBeNull();
   });
 });

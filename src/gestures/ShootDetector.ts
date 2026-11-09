@@ -40,6 +40,11 @@ export class ShootDetector {
     this.shooting = false;
   }
 
+  /** Forget a shoot in progress (after a gap in the pose); the calibrated baseline and the cooldown stay. */
+  reset() {
+    this.shooting = false;
+  }
+
   update(f: PoseFrame, hipsVisible: boolean): ShootOutput {
     const cfg = config.shoot;
     const rawLeft = hipAbduction(f, 'left');

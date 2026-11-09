@@ -1,6 +1,7 @@
 import { config } from '../config';
 import { noControls, type Controls } from './controls';
-import { controlsFrom, POSE_STALE_MS, type PoseReading } from './poseControls';
+import { poseGap } from '../pose/freshness';
+import { controlsFrom, type PoseReading } from './poseControls';
 
 /** What one pose frame makes the game do, decided by `PoseSession.update`. */
 export interface PoseStep<S extends string> {
@@ -16,14 +17,23 @@ export interface PoseStep<S extends string> {
 
 /**
  * The game-side decisions on the pose stream, apart from the camera, the detectors and the screen: which state
- * a frame leads to, which controls it gives the bird, and when they have gone stale. Used by `main.ts`, and driven
+ * a frame leads to, which controls it gives the bird, and what a gap in the pose does. Used by `main.ts`, and driven
  * by the replay tests (`tests/replay/`), so the tests run the very rules the game does.
+ *
+ * Pose freshness is one thing here: the age of the latest good pose (a frame with the player in it, `lastGoodT`),
+ * read through `poseGap`. Fresh (a short gap): the last controls keep applying. Lost: the game pauses softly
+ * (outOfFrame, no penalty, calibration kept) and resumes once the player is back. Gone: the calibration dialog.
+ * The gap counts frames that came without the player and frames that did not come at all, so `tick` (between
+ * frames, on the render ticker) is as much part of it as `update`.
  *
  * States named here: calibrating, countdown, playing, outOfFrame; any other state is left alone.
  */
 export class PoseSession {
   private poseControls: Controls = noControls();
-  private lastPoseT = 0;
+  /** ms time of the latest good pose; null: the camera has just (re)started, nothing counted yet */
+  private lastGoodT: number | null = null;
+  /** ms time of the latest frame with anybody in it (the player or not) */
+  private lastFrameT: number | null = null;
   private lastRedetectT = -Infinity;
 
   /** `now`: ms, in the frames' time. Call on every pose frame (also an empty one), with the detectors' reading. */
@@ -36,43 +46,87 @@ export class PoseSession {
       this.lastRedetectT = now;
       step.redetect = true;
     }
+    const frame = !!reading.flap;
+    const good = frame && vis.playerPresent;
+    if (frame) this.lastFrameT = now;
+    // the first frame after a restart starts the count, a good one renews it
+    if (good || this.lastGoodT === null) this.lastGoodT = now;
+    if (this.byGap(step, now)) return this.dropControls(step);
     const s: string = state;
-    // nobody in front of the camera any more: the big calibration dialog, as at the start
-    if ((s === 'countdown' || s === 'playing' || s === 'outOfFrame') && !vis.playerPresent) {
-      step.recalibrate = true;
-      step.state = 'calibrating';
-      return step;
-    }
     switch (s) {
       case 'countdown':
         if (!vis.inFrame) step.state = 'outOfFrame';
         break;
       case 'outOfFrame':
-        if (vis.inFrame) step.state = 'playing';
+        // a frame without the player doesn't bring the game back, even when the parts still count as visible
+        if (good && vis.inFrame) {
+          step.state = 'playing';
+          this.take(reading, step); // the bird flies on this very frame
+        }
         break;
       case 'playing': {
         if (!vis.inFrame) {
           step.state = 'outOfFrame';
           break;
         }
-        const controls = controlsFrom(reading);
-        if (!controls) break;
-        this.poseControls = controls;
-        this.lastPoseT = now;
-        step.shoot = !!reading.shoot?.triggered;
+        // a frame without the player: the last controls go on (until the gap is no more fresh)
+        if (good) this.take(reading, step);
         break;
       }
     }
+    return step.state === 'playing' ? step : this.dropControls(step);
+  }
+
+  /**
+   * Between frames, on every render tick: a gap in the pose goes on even when no frame comes (the camera or the
+   * page stalled). Returns the state (and `recalibrate`) it leads to; nothing else is decided here.
+   */
+  tick<S extends string>(state: S, now: number): PoseStep<S> {
+    const step: PoseStep<S> = { state, redetect: false, recalibrate: false, shoot: false };
+    if (this.lastGoodT !== null) this.byGap(step, now);
     return step;
+  }
+
+  /** No frames with anybody in them for longer than a short gap: the tracking is lost (not only the player's place). */
+  framesLost(now: number): boolean {
+    return this.lastFrameT !== null && poseGap(now - this.lastFrameT) !== 'fresh';
   }
 
   /** The controls the pose gives the bird now: the latest ones while playing and fresh, otherwise none. */
   controls(state: string, now: number): Controls {
-    return state === 'playing' && now - this.lastPoseT < POSE_STALE_MS ? this.poseControls : noControls();
+    return state === 'playing' && this.lastGoodT !== null && poseGap(now - this.lastGoodT) === 'fresh' ? this.poseControls : noControls();
   }
 
-  /** Stale pose controls must not apply until a fresh frame arrives (the camera went off). */
+  /** The camera went off: no gap is counted, and stale pose controls must not apply until a fresh frame arrives. */
   clear() {
-    this.lastPoseT = 0;
+    this.lastGoodT = null;
+    this.lastFrameT = null;
+    this.poseControls = noControls();
+  }
+
+  /** What the gap does to the game: soft pause, or the calibration dialog. True when it decided (`step.state` set). */
+  private byGap<S extends string>(step: PoseStep<S>, now: number): boolean {
+    const s: string = step.state;
+    if (s !== 'countdown' && s !== 'playing' && s !== 'outOfFrame') return false;
+    const gap = poseGap(now - this.lastGoodT!);
+    if (gap === 'gone') {
+      step.recalibrate = true;
+      step.state = 'calibrating';
+      return true;
+    }
+    if (gap === 'lost' && s !== 'outOfFrame') step.state = 'outOfFrame';
+    return gap === 'lost';
+  }
+
+  private take<S extends string>(reading: PoseReading, step: PoseStep<S>) {
+    const controls = controlsFrom(reading);
+    if (!controls) return;
+    this.poseControls = controls;
+    step.shoot = !!reading.shoot?.triggered;
+  }
+
+  private dropControls<S extends string>(step: PoseStep<S>): PoseStep<S> {
+    this.poseControls = noControls();
+    return step;
   }
 }

@@ -21,12 +21,17 @@ export const RIGHT_ARM = [14, 16];
 export const nullGapScenario = (ms: number): Scenario => ({ name: `null gap ${ms} ms`, ms, build: (f, t0) => nullGap(f, t0, ms) });
 export const hitchScenario = (ms: number): Scenario => ({ name: `hitch ${ms} ms`, ms, build: (f, t0) => hitch(f, t0, ms) });
 
-/** the scenarios of the metrics table (and of the tests that pin the current behaviour) */
+/** the scenarios of the metrics table (and of the tests that pin the behaviour) */
 export const SCENARIOS: Scenario[] = [
+  nullGapScenario(34),
   nullGapScenario(100),
   nullGapScenario(340),
+  nullGapScenario(510),
   nullGapScenario(680),
+  nullGapScenario(1020),
   nullGapScenario(1500),
+  nullGapScenario(2000),
+  nullGapScenario(3500),
   hitchScenario(340),
   hitchScenario(680),
   hitchScenario(1500),
@@ -37,6 +42,7 @@ export const SCENARIOS: Scenario[] = [
   { name: 'jitter sigma 0.03', ms: 0, build: (f) => jitter(f, 0.03) },
   { name: 'off-centre 0.15', ms: 0, build: (f) => shift(f, 0.15) },
   { name: 'off-centre 0.3', ms: 0, build: (f) => shift(f, 0.3) },
+  { name: 'off-centre 0.35 for 2000 ms', ms: 2000, build: (f, t0) => shift(f, 0.35, 0, t0, 2000) },
 ];
 
 /** where in the clip the perturbations are inserted (ms): spread over it, from the warm-up to a few seconds before its end */

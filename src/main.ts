@@ -15,7 +15,7 @@ import type { VisibilityOutput } from './gestures/VisibilityMonitor';
 import { Keyboard } from './input/keyboard';
 import { TouchControls } from './input/touchControls';
 import { PoseDetectors } from './input/poseControls';
-import { PoseSession } from './input/poseSession';
+import { PoseSession, type PoseStep } from './input/poseSession';
 import { BlackBox } from './pose/blackBox';
 import { startCamera, stopCamera } from './pose/camera';
 import { REQUIRED_PARTS } from './pose/landmarks';
@@ -145,7 +145,11 @@ async function main() {
     else if (state === 'outOfFrame')
       Object.assign(gs, {
         mode: 'outOfFrame',
-        message: cameraError ? t('{error} – reconnecting…', { error: t(cameraError) }) : (vis?.hint ?? t('Get into view')),
+        message: cameraError
+          ? t('{error} – reconnecting…', { error: t(cameraError) })
+          : session.framesLost(now)
+            ? t('Tracking lost — stay in the frame')
+            : (vis?.hint ?? t('Get into view')),
       });
     else if (state === 'countdown') Object.assign(gs, { mode: 'countdown', countdown: (countdownEnd - now) / 1000 });
     else if (state === 'menu' && demoOn && replay?.recording)
@@ -462,6 +466,16 @@ async function main() {
     if (inGame() && state !== 'gameOver' && !menuOpen && !game.showingSign) openPauseMenu();
   };
 
+  // a step of the session (from a pose frame or a render tick) into the app state, with the telemetry on why
+  const applyStep = (step: PoseStep<AppState>, now: number) => {
+    if (!vis) return; // no frame yet: the session has nothing to decide
+    if (step.recalibrate) tracker?.stats.recalibration(session.framesLost(now) ? 'noPerson' : recalCause(vis));
+    else if (step.state === 'outOfFrame' && state !== 'outOfFrame')
+      tracker?.stats.outOfFrameEpisode(session.framesLost(now) ? 'noFrames' : outOfFrameCause(vis, REQUIRED_PARTS));
+    state = step.state;
+    if (step.recalibrate) recalibrate();
+  };
+
   const onPose = (f: PoseFrame | null) => {
     const now = performance.now();
     frame = f;
@@ -476,11 +490,7 @@ async function main() {
     // what the frame means for the game (the rules are in `PoseSession`)
     const step = session.update(state, reading, now);
     if (step.redetect) tracker?.redetect();
-    // telemetry: why the game left or restarted play
-    if (step.recalibrate) tracker?.stats.recalibration(recalCause(vis));
-    else if (step.state === 'outOfFrame' && state !== 'outOfFrame') tracker?.stats.outOfFrameEpisode(outOfFrameCause(vis, REQUIRED_PARTS));
-    state = step.state;
-    if (step.recalibrate) recalibrate();
+    applyStep(step, now);
     if (step.shoot) game.requestPoo();
     if (f) blackBox.aspect = f.aspect;
     const ctl = session.controls(state, now);
@@ -528,6 +538,8 @@ async function main() {
       else startCountdown();
     }
     updateCamera();
+    // a gap in the pose goes on without frames too (a hitch): soft pause, then the calibration dialog
+    applyStep(session.tick(state, now), now);
 
     touch.visible = state === 'keyboard' && !menuOpen && !manualPause && !game.showingSign;
     game.controls = keyboard.apply(touch.apply(session.controls(state, now)));

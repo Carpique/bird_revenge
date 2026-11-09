@@ -2,7 +2,8 @@ import type { Game } from '../game/Game';
 import { STEP_MS } from '../game/physics';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { noControls, type Controls } from '../input/controls';
-import { controlsFrom, POSE_STALE_MS, PoseDetectors } from '../input/poseControls';
+import { controlsFrom, PoseDetectors } from '../input/poseControls';
+import { poseGap } from '../pose/freshness';
 import type { LevelDef } from '../level/types';
 import type { PoseFrame } from '../pose/types';
 import { toPoseFrame, type PoseRecording } from './recording';
@@ -109,7 +110,7 @@ export class PoseReplay {
       return;
     }
     const poo = this.feed(this.time);
-    this.game.controls = this.time - this.lastPoseT < POSE_STALE_MS ? this.controls : noControls();
+    this.game.controls = poseGap(this.time - this.lastPoseT) === 'fresh' ? this.controls : noControls();
     if (poo) this.game.requestPoo();
   }
 

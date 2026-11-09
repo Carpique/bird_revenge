@@ -1,14 +1,14 @@
 /**
  * Replay harness: recorded pose sessions played through the real pipeline, with the game side of `main.ts`.
  *
- * What is real: `OneEuroFilter` + `ArmOcclusion` (as in `PoseTracker.process`), `PoseDetectors` (visibility
+ * What is real: `PoseSmoother` (arm stand-in + One-Euro filters, as in `PoseTracker.process`), `PoseDetectors` (visibility
  * monitor, flap / shoot / tilt / pointing), `PoseSession` (the game's rules on the pose stream: state changes,
  * controls, staleness) and `config`.
  *
  * What is modelled:
  *  - the camera / MediaPipe: frames come from the recording at their own times (a recorded frame is taken for the
  *    tracker's raw output, so smoothing runs a second time over already smoothed data; close enough for the
- *    rules under test). `null` frames reset the filters, like the tracker does. A hitch is frames not delivered.
+ *    rules under test). `null` frames leave the filters alone (a long gap resets them, as in the tracker). A hitch is frames not delivered.
  *  - the calibration dialog: done once the player has been in frame for `config.calibration.holdMs` (the real one
  *    wants an X pose, which a recording can't give), then the countdown (`config.countdownMs`), then playing.
  *  - the ticker: 60 Hz (`tickMs`); the bird gets `PoseSession.controls` on every tick.
@@ -19,8 +19,7 @@ import tutorialJson from '../../src/tutorial/control-tutorial.json?raw';
 import { config } from '../../src/config';
 import { PoseDetectors, type PoseReading } from '../../src/input/poseControls';
 import { PoseSession } from '../../src/input/poseSession';
-import { ArmOcclusion } from '../../src/pose/ArmOcclusion';
-import { OneEuroFilter } from '../../src/pose/OneEuroFilter';
+import { PoseSmoother } from '../../src/pose/PoseSmoother';
 import type { PoseFrame } from '../../src/pose/types';
 import type { PoseRecording } from '../../src/tutorial/recording';
 
@@ -158,36 +157,19 @@ export function rng(seed: number) {
 // the simulation
 // ---------------------------------------------------------------------------------------------------------------
 
-/** `PoseTracker.process` for a frame list: occlusion stand-in, then one 1-euro filter per coordinate; reset on null */
+/** `PoseTracker.process` for a frame list: the real `PoseSmoother` (arm stand-in, One-Euro filters; a short gap leaves them be) */
 export class SimTracker {
-  private filters = Array.from({ length: 66 }, () => new OneEuroFilter());
-  private occlusion = new ArmOcclusion();
+  private smoother = new PoseSmoother();
 
   process(f: PoseFrame | null): PoseFrame | null {
-    if (!f) {
-      this.redetect();
-      return null;
-    }
-    const pts = this.occlusion.apply(
-      f.lm.map((p) => ({ x: p.x, y: p.y, z: 0, visibility: p.v })),
-      f.aspect,
-    );
-    const s = config.smoothing;
-    const tSec = f.t / 1000;
-    const lm = pts.map((p, i) => {
-      const fx = this.filters[2 * i], fy = this.filters[2 * i + 1];
-      fx.minCutoff = fy.minCutoff = s.minCutoff;
-      fx.beta = fy.beta = s.beta;
-      fx.dCutoff = fy.dCutoff = s.dCutoff;
-      return { x: fx.filter(p.x, tSec), y: fy.filter(p.y, tSec), v: p.visibility ?? 0 };
-    });
-    return { ...f, lm };
+    if (!f) return null;
+    const raw = f.lm.map((p) => ({ x: p.x, y: p.y, z: 0, visibility: p.v }));
+    return { ...f, lm: this.smoother.process(raw, f.aspect, f.t)! };
   }
 
   /** `PoseTracker.redetect`: forget the person */
   redetect() {
-    this.filters.forEach((x) => x.reset());
-    this.occlusion.reset();
+    this.smoother.reset();
   }
 }
 
@@ -216,7 +198,7 @@ export interface SimResult {
 
 export interface SimOptions {
   tickMs?: number;
-  /** the state at the start (default `outOfFrame`: the game is on, the first frames bring the player in) */
+  /** the state at the start (default `calibrating`, as a game starts: the first frames bring the player in) */
   startState?: SimState;
 }
 
@@ -230,7 +212,7 @@ export function simulate(rec: Recording, frames: TF[], opts: SimOptions = {}): S
   const out: SimResult = { ticks: [], events: [], triggers: [] };
   const ev = (t: number, type: SimEvent['type']) => out.events.push({ t, type });
 
-  let state: SimState = opts.startState ?? 'outOfFrame';
+  let state: SimState = opts.startState ?? 'calibrating';
   let calmSince: number | null = null;
   let countdownEnd = 0;
   let fi = 0;
@@ -263,6 +245,15 @@ export function simulate(rec: Recording, frames: TF[], opts: SimOptions = {}): S
         }
       }
     }
+    // a gap in the pose goes on between frames too (as the ticker does in main.ts)
+    const gapStep = session.tick(state, tick);
+    if (gapStep.recalibrate) {
+      ev(tick, 'recalibrate');
+      calmSince = null;
+    } else if (gapStep.state !== state) {
+      ev(tick, 'outOfFrame');
+    }
+    state = gapStep.state;
     if (state === 'countdown' && tick >= countdownEnd) {
       state = 'playing';
       ev(tick, 'countdownEnd');

@@ -149,6 +149,12 @@ export class FlapDetector {
   private left = new ArmTracker('left');
   private right = new ArmTracker('right');
 
+  /** Forget the strokes in progress (after a gap in the pose). */
+  reset() {
+    this.left = new ArmTracker('left');
+    this.right = new ArmTracker('right');
+  }
+
   update(f: PoseFrame, leftVisible: boolean, rightVisible: boolean): FlapOutput {
     this.left.update(f, leftVisible);
     this.right.update(f, rightVisible);

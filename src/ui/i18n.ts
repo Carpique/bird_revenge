@@ -50,6 +50,7 @@ const PL = {
   'Great!': 'Super!',
   'Step in front of the camera': 'Stań przed kamerą',
   'Move to the middle of the picture': 'Stań na środku obrazu',
+  'Tracking lost — stay in the frame': 'Utracono śledzenie — zostań w kadrze',
   'Step back — your hips are out of view': 'Cofnij się, nie widać bioder',
   'Move right — an arm is out of view': 'Przesuń się w prawo — nie widać ręki',
   'Move left — an arm is out of view': 'Przesuń się w lewo — nie widać ręki',

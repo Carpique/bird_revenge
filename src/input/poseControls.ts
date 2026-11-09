@@ -4,11 +4,9 @@ import { PointingDetector, type PointingOutput } from '../gestures/PointingDetec
 import { ShootDetector, type ShootOutput } from '../gestures/ShootDetector';
 import { TiltDetector, type TiltOutput } from '../gestures/TiltDetector';
 import { VisibilityMonitor, type VisibilityOutput } from '../gestures/VisibilityMonitor';
+import { poseGap } from '../pose/freshness';
 import type { PoseFrame } from '../pose/types';
 import type { Controls } from './controls';
-
-/** Pose controls older than this (ms) no longer apply: the bird gets no controls until a fresh frame arrives. */
-export const POSE_STALE_MS = 300;
 
 /** What the gesture detectors made of one pose frame; the detectors' outputs are null without a person in view. */
 export interface PoseReading {
@@ -29,11 +27,24 @@ export class PoseDetectors {
   readonly shoot = new ShootDetector();
   readonly tilt = new TiltDetector();
   readonly pointing = new PointingDetector();
+  /** when the detectors last saw a person; null: not since the start */
+  private lastFrameT: number | null = null;
 
-  /** `now`: ms, in the frames' time. Run on every frame, so the detectors' state stays continuous. */
+  /**
+   * `now`: ms, in the frames' time. Run on every frame, so the detectors' state stays continuous. After a gap
+   * without a person (`poseGap` not fresh: null frames, or none at all) their transient state is dropped, so it
+   * can't turn into a burst of wrong controls on the first frame back; the shoot calibration stays.
+   */
   update(f: PoseFrame | null, now: number): PoseReading {
     const vis = this.visibility.update(f, now);
     if (!f) return { vis, flap: null, shoot: null, tilt: null, pointing: null };
+    if (this.lastFrameT !== null && poseGap(now - this.lastFrameT) !== 'fresh') {
+      this.flap.reset();
+      this.shoot.reset();
+      this.tilt.reset();
+      this.pointing.reset();
+    }
+    this.lastFrameT = now;
     const left = vis.parts.leftArm.visible, right = vis.parts.rightArm.visible;
     const flap = this.flap.update(f, left, right);
     const shoot = this.shoot.update(f, vis.parts.torso.visible);

@@ -16,6 +16,14 @@ export const config = {
     /** MediaPipe model size: lite is fastest, heavy most accurate. Change requires reload. */
     model: 'lite' as 'lite' | 'full' | 'heavy',
     delegate: 'GPU' as 'GPU' | 'CPU',
+    /**
+     * no good pose for less than this (ms; nobody found, or the frames did not come): the last controls keep
+     * applying and nothing resets, so a dropped frame or a hitch of the camera goes unnoticed. Longer: the game
+     * pauses softly (`visibility.personGoneAfterMs`) and the gesture detectors forget what they were doing.
+     */
+    holdLastMs: 400,
+    /** a gap this long (ms) without a good pose resets the smoothing filters: the person may have moved a lot meanwhile */
+    resetFiltersAfterMs: 500,
   },
 
   /** Local tracking telemetry (debug panel) and the black box (B): nothing of it leaves the device. */
@@ -65,11 +73,19 @@ export const config = {
     recoverAfterMs: 300,
     noPersonAfterMs: 500,
     /**
-     * the torso's centre (between shoulders and hips) further than this (fraction of frame width) from the middle is
-     * off centre: the player has wandered off, or the tracker has picked someone else in the room
+     * no good pose (nobody found, the frames missing, or someone off centre) for this long (ms): nobody counts as in
+     * front of the camera and the calibration dialog comes up. Shorter gaps only pause the game softly ("Tracking
+     * lost", or the out-of-frame box), with the calibration kept.
      */
-    maxOffCentre: 0.25,
-    /** off centre this long: nobody counts as in front of the camera (calibration dialog) */
+    personGoneAfterMs: 3000,
+    /**
+     * the torso's centre (between shoulders and hips) further than this (fraction of frame width) from the middle is
+     * off centre: the player has wandered off, or the tracker has picked someone else in the room. 0.3: a player
+     * leaning into a big sideways flight or stepping aside has the torso centre swing out; 0.25 made that count
+     * as off centre too often, and it only pauses the game softly now.
+     */
+    maxOffCentre: 0.3,
+    /** off centre this long: the game pauses softly (the "move to the middle" hint); after `personGoneAfterMs` it recalibrates */
     offCentreAfterMs: 600,
     /** while off centre, the pose tracker forgets who it follows and looks again, at most this often */
     redetectEveryMs: 1500,
