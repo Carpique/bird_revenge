@@ -17,6 +17,7 @@ images), the calibration and the game state per frame. Besides the clean-recordi
 
 - `2026-11-09-gra.json`: a level played (calibration, countdown, play), 60 s, ~23 fps
 - `2026-11-09-trening.json`: practice, 60 s of play, ~23 fps
+- `2026-11-09-gra-po-strojeniu.json`: a level, 60 s of play, ~25 fps, after the latency tuning ("better, but sometimes too abrupt"; tilted, lowered T held for seconds at 24.5-26.9, 28.7-32.7, 45.3-48.2 s)
 
 A recording with a name other than the tutorial's gets no pinned shoot-trigger count; add one in
 `tests/replay/behaviour.test.ts` (`EXPECTED_TRIGGERS`) if it should have one.

@@ -304,10 +304,12 @@ export const config = {
     /** tilted T: sideways speed, px per physics step */
     driftSpeed: 1.8,
     /**
-     * how quickly the bird reaches its speed (or stops, in the hover), px/s². 1800 -> 3600: half the cruising speed
-     * in a new direction after ~100 ms instead of ~180 (a turn round takes ~230 ms instead of ~470)
+     * how quickly the bird reaches its speed (or stops, in the hover), px/s². 2400: half the cruising speed in a new
+     * direction after ~90 ms, a turn round in ~350 ms. 3600 felt abrupt in play: with Matter.js, 8-13 jolts per
+     * minute (the speed changing more than 5 px per step within 100 ms) on the recordings of play, none at 2400;
+     * 1800 lagged (a turn round ~470 ms)
      */
-    accel: 3600,
+    accel: 2400,
     /** rest: fraction of the sideways and upward speed lost per physics step */
     restDrag: 0.08,
     /** Matter.js frictionAir while flying, hovering or drifting (rest: physics.birdAirFriction) */

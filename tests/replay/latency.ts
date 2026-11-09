@@ -19,6 +19,8 @@ const STABLE_MS = 300;
 const MATCH_HOLD_MS = 150;
 /** the pipeline must agree within this long after the new pose's segment ends, or the change counts as missed */
 const MATCH_WINDOW_MS = 1500;
+/** frames reading something else for up to this long (ms) do not end a held pose */
+const BRIDGE_MS = 100;
 
 export interface Latency {
   /** pose changes in the raw geometry */
@@ -47,12 +49,15 @@ const quantile = (xs: number[], q: number) => (xs.length ? [...xs].sort((a, b) =
 
 export function latency(rec: Recording): Latency {
   // the raw geometry, frame by frame
-  const raw = rec.frames.map(({ t, f }) => ({ t, p: f ? classifyArms(dirOf(f, 'left'), dirOf(f, 'right'), null) : null }));
+  const raw = rec.frames.map(({ t, f }) => ({ t, nobody: !f, p: f ? classifyArms(dirOf(f, 'left'), dirOf(f, 'right'), null) : null }));
+  // a pose held: the same reading frame after frame; a frame with nobody in view ends it, and so does a gap of
+  // more than BRIDGE_MS of frames reading something else (a single odd frame in a held pose is noise)
   const segs: { t0: number; t1: number; p: PointingIntent }[] = [];
+  let cur: { t0: number; t1: number; p: PointingIntent } | null = null;
   for (const e of raw) {
-    const last = segs[segs.length - 1];
-    if (e.p && last && same(e.p, last.p)) last.t1 = e.t;
-    else if (e.p) segs.push({ t0: e.t, t1: e.t, p: e.p });
+    if (e.nobody) cur = null;
+    else if (e.p && cur && same(e.p, cur.p) && e.t - cur.t1 <= BRIDGE_MS) cur.t1 = e.t;
+    else if (e.p) segs.push((cur = { t0: e.t, t1: e.t, p: e.p }));
   }
   const stable = segs.filter((s) => s.t1 - s.t0 >= STABLE_MS);
 
@@ -75,16 +80,21 @@ export function latency(rec: Recording): Latency {
     const s = stable[i];
     if (same(s.p, stable[i - 1].p)) continue;
     changes++;
+    // followed: the bird told the same for MATCH_HOLD_MS in full, within the window
     let start: number | null = null;
+    let followedAt: number | null = null;
     for (const e of intents) {
       if (e.t < s.t0 - 50) continue;
       if (e.t > s.t1 + MATCH_WINDOW_MS) break;
       if (same(e.p, s.p)) {
         start ??= e.t;
-        if (e.t - start >= MATCH_HOLD_MS) break;
+        if (e.t - start >= MATCH_HOLD_MS) {
+          followedAt = start;
+          break;
+        }
       } else start = null;
     }
-    if (start !== null) delays.push(Math.max(0, start - s.t0));
+    if (followedAt !== null) delays.push(Math.max(0, followedAt - s.t0));
   }
 
   const modes: { t0: number; t1: number }[] = [];
