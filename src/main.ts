@@ -12,10 +12,10 @@ import type { PointingOutput } from './gestures/PointingDetector';
 import type { TiltOutput } from './gestures/TiltDetector';
 import type { ShootOutput } from './gestures/ShootDetector';
 import type { VisibilityOutput } from './gestures/VisibilityMonitor';
-import { noControls, type Controls } from './input/controls';
 import { Keyboard } from './input/keyboard';
 import { TouchControls } from './input/touchControls';
-import { controlsFrom, POSE_STALE_MS, PoseDetectors } from './input/poseControls';
+import { PoseDetectors } from './input/poseControls';
+import { PoseSession } from './input/poseSession';
 import { startCamera, stopCamera } from './pose/camera';
 import { PoseTracker } from './pose/PoseTracker';
 import type { PoseFrame } from './pose/types';
@@ -111,9 +111,6 @@ async function main() {
   let tiltOut: TiltOutput | null = null;
   let pointingOut: PointingOutput | null = null;
   let calibStatus: CalibrationStatus | null = null;
-  let poseControls: Controls = noControls();
-  let lastPoseT = 0;
-  let lastRedetectT = -Infinity;
   let tracker: PoseTracker | null = null;
 
   /** the window is unfocused / hidden, or the game is paused: nothing runs */
@@ -231,6 +228,7 @@ async function main() {
   const touch = new TouchControls(gameBox);
   const detectors = new PoseDetectors();
   const calibration = new Calibration();
+  const session = new PoseSession();
 
   // the calibration dialog's "Back" (the only way out on a phone): to the level select, the level selected, or from
   // training (or a level tested from the URL) to the title screen
@@ -311,7 +309,7 @@ async function main() {
     stopCamera(video);
     cameraOn = false;
     frame = null;
-    lastPoseT = 0; // stale pose controls must not apply until a fresh frame arrives
+    session.clear(); // stale pose controls must not apply until a fresh frame arrives
   };
   const onCameraLost = () => {
     console.warn('camera stream ended');
@@ -458,42 +456,19 @@ async function main() {
       ({ flap: flapOut, shoot: shootOut, tilt: tiltOut, pointing: pointingOut } = reading);
       debug.record(now, reading.flap, reading.shoot);
     }
-    // someone off to the side may be another person the tracker latched onto: make it look again for whoever
-    // is in front of the camera
-    if (vis.personDetected && !vis.centred && now - lastRedetectT >= config.visibility.redetectEveryMs) {
-      lastRedetectT = now;
-      tracker?.redetect();
-    }
-    // nobody in front of the camera any more: the big calibration dialog, as at the start
-    if ((state === 'countdown' || state === 'playing' || state === 'outOfFrame') && !vis.playerPresent) recalibrate();
-
-    switch (state) {
-      case 'calibrating':
-        calibStatus = calibration.update(f, vis);
-        if (calibStatus.done) {
-          detectors.shoot.calibrate(calibStatus.done);
-          startCountdown();
-        }
-        break;
-      case 'countdown':
-        if (!vis.inFrame) state = 'outOfFrame';
-        break;
-      case 'outOfFrame':
-        if (vis.inFrame) state = 'playing';
-        break;
-      case 'playing':
-        if (!vis.inFrame) {
-          state = 'outOfFrame';
-          break;
-        }
-        {
-          const controls = controlsFrom(reading);
-          if (!controls) break;
-          poseControls = controls;
-          lastPoseT = now;
-          if (reading.shoot?.triggered) game.requestPoo();
-        }
-        break;
+    // what the frame means for the game (the rules are in `PoseSession`)
+    const step = session.update(state, reading, now);
+    if (step.redetect) tracker?.redetect();
+    state = step.state;
+    if (step.recalibrate) recalibrate();
+    if (step.shoot) game.requestPoo();
+    // the calibration dialog, also on the frame that brought it up
+    if (state === 'calibrating') {
+      calibStatus = calibration.update(f, vis);
+      if (calibStatus.done) {
+        detectors.shoot.calibrate(calibStatus.done);
+        startCountdown();
+      }
     }
   };
 
@@ -520,9 +495,8 @@ async function main() {
     }
     updateCamera();
 
-    const poseFresh = state === 'playing' && now - lastPoseT < POSE_STALE_MS;
     touch.visible = state === 'keyboard' && !menuOpen && !manualPause && !game.showingSign;
-    game.controls = keyboard.apply(touch.apply(poseFresh ? poseControls : noControls()));
+    game.controls = keyboard.apply(touch.apply(session.controls(state, now)));
     // during gameOver the game runs only to slide the "Game Over" sign through
     game.paused = manualPause || menuOpen || !(state === 'playing' || state === 'keyboard' || state === 'gameOver');
     game.showPausedText = manualPause;
