@@ -1,4 +1,4 @@
-import { Application } from 'pixi.js';
+import { Application, UPDATE_PRIORITY } from 'pixi.js';
 import { countLevelView } from './analytics';
 import { audio } from './audio/audio';
 import { config, loadSavedConfig } from './config';
@@ -73,6 +73,11 @@ async function main() {
     background: scenery.skyColor,
   });
   gameBox.appendChild(app.canvas);
+  // the canvas as big as its box, checked every frame before anything is laid out: the resize event alone isn't enough,
+  // iOS Safari may still report the old size while turning, and then the game stays drawn too big
+  app.ticker.add(() => {
+    if (gameBox.clientWidth !== app.screen.width || gameBox.clientHeight !== app.screen.height) app.resize();
+  }, undefined, UPDATE_PRIORITY.HIGH);
 
   const video = document.getElementById('camera') as HTMLVideoElement;
   const guide = new FrameGuide(document.getElementById('guide') as HTMLCanvasElement, video, app.stage);
