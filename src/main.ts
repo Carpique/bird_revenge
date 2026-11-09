@@ -26,6 +26,7 @@ import { DebugPanel } from './ui/DebugPanel';
 import { loadFonts } from './ui/fonts';
 import { FrameGuide, type GuideState } from './ui/FrameGuide';
 import { FullscreenButton } from './ui/FullscreenButton';
+import { MenuButton } from './ui/MenuButton';
 import { t, type Msg } from './ui/i18n';
 import { LanguageButton } from './ui/LanguageButton';
 import { PauseMenu } from './ui/PauseMenu';
@@ -222,6 +223,7 @@ async function main() {
   const recorder = new Recorder();
   const corner = document.getElementById('corner')!;
   const fullscreen = new FullscreenButton(corner);
+  const menuButton = new MenuButton(corner);
   const volume = new VolumeButton(corner);
   const language = new LanguageButton();
   new RotateHint(document.getElementById('rotate')!);
@@ -438,6 +440,10 @@ async function main() {
       else openPauseMenu();
     }
   };
+  // on a touch screen, with no Esc: the menu icon in the corner
+  menuButton.onClick = () => {
+    if (inGame() && state !== 'gameOver' && !menuOpen && !game.showingSign) openPauseMenu();
+  };
 
   const onPose = (f: PoseFrame | null) => {
     const now = performance.now();
@@ -530,16 +536,22 @@ async function main() {
     // only the title screen lets Esc leave full screen; in the game it opens the pause menu
     fullscreen.lockEscape = !splash.visible;
     game.root.visible = !splash.visible;
-    // the corner buttons: the volume one only on the title screen, the fullscreen one down on the ground in the game
+    // the corner buttons: the volume one only on the title screen; in the game the fullscreen one at the end of the
+    // hearts' row, and on a touch screen the menu one after it, or in its place once in full screen
     if (document.body.classList.contains('in-game') === splash.visible) document.body.classList.toggle('in-game', !splash.visible);
+    const touchMenu = TouchControls.available && !splash.visible;
+    fullscreen.hiddenWhenFull = touchMenu;
+    menuButton.visible = touchMenu;
     if (!splash.visible) {
-      // over the game's slot for it, at the end of the hearts' row, scaled with the world
+      // over the game's slot for them, at the end of the hearts' row, scaled with the world
+      game.cornerIcons = +fullscreen.visible + +menuButton.visible;
       const box = app.canvas.getBoundingClientRect();
       const s = game.root.scale.x;
-      const slot = game.fullscreenSlot;
+      const slot = game.cornerSlot;
       corner.style.setProperty('--fs-x', `${box.left + game.root.x + slot.x * s}px`);
       corner.style.setProperty('--fs-y', `${box.top + game.root.y + slot.y * s}px`);
       corner.style.setProperty('--fs-size', `${slot.size * s}px`);
+      corner.style.setProperty('--fs-gap', `${slot.gap * s}px`);
     }
     // a phone held upright: the game (and the instructions' demonstration) in a 16:9 box as wide as the screen,
     // with a hint to turn it; the title screen fills it, laid out for it

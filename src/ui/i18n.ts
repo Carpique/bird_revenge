@@ -67,6 +67,7 @@ const PL = {
   'Exit full screen': 'Zamknij pełny ekran',
   Volume: 'Głośność',
   'Sound off': 'Dźwięk wyłączony',
+  Menu: 'Menu',
 } as const;
 
 export type Msg = keyof typeof PL;

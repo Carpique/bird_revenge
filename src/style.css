@@ -24,8 +24,8 @@ body.boxed #rotate { position: fixed; left: 0; right: 0; top: 0; height: calc(50
 /* language flag, top-left, title screen only */
 #language { position: fixed; top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); z-index: 1002; }
 #language svg { display: block; box-shadow: 0 0 0 1px rgba(0,0,0,0.35); }
-#volume, #fullscreen { position: relative; }
-#fullscreen[hidden] { display: none; }
+#volume, #fullscreen, #menu { position: relative; }
+#fullscreen[hidden], #menu[hidden] { display: none; }
 .corner-popup { position: absolute; top: 48px; right: 0; width: 220px; padding: 10px 12px;
   font: 14px/1.35 system-ui, -apple-system, sans-serif; color: #2b2b2b;
   background: rgba(255,255,255,0.95); border: 2px solid #333; border-radius: 10px; }
@@ -34,19 +34,20 @@ body.boxed #rotate { position: fixed; left: 0; right: 0; top: 0; height: calc(50
   background: rgba(255,255,255,0.9); border: 2px solid #333; border-radius: 10px; }
 .volume-popup[hidden] { display: none; }
 .volume-popup input { display: block; width: 140px; accent-color: #2b2b2b; cursor: pointer; }
-/* the fullscreen icon's layers: on the title screen just the dark icon */
-#fullscreen .icon-fill { stroke: currentColor; stroke-width: 2.5; }
-#fullscreen .icon-outline, #fullscreen .icon-shadow { display: none; }
-/* in the game: no volume button, and the fullscreen toggle at the end of the hearts' row (main.ts sets --fs-x, --fs-y,
-   --fs-size from the game's layout), as a bare icon in the big-text colours (yellow, red outline, black shadow) */
+/* the corner icons' layers: on the title screen just the dark icon */
+#fullscreen .icon-fill, #menu .icon-fill { stroke: currentColor; stroke-width: 2.5; }
+#fullscreen .icon-outline, #fullscreen .icon-shadow, #menu .icon-outline, #menu .icon-shadow { display: none; }
+/* in the game: no volume button, and the fullscreen toggle (and on a touch screen the menu one) at the end of the
+   hearts' row (main.ts sets --fs-x, --fs-y, --fs-size, --fs-gap from the game's layout), as bare icons in the big-text
+   colours (yellow, red outline, black shadow) */
 body.in-game #volume { display: none; }
-body.in-game #corner { top: var(--fs-y); left: var(--fs-x); right: auto; }
-body.in-game #fullscreen .corner-button, body.in-game #fullscreen .corner-button:hover {
+body.in-game #corner { top: var(--fs-y); left: var(--fs-x); right: auto; gap: var(--fs-gap); }
+body.in-game :is(#fullscreen, #menu) .corner-button, body.in-game :is(#fullscreen, #menu) .corner-button:hover {
   width: var(--fs-size); height: var(--fs-size); background: none; border: none; }
-body.in-game #fullscreen svg { width: 100%; height: 100%; }
-body.in-game #fullscreen .icon-fill { stroke: #ffd23f; stroke-width: 1.6; }
-body.in-game #fullscreen .icon-outline { display: inline; stroke: #c0392b; stroke-width: 4.2; }
-body.in-game #fullscreen .icon-shadow { display: inline; stroke: #2b2b2b; stroke-width: 4.2; transform: translate(1.2px, 1.2px); }
+body.in-game :is(#fullscreen, #menu) svg { width: 100%; height: 100%; }
+body.in-game :is(#fullscreen, #menu) .icon-fill { stroke: #ffd23f; stroke-width: 1.6; }
+body.in-game :is(#fullscreen, #menu) .icon-outline { display: inline; stroke: #c0392b; stroke-width: 4.2; }
+body.in-game :is(#fullscreen, #menu) .icon-shadow { display: inline; stroke: #2b2b2b; stroke-width: 4.2; transform: translate(1.2px, 1.2px); }
 body.in-game .corner-popup { top: calc(100% + 8px); }
 /* keep the tuning panel below the corner buttons */
 body .lil-gui.autoPlace { top: 60px; max-height: calc(100% - 60px); }
