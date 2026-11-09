@@ -19,6 +19,8 @@ export interface PointingIntent {
    */
   dx: number;
   dy: number;
+  /** `drift` with the arms lowered: sinking speed, px per physics step (0 or absent: keeps the altitude) */
+  sink?: number;
 }
 
 const DEG = 180 / Math.PI;
@@ -96,7 +98,8 @@ export function pointingStep(v: { x: number; y: number }, p: PointingIntent, ste
     case 'hover':
       return { ...approach(v, { x: 0, y: 0 }, maxDv), gravity: 0 };
     case 'drift':
-      return { ...approach(v, { x: p.dx * cfg.driftSpeed, y: 0 }, maxDv), gravity: 0 };
+      // y down on screen: a positive sink descends
+      return { ...approach(v, { x: p.dx * cfg.driftSpeed, y: p.sink ?? 0 }, maxDv), gravity: 0 };
     case 'fly':
       return { ...approach(v, { x: p.dx * cfg.cruiseSpeed, y: -p.dy * cfg.cruiseSpeed }, maxDv), gravity: 0 };
   }

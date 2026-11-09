@@ -23,6 +23,7 @@ By default the arms steer the bird by **pointing** (directions as seen on screen
 | both straight, pointing the same way | flies that way at a fixed cruising speed (almost any direction, up, sideways, diagonally, down) |
 | spread out in a T (a sloppy T, slightly raised or drooping, counts) | hovers in place |
 | a tilted T (one hand clearly lower) | moves slowly sideways towards the lower hand, keeping its altitude: for precise positioning |
+| a tilted T with both arms lowered (on average ~20° or more below level) | descends diagonally towards the lower hand, steeper the lower the arms (switch off: tuning panel **G**, *pointing* → descend) |
 | a leg raised sideways (the shoot pose) | poos (the poo drops straight down) |
 
 **Flapping mode** is the alternative: tick "Flapping (off: pointing)" in the tuning panel (**G**, section *pointing*). It replaces pointing with flapping, tilt and hover (pooping stays the same). The keyboard works the same in both modes:

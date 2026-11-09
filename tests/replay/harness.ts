@@ -198,6 +198,8 @@ export interface Tick {
   mode: string;
   /** the flying direction in degrees (mode 'fly'), 0 or 180 for drift */
   ang: number;
+  /** drift with the arms lowered: the sinking speed (px per physics step), else 0 */
+  sink: number;
 }
 
 export interface SimEvent {
@@ -287,7 +289,7 @@ export function simulate(rec: Recording, frames: TF[], opts: SimOptions = {}): S
       if (p?.mode === 'fly') ang = (Math.atan2(p.dy, p.dx) * 180) / Math.PI;
       else if (p?.mode === 'drift') ang = p.dx > 0 ? 0 : 180;
     }
-    out.ticks.push({ t: tick, state, mode, ang });
+    out.ticks.push({ t: tick, state, mode, ang, sink: state === 'playing' && p?.mode === 'drift' ? (p.sink ?? 0) : 0 });
   }
   return out;
 }

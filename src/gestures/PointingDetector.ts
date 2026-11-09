@@ -1,5 +1,5 @@
 import { config } from '../config';
-import { classifyArms, type PointingIntent, type PointingMode } from '../game/pointing';
+import { classifyArms, outwardElevation, type PointingIntent, type PointingMode } from '../game/pointing';
 import { L } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
 import { pt, type Side, type Vec } from './geometry';
@@ -29,7 +29,8 @@ const angleOf = (v: Vec) => (Math.atan2(v.y, v.x) * 180) / Math.PI;
  * Pointing control: reads both arms' directions every frame (`classifyArms`). A new mode must hold for `enterMs`
  * before the bird follows it (so the arms sweeping through other poses on the way don't count); while flying, the
  * direction follows the arms straight away. Arms matching no pose keep the current mode for `ambiguousMs`, then
- * the bird rests.
+ * the bird rests. A drift (tilted T) with the arms lowered descends (`pointing.descend`): the sinking speed follows
+ * how low the arms are, with a hysteresis to start and stop it and a smoothed speed.
  */
 export class PointingDetector {
   private left: Vec | null = null;
@@ -40,11 +41,18 @@ export class PointingDetector {
   private ambiguousSince: number | null = null;
   /** time of the last frame (ms), for the smoothing's time step */
   private lastT: number | null = null;
+  /** a lowered tilted T: descending, since when it is pending, and the smoothed sinking speed (px per step) */
+  private descending = false;
+  private descendSince: number | null = null;
+  private sink = 0;
 
   /** Back to resting with nothing pending (after a gap in the pose). */
   reset() {
     this.left = this.right = null;
     this.lastT = null;
+    this.descending = false;
+    this.descendSince = null;
+    this.sink = 0;
     this.intent = { mode: 'rest', dx: 0, dy: 0 };
     this.pending = null;
     this.pendingSince = 0;
@@ -94,6 +102,35 @@ export class PointingDetector {
         }
       }
     }
-    return { ...angles, candidate, intent: this.intent };
+    return { ...angles, candidate, intent: this.withSink(f.t, dt) };
+  }
+
+  /** The intent, a drift with the arms lowered descending (`pointing.descend*`). */
+  private withSink(t: number, dt: number): PointingIntent {
+    const cfg = config.pointing;
+    const intent = this.intent;
+    if (!cfg.descend || intent.mode !== 'drift' || !this.left || !this.right) {
+      this.descending = false;
+      this.descendSince = null;
+      this.sink = 0;
+      return intent;
+    }
+    // how far below level the arms are, on average (deg; negative: raised)
+    const lowered = -(outwardElevation(this.left, -1) + outwardElevation(this.right, 1)) / 2;
+    if (!this.descending) {
+      if (lowered >= cfg.descendEnter) {
+        this.descendSince ??= t;
+        if (t - this.descendSince >= cfg.enterMs) this.descending = true;
+      } else this.descendSince = null;
+    } else if (lowered < cfg.descendExit) {
+      this.descending = false;
+      this.descendSince = null;
+    }
+    const span = Math.max(1e-6, cfg.descendFull - cfg.descendZero);
+    const target = this.descending ? cfg.descendSpeed * Math.min(1, Math.max(0, (lowered - cfg.descendZero) / span)) : 0;
+    const k = cfg.descendSmoothMs <= 0 ? 1 : 1 - Math.exp(-dt / cfg.descendSmoothMs);
+    this.sink += k * (target - this.sink);
+    if (target === 0 && this.sink < 0.02) this.sink = 0;
+    return this.sink > 0 ? { ...intent, sink: this.sink } : intent;
   }
 }

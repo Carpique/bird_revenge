@@ -174,7 +174,8 @@ export class DebugPanel {
           (info.pointing.intent
             ? ` → ${info.pointing.intent.mode.toUpperCase()}` +
               (info.pointing.intent.mode === 'fly' || info.pointing.intent.mode === 'drift'
-                ? ` at ${n((Math.atan2(info.pointing.intent.dy, info.pointing.intent.dx) * 180) / Math.PI)}°`
+                ? ` at ${n((Math.atan2(info.pointing.intent.dy, info.pointing.intent.dx) * 180) / Math.PI)}°` +
+                  (info.pointing.intent.sink ? ` sink ${info.pointing.intent.sink.toFixed(2)}` : '')
                 : '')
             : '') +
           (config.pointing.flapping ? '  (off)' : '')

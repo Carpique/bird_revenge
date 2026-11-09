@@ -213,7 +213,8 @@ export class Bird {
     }
     // pointing control, a tilted T on the floor: the same lift-off, rising `liftOffHeight` to drift just above it.
     // Gravity is cancelled there, so the kick is from the pointing accel, which then tops it out at that height
-    if (this.pointing && p!.mode === 'drift' && this.onGround) {
+    // (not while descending: the lowered arms ask for the floor)
+    if (this.pointing && p!.mode === 'drift' && !p!.sink && this.onGround) {
       const aStep = config.pointing.accel * (stepMs / 1000) ** 2;
       Body.setVelocity(b, { x: b.velocity.x, y: -Math.sqrt(2 * aStep * config.tilt.liftOffHeight) });
     }

@@ -85,6 +85,13 @@ describe('pointing physics', () => {
     expect(Math.abs(v.y)).toBeLessThan(0.1);
   });
 
+  it('drift with the arms lowered: sideways and down, at the sinking speed', () => {
+    const v = fly({ mode: 'drift', dx: 1, dy: 0, sink: 1.2 });
+    expect(v.x).toBeGreaterThan(config.pointing.driftSpeed * 0.95);
+    expect(v.y).toBeGreaterThan(1.2 * 0.95);
+    expect(v.y).toBeLessThan(1.2 * 1.05);
+  });
+
   it('rest: momentum fades, falls', () => {
     const v = fly({ mode: 'rest', dx: 0, dy: 0 }, { x: 8, y: -6 });
     expect(Math.abs(v.x)).toBeLessThan(0.5);
@@ -122,6 +129,62 @@ describe('PointingDetector', () => {
     const d = new PointingDetector();
     const fs = frames(1000, (t) => (t >= 500 && t < 500 + config.pointing.enterMs / 2 ? { armLeft: 180, armRight: 180 } : { armLeft: 90, armRight: 90 }));
     expect(fs.map((f) => d.update(f, true, true)).every((o) => o.intent?.mode !== 'fly')).toBe(true);
+  });
+
+  describe('a tilted T with the arms lowered descends', () => {
+    // elevations: 90 level, below 90 lowered (armLeft / armRight: the player's arms)
+    const LOWERED = { armLeft: 80, armRight: 40 }; // -10 / -50: 30 below level on average, tilted 20: drift
+    const run = (d: PointingDetector, ms: number, pose: { armLeft: number; armRight: number }, t0 = 0) =>
+      frames(ms, () => pose, t0).map((f) => d.update(f, true, true));
+    const expectedSink = (lowered: number) =>
+      config.pointing.descendSpeed * Math.min(1, Math.max(0, (lowered - config.pointing.descendZero) / (config.pointing.descendFull - config.pointing.descendZero)));
+
+    it('sinks the lower the arms are, towards the lower hand', () => {
+      const o = run(new PointingDetector(), 800, LOWERED).at(-1)!;
+      expect(o.intent).toMatchObject({ mode: 'drift', dx: 1 });
+      expect(o.intent!.sink!).toBeCloseTo(expectedSink(30), 1);
+    });
+
+    it('a level tilted T keeps its altitude; a lowered T not tilted still hovers', () => {
+      const level = run(new PointingDetector(), 800, { armLeft: 120, armRight: 60 }).at(-1)!;
+      expect(level.intent).toMatchObject({ mode: 'drift' });
+      expect(level.intent!.sink ?? 0).toBe(0);
+      const sloppy = run(new PointingDetector(), 800, { armLeft: 62, armRight: 62 }).at(-1)!; // 28 below, level
+      expect(sloppy.intent!.mode).toBe('hover');
+      expect(sloppy.intent!.sink ?? 0).toBe(0);
+    });
+
+    it('hysteresis: 18 below level does not start it, but keeps it going once started; 12 below stops it', () => {
+      const SLIGHT = { armLeft: 92, armRight: 52 }; // +2 / -38: 18 below, tilted 20
+      const ABOVE_EXIT = { armLeft: 98, armRight: 58 }; // +8 / -32: 12 below
+      expect(run(new PointingDetector(), 800, SLIGHT).every((o) => !o.intent?.sink)).toBe(true);
+      const d = new PointingDetector();
+      run(d, 800, LOWERED);
+      const kept = run(d, 600, SLIGHT, 800).at(-1)!;
+      expect(kept.intent!.sink!).toBeCloseTo(expectedSink(18), 1);
+      const stopped = run(d, 600, ABOVE_EXIT, 1400).at(-1)!;
+      expect(stopped.intent).toMatchObject({ mode: 'drift' });
+      expect(stopped.intent!.sink ?? 0).toBe(0);
+    });
+
+    it('starts only after enterMs, and the speed picks up smoothly', () => {
+      const d = new PointingDetector();
+      run(d, 600, { armLeft: 120, armRight: 60 }); // a level drift first
+      const out = run(d, 600, LOWERED, 600);
+      const firstSink = out.findIndex((o) => (o.intent?.sink ?? 0) > 0);
+      expect(firstSink).toBeGreaterThan(0);
+      expect(out[firstSink].intent!.sink!).toBeLessThan(expectedSink(30) * 0.8); // not straight to full speed
+    });
+
+    it('off (pointing.descend false): a lowered tilted T keeps its altitude', () => {
+      const was = config.pointing.descend;
+      config.pointing.descend = false;
+      try {
+        expect(run(new PointingDetector(), 800, LOWERED).at(-1)!.intent!.sink ?? 0).toBe(0);
+      } finally {
+        config.pointing.descend = was;
+      }
+    });
   });
 
   it('no intent while an arm is out of view', () => {

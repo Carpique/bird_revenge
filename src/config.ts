@@ -304,6 +304,23 @@ export const config = {
     /** tilted T: sideways speed, px per physics step */
     driftSpeed: 1.8,
     /**
+     * a tilted T with the arms lowered descends diagonally, towards the lower hand: the lower the arms (their
+     * average below level), the faster it sinks; level ones keep the altitude as before, and a lowered T that is
+     * not tilted still hovers. Off: a tilted T always keeps its altitude. On the recordings of play a lowered
+     * tilted T was held for seconds (2026-11-09-gra-po-strojeniu) and next to never elsewhere
+     */
+    descend: true,
+    /** the arms' average this far below level (deg) starts the descent, held `enterMs`... */
+    descendEnter: 20,
+    /** ...and it goes on until they are back above this (deg), so it doesn't flicker at the edge */
+    descendExit: 15,
+    /** sinking speed: none at `descendZero` deg below level, rising to `descendSpeed` (px per physics step) at `descendFull` */
+    descendZero: 15,
+    descendFull: 35,
+    descendSpeed: 1.8,
+    /** time constant (ms) of the sinking speed's changes, so starting or stopping the descent doesn't jolt */
+    descendSmoothMs: 80,
+    /**
      * how quickly the bird reaches its speed (or stops, in the hover), px/s². 2400: half the cruising speed in a new
      * direction after ~90 ms, a turn round in ~350 ms. 3600 felt abrupt in play: with Matter.js, 8-13 jolts per
      * minute (the speed changing more than 5 px per step within 100 ms) on the recordings of play, none at 2400;
