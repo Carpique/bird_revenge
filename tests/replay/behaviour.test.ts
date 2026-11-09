@@ -112,6 +112,17 @@ describe('visibility and landmark noise', () => {
     }
   });
 
+  it('an elbow below the threshold for 1 s: one short soft pause (recoverAfterMs 150: on average 404 ms, back after 391 ms; it was 542 and 537)', () => {
+    const r = run(scenario('left elbow low visibility 1000 ms'));
+    for (const m of r.runs) {
+      expect(m.recalibrations).toBe(0);
+      expect(m.staleMs).toBe(0);
+      expect(m.outOfFrameMs).toBeGreaterThan(0);
+    }
+    expect(r.mean.outOfFrameMs!).toBeLessThan(480);
+    expect(r.mean.recoveryMs!).toBeLessThan(480);
+  });
+
   it('a hallucinated wrist (low visibility, hanging) for 300 ms: no pause, a few hundred ms of wrong controls at most', () => {
     for (const m of run(scenario('left wrist hallucination 300 ms')).runs) {
       expect(m.recalibrations).toBe(0);

@@ -37,6 +37,7 @@ export const SCENARIOS: Scenario[] = [
   hitchScenario(1500),
   { name: 'left arm low visibility 600 ms', ms: 600, build: (f, t0) => lowVisibility(f, t0, 600, LEFT_ARM, 0.1) },
   { name: 'both arms low visibility 600 ms', ms: 600, build: (f, t0) => lowVisibility(f, t0, 600, [...LEFT_ARM, ...RIGHT_ARM], 0.1) },
+  { name: 'left elbow low visibility 1000 ms', ms: 1000, build: (f, t0) => lowVisibility(f, t0, 1000, [13], 0.5) },
   { name: 'left wrist hallucination 300 ms', ms: 300, build: (f, t0) => wristHallucination(f, t0, 300, 'left') },
   { name: 'left wrist hanging v=0.15 340 ms', ms: 340, build: (f, t0) => lowWristHanging(f, t0, 340, 'left') },
   { name: 'left wrist hanging v=0.15 1000 ms', ms: 1000, build: (f, t0) => lowWristHanging(f, t0, 1000, 'left') },

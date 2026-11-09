@@ -80,9 +80,19 @@ export const config = {
      * wrist position MediaPipe estimates even off-frame), so raised hands may leave the frame
      */
     forearmInFrame: 0.2,
-    /** arms get longer, since hands briefly leave the frame at the top of a big flap */
+    /**
+     * arms get longer, since hands briefly leave the frame at the top of a big flap. Kept at 800 on the replay evidence: with
+     * the elbow really lost, 600 would cut the wrong controls before the pause from about 380 to 230 ms and 400 to about 60,
+     * but a dip of the elbow's visibility with the position still right (v 0.5 for 600 ms) then costs a pause of 550 ms for
+     * nothing, and there is no recording of flapping to say how far the elbow's visibility dips in a big flap. To revisit with field data.
+     */
     armLostAfterMs: 800,
-    recoverAfterMs: 300,
+    /**
+     * a lost part (or the torso's centre) must be back this long (ms) before it counts as visible again; the score's
+     * smoothing (`emaAlpha`, `recoverAbove`) adds about 5 frames to it. 300 -> 150 shortens each soft pause by 130-280 ms
+     * (replay: elbow v 0.5 for 1 s 542 -> 404 ms, recovery 537 -> 391 ms) and adds none.
+     */
+    recoverAfterMs: 150,
     noPersonAfterMs: 500,
     /**
      * no good pose (nobody found, the frames missing, or someone off centre) for this long (ms): nobody counts as in
