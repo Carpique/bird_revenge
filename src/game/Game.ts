@@ -40,9 +40,9 @@ interface Popup {
  * The game world: PixiJS for drawing, Matter.js for physics, fixed 60 Hz simulation.
  * Knows nothing about cameras or poses — it just reads `controls` and `requestPoo()`.
  */
-/** the fullscreen icon's size and its gap after the hearts, in world px */
-const FULLSCREEN_ICON = 48;
-const FULLSCREEN_GAP = 14;
+/** the corner icons' size (fullscreen, menu) and the gap after the hearts and between them, in world px */
+const CORNER_ICON = 48;
+const CORNER_GAP = 14;
 
 export class Game {
   readonly root = new Container();
@@ -129,6 +129,7 @@ export class Game {
   private coinText: Text;
   private pausedText: GlowText;
   private hearts = new Container();
+  private cornerCount = 1;
   /** darkens the game behind the "Pause", "Game Over" and "Hooray" signs */
   private dim = new Graphics();
   /** how far the dimming behind "Pause" or a dialog (`dimmed`) has faded in (0–1) */
@@ -193,8 +194,9 @@ export class Game {
     this.coinText.x = coinIcon.width + 8;
     this.coinBox.addChild(spriteBacking(coinIcon, small), coinIcon, textBacking(this.coinText, small), this.coinText);
     this.coinBox.y = 14;
-    // the fullscreen icon (a DOM button, placed over `fullscreenSlot`) ends the row, after a gap
-    this.hearts.position.set(WORLD.width - 24 - FULLSCREEN_ICON - FULLSCREEN_GAP, 14);
+    // the corner icons (DOM buttons, placed over `cornerSlot`) end the row, after a gap
+    this.hearts.y = 14;
+    this.cornerIcons = 1;
     this.buildHearts();
     this.pausedText = bigText('');
     this.gameOverText = bigText('');
@@ -783,12 +785,19 @@ export class Game {
     this.onGameOver?.();
   }
 
-  /** Where the fullscreen icon goes, in world px: at the end of the hearts' row, in the top-right corner. */
-  get fullscreenSlot() {
-    return { x: WORLD.width - 24 - FULLSCREEN_ICON, y: this.hearts.y + 2, size: FULLSCREEN_ICON };
+  /** How many corner icons end the hearts' row (fullscreen, menu): the hearts make room for them, at least one. */
+  set cornerIcons(n: number) {
+    this.cornerCount = Math.max(1, n);
+    this.hearts.x = this.cornerSlot.x - CORNER_GAP;
   }
 
-  /** One heart per life, right-aligned in the corner, left of the fullscreen icon; each with a backing, like the score. */
+  /** Where the corner icons go, in world px: in a row at the end of the hearts' row, in the top-right corner. */
+  get cornerSlot() {
+    const n = this.cornerCount;
+    return { x: WORLD.width - 24 - n * CORNER_ICON - (n - 1) * CORNER_GAP, y: this.hearts.y + 2, size: CORNER_ICON, gap: CORNER_GAP };
+  }
+
+  /** One heart per life, right-aligned in the corner, left of the corner icons; each with a backing, like the score. */
   private buildHearts() {
     for (const c of this.hearts.removeChildren()) c.destroy({ children: true });
     const n = config.player.lives;

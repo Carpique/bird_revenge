@@ -48,6 +48,7 @@ const landscape = () => !isPortrait(window.innerWidth, window.innerHeight);
  * screen, which opens it without the browser's bars.
  */
 export class FullscreenButton {
+  private wrap = document.createElement('div');
   private button = document.createElement('button');
   private tip = document.createElement('div');
   private escapeLocked = false;
@@ -55,15 +56,17 @@ export class FullscreenButton {
   private autoEntered = false;
   /** the next tap goes full screen (turned sideways, and not left by hand since) */
   private autoArmed = false;
+  /** can't go full screen here, or already is for good (started from the home screen) */
+  private unavailable = isInstalled() || (!fullscreenEnabled() && !isIOS);
+  private hideWhenFull = false;
 
   constructor(parent: HTMLElement) {
-    const wrap = document.createElement('div');
+    const wrap = this.wrap;
     wrap.id = 'fullscreen';
     const b = this.button;
     b.className = 'corner-button';
     b.type = 'button';
     b.tabIndex = -1;
-    if (isInstalled() || (!fullscreenEnabled() && !isIOS)) wrap.hidden = true;
     b.addEventListener('mousedown', (e) => e.preventDefault());
     b.addEventListener('click', () => this.toggle());
     this.tip.className = 'corner-popup';
@@ -91,11 +94,11 @@ export class FullscreenButton {
         this.autoArmed = now;
         if (!now && this.autoEntered) void exitFullscreen();
       });
-      // the button's own tap toggles it instead
+      // the corner buttons' own taps do their own thing instead
       window.addEventListener(
         'pointerup',
         (e) => {
-          if (!this.autoArmed || !landscape() || fullscreenElement() || wrap.contains(e.target as Node)) return;
+          if (!this.autoArmed || !landscape() || fullscreenElement() || parent.contains(e.target as Node)) return;
           this.autoArmed = false;
           this.autoEntered = true;
           void requestFullscreen();
@@ -118,6 +121,17 @@ export class FullscreenButton {
     this.applyEscapeLock();
   }
 
+  /** Hidden while in full screen (in the game on a touch screen, where the menu button takes its place). */
+  set hiddenWhenFull(on: boolean) {
+    if (on === this.hideWhenFull) return;
+    this.hideWhenFull = on;
+    this.update();
+  }
+
+  get visible() {
+    return !this.wrap.hidden;
+  }
+
   private applyEscapeLock() {
     if (!keyboardLock) return;
     if (this.escapeLocked && fullscreenElement()) keyboardLock.lock(['Escape']).catch(() => {});
@@ -136,6 +150,7 @@ export class FullscreenButton {
 
   private update() {
     const full = !!fullscreenElement();
+    this.wrap.hidden = this.unavailable || (this.hideWhenFull && full);
     this.button.setAttribute('aria-label', t(full ? 'Exit full screen' : 'Full screen'));
     // two layers: an outline under the icon, shown only in the game (see style.css)
     const icon = full ? EXIT_ICON : ENTER_ICON;
