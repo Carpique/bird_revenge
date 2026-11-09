@@ -3,7 +3,7 @@ import { config } from '../../src/config';
 import { PoseDetectors } from '../../src/input/poseControls';
 import { PoseSession } from '../../src/input/poseSession';
 import { synthPose } from '../synthetic';
-import { allRecordings, cleanRun, shift, tutorialRecording } from './harness';
+import { allRecordings, cleanRun, sameControl, shift, simulate, tutorialRecording } from './harness';
 import { hitchScenario, nullGapScenario, runScenario, SCENARIOS, type Scenario } from './scenarios';
 
 /**
@@ -117,6 +117,31 @@ describe('visibility and landmark noise', () => {
       expect(m.recalibrations).toBe(0);
       expect(m.outOfFrameMs).toBe(0);
       expect(m.wrongMs).toBeLessThan(700);
+    }
+  });
+
+  it('a wrist only guessed (v=0.15, hanging) with a confident elbow: the arm keeps pointing along the upper arm', () => {
+    // without pose.minWristVisibility this was 483 ms (left wrist, 1 s) and 858 ms (both) of wrong controls on average
+    const one = run(scenario('left wrist hanging v=0.15 1000 ms'));
+    const both = run(scenario('both wrists hanging v=0.15 1000 ms'));
+    for (const m of [...one.runs, ...both.runs]) {
+      expect(m.recalibrations).toBe(0);
+      expect(m.outOfFrameMs).toBe(0);
+      expect(m.staleMs).toBe(0);
+    }
+    expect(one.mean.wrongMs!).toBeLessThan(150);
+    expect(both.mean.wrongMs!).toBeLessThan(250);
+  });
+
+  it('normal play is unaffected by the wrist gate: the same controls tick by tick, the same shoot triggers', () => {
+    for (const r of allRecordings()) {
+      const on = cleanRun(r).run;
+      const saved = config.pose.minWristVisibility;
+      config.pose.minWristVisibility = 0;
+      const off = simulate(r, r.frames);
+      config.pose.minWristVisibility = saved;
+      expect(on.ticks.filter((tk, i) => !sameControl(tk, off.ticks[i])).length, r.name).toBe(0);
+      expect(on.triggers, r.name).toEqual(off.triggers);
     }
   });
 

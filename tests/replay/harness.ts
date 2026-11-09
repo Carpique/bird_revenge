@@ -137,6 +137,22 @@ export function wristHallucination(frames: TF[], t0: number, ms: number, side: '
   });
 }
 
+/**
+ * Only the wrist of `side` is guessed, hanging down from the shoulder, with a low visibility `v`; the elbow stays as
+ * recorded and confident (the case of `pose.minWristVisibility`).
+ */
+export function lowWristHanging(frames: TF[], t0: number, ms: number, side: 'left' | 'right' = 'left', v = 0.15): TF[] {
+  const [sh, wr] = side === 'left' ? [11, 15] : [12, 16];
+  return cloneFrames(frames).map((x) => {
+    if (x.f && inWindow(x.t, t0, ms)) {
+      const lm = x.f.lm;
+      const len = Math.hypot(lm[wr].x - lm[sh].x, lm[wr].y - lm[sh].y);
+      lm[wr] = { x: lm[sh].x, y: lm[sh].y + len, v };
+    }
+    return x;
+  });
+}
+
 const cloneFrame = (f: PoseFrame): PoseFrame => ({ ...f, lm: f.lm.map((p) => ({ ...p })) });
 
 /** seeded random numbers: uniform `u`, standard normal `g` */

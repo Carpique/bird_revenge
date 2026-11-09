@@ -22,6 +22,13 @@ export const config = {
      * pauses softly (`visibility.personGoneAfterMs`) and the gesture detectors forget what they were doing.
      */
     holdLastMs: 400,
+    /**
+     * a wrist less visible than this is not trusted (MediaPipe guesses it hanging): with the elbow confident, the arm
+     * points the way the shoulder → elbow line does instead (`WristGate`); with the elbow not confident either, the arm is out of view
+     */
+    minWristVisibility: 0.5,
+    /** a wrist taken as a stand-in is trusted again at `minWristVisibility` plus this, so one hovering around the threshold does not flip */
+    wristVisibilityMargin: 0.1,
     /** a gap this long (ms) without a good pose resets the smoothing filters: the person may have moved a lot meanwhile */
     resetFiltersAfterMs: 500,
   },

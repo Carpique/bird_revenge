@@ -45,4 +45,4 @@ it('prints the metrics of every perturbation', () => {
   }
   console.log(lines.join('\n'));
   if (import.meta.env.VITE_REPLAY_JSON) console.log(`REPLAY_METRICS_JSON ${JSON.stringify(all)}`);
-});
+}, 30_000);

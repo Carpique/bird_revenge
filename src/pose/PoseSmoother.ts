@@ -3,18 +3,21 @@ import { config } from '../config';
 import { ArmOcclusion } from './ArmOcclusion';
 import { filtersStale } from './freshness';
 import { OneEuroFilter } from './OneEuroFilter';
+import { WristGate } from './WristGate';
 import type { Landmark } from './types';
 
 const N = 33;
 
 /**
- * The tracker's landmark pipeline: the arm stand-in (`ArmOcclusion`), then one One-Euro filter per coordinate.
+ * The tracker's landmark pipeline: the arm stand-in (`ArmOcclusion`), the wrist gate (`WristGate`), then one One-Euro filter per coordinate.
  * A frame with nobody in it changes nothing: after a short gap the smoothing carries on (the filters take the
  * larger time step into account), and only a gap of `pose.resetFiltersAfterMs` or more starts them afresh.
  */
 export class PoseSmoother {
   /** stands in for an arm hidden behind the other; `occlusion.standIn` says how much, for the last frame */
   readonly occlusion = new ArmOcclusion();
+  /** a wrist MediaPipe cannot see is moved onto the upper-arm line; `wristGate.gated` says which, for the last frame */
+  readonly wristGate = new WristGate();
   private filters = Array.from({ length: N * 2 }, () => new OneEuroFilter());
   /** ms time of the last frame with a person; null: none since the start or the last reset */
   private lastValidT: number | null = null;
@@ -23,6 +26,7 @@ export class PoseSmoother {
   reset() {
     this.filters.forEach((f) => f.reset());
     this.occlusion.reset();
+    this.wristGate.reset();
     this.lastValidT = null;
   }
 
@@ -31,7 +35,7 @@ export class PoseSmoother {
     if (!raw || raw.length < N) return null;
     if (this.lastValidT !== null && filtersStale(ts - this.lastValidT)) this.reset();
     this.lastValidT = ts;
-    const pts = this.occlusion.apply(raw, aspect);
+    const pts = this.wristGate.apply(this.occlusion.apply(raw, aspect));
     const s = config.smoothing;
     const tSec = ts / 1000;
     const lm: Landmark[] = new Array(N);

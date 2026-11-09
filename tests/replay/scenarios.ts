@@ -1,5 +1,5 @@
 import {
-  cleanRun, hitch, jitter, lowVisibility, measure, nullGap, shift, simulate, wristHallucination,
+  cleanRun, hitch, jitter, lowVisibility, lowWristHanging, measure, nullGap, shift, simulate, wristHallucination,
   type Metrics, type Recording, type TF,
 } from './harness';
 
@@ -38,6 +38,9 @@ export const SCENARIOS: Scenario[] = [
   { name: 'left arm low visibility 600 ms', ms: 600, build: (f, t0) => lowVisibility(f, t0, 600, LEFT_ARM, 0.1) },
   { name: 'both arms low visibility 600 ms', ms: 600, build: (f, t0) => lowVisibility(f, t0, 600, [...LEFT_ARM, ...RIGHT_ARM], 0.1) },
   { name: 'left wrist hallucination 300 ms', ms: 300, build: (f, t0) => wristHallucination(f, t0, 300, 'left') },
+  { name: 'left wrist hanging v=0.15 340 ms', ms: 340, build: (f, t0) => lowWristHanging(f, t0, 340, 'left') },
+  { name: 'left wrist hanging v=0.15 1000 ms', ms: 1000, build: (f, t0) => lowWristHanging(f, t0, 1000, 'left') },
+  { name: 'both wrists hanging v=0.15 1000 ms', ms: 1000, build: (f, t0) => lowWristHanging(lowWristHanging(f, t0, 1000, 'left'), t0, 1000, 'right') },
   { name: 'jitter sigma 0.008', ms: 0, build: (f) => jitter(f, 0.008) },
   { name: 'jitter sigma 0.03', ms: 0, build: (f) => jitter(f, 0.03) },
   { name: 'off-centre 0.15', ms: 0, build: (f) => shift(f, 0.15) },
