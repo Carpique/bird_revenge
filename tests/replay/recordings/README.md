@@ -19,6 +19,23 @@ images), the calibration and the game state per frame. Besides the clean-recordi
 - `2026-11-09-trening.json`: practice, 60 s of play, ~23 fps
 - `2026-11-09-gra-po-strojeniu.json`: a level, 60 s of play, ~25 fps, after the latency tuning ("better, but sometimes too abrupt"; tilted, lowered T held for seconds at 24.5-26.9, 28.7-32.7, 45.3-48.2 s)
 
+What a black-box dump holds per frame (`BlackBoxFrame`): `t` (ms from the first frame), `lm` (33 raw landmarks
+`[x, y, visibility, z]`, or null: nobody), `st` (app state), `pd` / `ce` / `pp` / `in` (person detected, centred,
+player present, in frame), `ctl` (the flapping-mode controls; all 0 under pointing control), `ms` (inference ms).
+Dumps with `blackBox.format: 2` (made after 2026-11-10) also record the effect, each key absent when not known:
+
+- `pi`: the pointing intent the bird was given at the frame (`{ m, dx, dy, s? }`: mode, direction with y up, sink in
+  px per physics step); `null`: none (not playing, a stale pose, flapping mode)
+- `bd`: the bird when the frame arrived (`{ x, y, vx, vy, gr?, pe?, die? }`: world px, px per physics step with y
+  down; on the ground or something, perched on a branch, dying)
+- `dr`: camera frames dropped just before this one (absent: unknown, no frame metadata)
+- `lr`: long render frames (> `telemetry.longRenderMs`) since the previous pose frame
+
+and in the `blackBox` header: `format`, `source` (where the frames' time came from: `capture`, `media`, `callback`),
+`dropped` and `longRender` (totals over the dump) and `world` (width, height, groundY, the physics step in ms).
+`blackBoxEffect(json)` (`src/pose/blackBox.ts`) reads the effect back per frame (null for an older dump);
+`parseBlackBox` ignores it, so the replay is the same for both. The three recordings above are of the older kind.
+
 A recording with a name other than the tutorial's gets no pinned shoot-trigger count; add one in
 `tests/replay/behaviour.test.ts` (`EXPECTED_TRIGGERS`) if it should have one.
 

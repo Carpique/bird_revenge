@@ -18,6 +18,7 @@
 import tutorialJson from '../../src/tutorial/control-tutorial.json?raw';
 import { config } from '../../src/config';
 import { PoseDetectors, type PoseReading } from '../../src/input/poseControls';
+import type { Controls } from '../../src/input/controls';
 import { PoseSession } from '../../src/input/poseSession';
 import { PoseSmoother } from '../../src/pose/PoseSmoother';
 import type { PoseFrame } from '../../src/pose/types';
@@ -218,6 +219,11 @@ export interface SimOptions {
   tickMs?: number;
   /** the state at the start (default `calibrating`, as a game starts: the first frames bring the player in) */
   startState?: SimState;
+  /**
+   * called on every frame where `main.ts onPose` feeds the black box: after the frame's step, with the frame as the
+   * tracker got it (before smoothing), the state and the controls the session gives the bird at the frame's time
+   */
+  onFrame?: (frame: TF, state: SimState, controls: Controls) => void;
 }
 
 /** Plays `frames` (what the tracker delivers: perturbed or not) through the pipeline and the game's rules. */
@@ -241,9 +247,10 @@ export function simulate(rec: Recording, frames: TF[], opts: SimOptions = {}): S
   for (let tick = 0; tick <= end; tick += tickMs) {
     // the frames that arrived by now
     while (fi < frames.length && frames[fi].t <= tick) {
-      const { t } = frames[fi];
+      const frame = frames[fi++];
+      const { t } = frame;
       while (ci < calibrations.length && calibrations[ci].t <= t) detectors.shoot.calibrate({ ...calibrations[ci++].baseline });
-      const f = tracker.process(frames[fi++].f);
+      const f = tracker.process(frame.f);
       const reading: PoseReading = detectors.update(f, t);
       const step = session.update(state, reading, t);
       if (step.redetect) {
@@ -258,6 +265,7 @@ export function simulate(rec: Recording, frames: TF[], opts: SimOptions = {}): S
       }
       state = step.state;
       if (step.shoot) out.triggers.push(t);
+      opts.onFrame?.(frame, state, session.controls(state, t));
       if (state === 'calibrating') {
         calmSince = reading.vis.inFrame && reading.vis.playerPresent ? (calmSince ?? t) : null;
         if (calmSince !== null && t - calmSince >= config.calibration.holdMs) {

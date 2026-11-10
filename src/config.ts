@@ -44,7 +44,7 @@ export const config = {
     hitchMs: 100,
     /** a render frame (the interval between two ticks of the game's render loop) longer than this (ms) counts as a long one in the debug panel: 25 is one and a half 60 Hz frames; time paused, suspended or hidden does not count */
     longRenderMs: 25,
-    /** the black box keeps this many seconds of the raw pose stream, to save with B (about 34 KB of memory per second). Change requires reload. */
+    /** the black box keeps this many seconds of the raw pose stream, to save with B (about 35 KB of memory per second: the landmarks, and per frame the game state, the pointing intent the bird was given, its position and velocity, dropped camera and long render frames). Change requires reload. */
     blackBoxSeconds: 60,
   },
 

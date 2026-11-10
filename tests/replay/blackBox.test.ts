@@ -1,10 +1,24 @@
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { describe, expect, it } from 'vitest';
-import { BLACK_BOX_GAP_MS, BlackBox, parseBlackBox, type BlackBoxContext } from '../../src/pose/blackBox';
+import { WORLD } from '../../src/config';
+import type { BirdSample } from '../../src/game/Bird';
+import type { PointingIntent } from '../../src/game/pointing';
+import {
+  BLACK_BOX_FORMAT,
+  BLACK_BOX_GAP_MS,
+  BlackBox,
+  blackBoxEffect,
+  parseBlackBox,
+  type BlackBoxContext,
+  type BlackBoxDump,
+} from '../../src/pose/blackBox';
 import { L } from '../../src/pose/landmarks';
 import { PoseSmoother } from '../../src/pose/PoseSmoother';
 import { synthPose, type SynthPose } from '../synthetic';
-import { simulate, toRecording, type TF } from './harness';
+import { allRecordings, simulate, toRecording, type TF } from './harness';
+import tutorialJson from '../../src/tutorial/control-tutorial.json?raw';
+
+const recordingsJson = import.meta.glob<string>('./recordings/*.json', { eager: true, query: '?raw', import: 'default' });
 
 const ctx = (over: Partial<BlackBoxContext> = {}): BlackBoxContext => ({
   state: 'playing',
@@ -156,5 +170,167 @@ describe('BlackBox', () => {
     const dc = c.dump(info)!;
     expect(dc.baseline).toEqual(baseline);
     expect(dc.calibrations).toBeUndefined();
+  });
+});
+
+const bird = (over: Partial<BirdSample> = {}): BirdSample => ({ x: 640, y: 300, vx: 0, vy: 0, onGround: false, perched: false, dying: false, ...over });
+const roundTrip = (d: BlackBoxDump | null) => JSON.parse(JSON.stringify(d));
+
+describe('BlackBox: the effect (format 2)', () => {
+  it('round-trips the intent, the bird, the drops and the long render frames through add -> dump -> blackBoxEffect', () => {
+    const b = new BlackBox(2);
+    const fly: PointingIntent = { mode: 'fly', dx: 0.70710678, dy: 0.70710678 };
+    const drift: PointingIntent = { mode: 'drift', dx: -1, dy: 0, sink: 2.345 };
+    b.add(0, raw(0), ctx({ intent: fly, bird: bird({ x: 100.04, y: 200.06, vx: 1.234, vy: -5.678 }), dropped: 0, longRender: 0 }));
+    b.add(33, raw(33), ctx({ intent: drift, bird: bird({ onGround: true, perched: true }), dropped: 2, longRender: 3 }));
+    b.add(66, raw(66), ctx({ intent: { mode: 'hover', dx: 0, dy: 0 }, bird: bird({ dying: true }), dropped: 1, longRender: 1 }));
+    b.add(99, raw(99), ctx({ intent: { mode: 'rest', dx: 0, dy: 0, sink: 0 }, bird: bird(), dropped: 0, longRender: 0 }));
+    const d = roundTrip(b.dump({ ...info, source: 'capture' }));
+    // short keys, rounded
+    expect(d.frames[0]).toMatchObject({ pi: { m: 'fly', dx: 0.707, dy: 0.707 }, bd: { x: 100, y: 200.1, vx: 1.23, vy: -5.68 }, dr: 0, lr: 0 });
+    expect(d.frames[0].pi.s).toBeUndefined(); // no sink: no key
+    expect(d.frames[0].bd.gr).toBeUndefined(); // flags only when true
+    expect(d.frames[1]).toMatchObject({ pi: { m: 'drift', dx: -1, dy: 0, s: 2.35 }, bd: { gr: true, pe: true }, dr: 2, lr: 3 });
+    expect(d.blackBox).toMatchObject({
+      format: BLACK_BOX_FORMAT,
+      source: 'capture',
+      dropped: 3,
+      longRender: 4,
+      world: { width: WORLD.width, height: WORLD.height, groundY: WORLD.groundY },
+    });
+    expect(d.blackBox.world.stepMs).toBeCloseTo(1000 / 60, 3);
+
+    const e = blackBoxEffect(d)!;
+    expect(e).toMatchObject({ format: 2, source: 'capture', dropped: 3, longRender: 4 });
+    expect(e.frames.map((f) => f.t)).toEqual(d.frames.map((f: { t: number }) => f.t));
+    expect(e.frames[0]).toEqual({
+      t: 0,
+      hasIntent: true,
+      intent: { mode: 'fly', dx: 0.707, dy: 0.707 },
+      bird: { x: 100, y: 200.1, vx: 1.23, vy: -5.68, onGround: false, perched: false, dying: false },
+      dropped: 0,
+      longRender: 0,
+    });
+    expect(e.frames[1].intent).toEqual({ mode: 'drift', dx: -1, dy: 0, sink: 2.35 });
+    expect(e.frames[1].bird).toMatchObject({ onGround: true, perched: true, dying: false });
+    expect(e.frames[2].intent).toEqual({ mode: 'hover', dx: 0, dy: 0 });
+    expect(e.frames[2].bird).toMatchObject({ onGround: false, dying: true });
+    expect(e.frames[3].intent).toEqual({ mode: 'rest', dx: 0, dy: 0 });
+    // the replay side is untouched: parseBlackBox still hands a plain recording
+    expect(Object.keys(parseBlackBox(d).frames[0]).sort()).toEqual(['lm', 't']);
+  });
+
+  it('a null intent and unknown drops are represented and read back as such; what was not given is absent', () => {
+    const b = new BlackBox(2);
+    b.add(0, null, ctx({ state: 'calibrating', intent: null, bird: bird(), dropped: null, longRender: 0 }));
+    b.add(33, raw(33), ctx()); // nothing of the effect given (as a caller without it)
+    const d = roundTrip(b.dump(info));
+    expect(d.frames[0].pi).toBeNull();
+    expect('dr' in d.frames[0]).toBe(false);
+    for (const k of ['pi', 'bd', 'dr', 'lr']) expect(k in d.frames[1]).toBe(false);
+    expect(d.blackBox.source).toBeNull(); // no source given
+    const e = blackBoxEffect(d)!;
+    expect(e.frames[0]).toMatchObject({ hasIntent: true, intent: null, dropped: null, longRender: 0 });
+    expect(e.frames[0].bird).not.toBeNull();
+    expect(e.frames[1]).toEqual({ t: 33, hasIntent: false, intent: null, bird: null, dropped: null, longRender: null });
+    expect(e).toMatchObject({ dropped: 0, longRender: 0 });
+  });
+
+  it('the effect wraps with the ring and is pruned by the time window together with its frames', () => {
+    // a camera faster than 60 fps wraps the ring; each frame's effect carries its index
+    const b = new BlackBox(2); // 120 frames of room
+    for (let i = 0; i < 500; i++) {
+      const intent: PointingIntent | null = i % 5 === 0 ? null : { mode: 'fly', dx: (i % 100) / 100, dy: 0 };
+      b.add(i * 10, raw(i * 10), ctx({ lift: i, intent, bird: bird({ x: i, vy: i / 10 }), dropped: i % 3 === 0 ? null : i % 7, longRender: i % 4 }));
+    }
+    const check = (d: BlackBoxDump, first: number) => {
+      const e = blackBoxEffect(roundTrip(d))!;
+      expect(e.frames).toHaveLength(d.frames.length);
+      let dropped = 0, long = 0;
+      e.frames.forEach((f, k) => {
+        const i = first + k;
+        expect(d.frames[k].ctl.lift).toBe(i); // the frame and its effect stay together
+        expect(f.bird!.x).toBe(i);
+        expect(f.bird!.vy).toBeCloseTo(i / 10, 2);
+        expect(f.intent).toEqual(i % 5 === 0 ? null : { mode: 'fly', dx: (i % 100) / 100, dy: 0 });
+        expect(f.dropped).toBe(i % 3 === 0 ? null : i % 7);
+        expect(f.longRender).toBe(i % 4);
+        dropped += f.dropped ?? 0;
+        long += f.longRender!;
+      });
+      // the header's totals are over the dump only
+      expect(e.dropped).toBe(dropped);
+      expect(e.longRender).toBe(long);
+    };
+    check(b.dump(info)!, 380);
+
+    // 30 fps: the time window, not the ring, drops the old frames, and their effect with them
+    const c = new BlackBox(2);
+    for (let i = 0; i < 500; i++) {
+      const intent: PointingIntent | null = i % 5 === 0 ? null : { mode: 'fly', dx: (i % 100) / 100, dy: 0 };
+      c.add(i * 33, raw(i * 33), ctx({ lift: i, intent, bird: bird({ x: i, vy: i / 10 }), dropped: i % 3 === 0 ? null : i % 7, longRender: i % 4 }));
+    }
+    const dc = c.dump(info)!;
+    expect(dc.frames).toHaveLength(Math.floor(2000 / 33) + 1);
+    check(dc, 500 - dc.frames.length);
+  });
+
+  it('a dump from before the effect (no format) parses as before and yields no effect', () => {
+    const old: [string, string][] = [['control-tutorial', tutorialJson], ...Object.entries(recordingsJson)];
+    expect(old.length).toBe(4);
+    for (const [name, text] of old) {
+      const json = JSON.parse(text);
+      expect(blackBoxEffect(json), name).toBeNull();
+      expect(() => parseBlackBox(json), name).not.toThrow();
+      expect(json.frames.some((f: object) => 'pi' in f || 'bd' in f), name).toBe(false);
+    }
+    // the replay suite's view of them is unchanged (same frames as the harness loads)
+    expect(allRecordings()).toHaveLength(4);
+
+    // a new dump: the same recording for the replay as the dump without its effect and header additions
+    const b = new BlackBox(2);
+    for (let i = 0; i < 30; i++) b.add(i * 33, raw(i * 33), ctx({ intent: { mode: 'hover', dx: 0, dy: 0 }, bird: bird(), dropped: 0, longRender: 1 }));
+    const d = roundTrip(b.dump(info));
+    const stripped = {
+      ...d,
+      frames: d.frames.map(({ pi, bd, dr, lr, ...f }: Record<string, unknown>) => (void [pi, bd, dr, lr], f)),
+      blackBox: { ...d.blackBox, format: undefined, source: undefined, dropped: undefined, longRender: undefined, world: undefined },
+    };
+    expect(blackBoxEffect(stripped)).toBeNull();
+    expect(parseBlackBox(d)).toEqual(parseBlackBox(stripped));
+    // plain recordings and junk: no effect, no throw
+    expect(blackBoxEffect({ version: 1, aspect: 1.7, frames: [] })).toBeNull();
+    expect(blackBoxEffect(null)).toBeNull();
+  });
+
+  it('records the intent the pipeline gives the bird, frame by frame (a recording played as main.ts feeds the box)', () => {
+    for (const rec of allRecordings()) {
+      const b = new BlackBox(rec.frames[rec.frames.length - 1].t / 1000 + 1);
+      const given: (PointingIntent | null)[] = [];
+      const run = simulate(rec, rec.frames, {
+        onFrame: ({ t, f }, state, c) => {
+          given.push(c.pointing && { ...c.pointing });
+          const lm = f && f.lm.map((p) => ({ x: p.x, y: p.y, z: p.z ?? 0, visibility: p.v }));
+          b.add(t, lm, ctx({ state, intent: c.pointing, flapping: c.flapping, dropped: null }));
+        },
+      });
+      // the hook only watches: the run is the same as without it
+      expect(run).toEqual(simulate(rec, rec.frames));
+      const e = blackBoxEffect(roundTrip(b.dump(info)))!;
+      expect(e.frames).toHaveLength(given.length);
+      expect(given.length).toBeGreaterThanOrEqual(rec.frames.length - 1); // the last 60 Hz tick may come before the last frame
+      const playing = given.filter((p) => p !== null);
+      expect(playing.length, rec.name).toBeGreaterThan(100); // the recording does reach play and pointing
+      e.frames.forEach((f, k) => {
+        const p = given[k];
+        if (!p) return expect(f.intent).toBeNull();
+        expect(f.intent!.mode).toBe(p.mode);
+        expect(f.intent!.dx).toBeCloseTo(p.dx, 3);
+        expect(f.intent!.dy).toBeCloseTo(p.dy, 3);
+        expect(f.intent!.sink ?? 0).toBeCloseTo(p.sink ?? 0, 2);
+      });
+      const modes = new Set(e.frames.map((f) => f.intent?.mode ?? 'none'));
+      expect(modes.has('fly') || modes.has('drift') || modes.has('hover'), rec.name).toBe(true);
+    }
   });
 });

@@ -2,6 +2,7 @@ import { Application, UPDATE_PRIORITY } from 'pixi.js';
 import { countLevelView } from './analytics';
 import { audio } from './audio/audio';
 import { changedConfig, config, loadSavedConfig } from './config';
+import type { BirdSample } from './game/Bird';
 import { Game } from './game/Game';
 import { firstLevel, gameLevels, levels, nextLevel, onLevelEdited, testLevelName, TRAINING } from './levels';
 import { markCompleted, unlockedLevels } from './levels/progress';
@@ -227,6 +228,9 @@ async function main() {
   const recorder = new Recorder();
   // the last minute of the raw pose stream, saved with B (see `BlackBox`)
   const blackBox = new BlackBox();
+  // the bird's state per pose frame for it (one object, filled in place) and the long render frames counted so far
+  const birdSample: BirdSample = { x: 0, y: 0, vx: 0, vy: 0, onGround: false, perched: false, dying: false };
+  let longRenderSeen = 0;
   const corner = document.getElementById('corner')!;
   const fullscreen = new FullscreenButton(corner);
   const menuButton = new MenuButton(corner);
@@ -445,6 +449,7 @@ async function main() {
         delegate: tracker?.stats.info?.delegate ?? config.pose.delegate,
         config: changedConfig(),
         flapping: config.pointing.flapping,
+        source: tracker?.stats.source ?? null,
       });
       if (dump) downloadJson('black-box', dump);
     }
@@ -496,6 +501,10 @@ async function main() {
     if (step.shoot) game.requestPoo();
     if (f) blackBox.aspect = f.aspect;
     const ctl = session.controls(state, now);
+    // the long render frames since the previous pose frame (the count starts again when the stats are reset)
+    const longRender = tracker ? tracker.stats.longRenderFrames : 0;
+    const longSince = longRender >= longRenderSeen ? longRender - longRenderSeen : longRender;
+    longRenderSeen = longRender;
     blackBox.add(now, tracker?.raw ?? null, {
       state,
       personDetected: vis.personDetected,
@@ -507,6 +516,11 @@ async function main() {
       hover: ctl.hover,
       flapping: ctl.flapping,
       inferenceMs: tracker?.inferenceMs ?? 0,
+      // the effect: what the bird is told and where it is when the frame arrives
+      intent: ctl.pointing,
+      bird: game.birdState(birdSample),
+      dropped: timing.dropped,
+      longRender: longSince,
     });
     // the calibration dialog, also on the frame that brought it up
     if (state === 'calibrating') {

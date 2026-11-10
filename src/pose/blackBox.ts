@@ -1,6 +1,10 @@
-import { config } from '../config';
+import { config, WORLD } from '../config';
+import type { BirdSample } from '../game/Bird';
+import { STEP_MS } from '../game/physics';
+import type { PointingIntent, PointingMode } from '../game/pointing';
 import type { ShootBaseline } from '../gestures/ShootDetector';
 import type { PoseRecording, RecordedFrame } from '../tutorial/recording';
+import type { FrameSource } from './FrameClock';
 
 const N = 33;
 /** floats per frame: x, y, z, visibility per landmark (z: the arm stand-in compares the wrists' depths) */
@@ -9,6 +13,30 @@ const STRIDE = N * 4;
 const MAX_FPS = 60;
 /** a longer gap between two frames is a pause (the camera was off), not part of one stream: what came before is dropped */
 export const BLACK_BOX_GAP_MS = 5000;
+/**
+ * the dump's `blackBox.format`: 2 = frames carry the effect (`pi`, `bd`, `dr`, `lr`); absent (1) = a dump from
+ * before, with the pose and the game state only
+ */
+export const BLACK_BOX_FORMAT = 2;
+
+/** pointing modes as stored (index + 1; 0: no intent) */
+const MODES: readonly PointingMode[] = ['rest', 'hover', 'drift', 'fly'];
+/**
+ * the intent's numbers stored per frame: `PointingIntent`'s key, the dump's key, decimals in the dump, and whether
+ * the dump leaves it out when 0 (an optional key). One more number (a speed) is one more entry here and its key in
+ * `BlackBoxIntent`; storage, dump and `blackBoxEffect` follow the table.
+ */
+const INTENT_KEYS: readonly { key: 'dx' | 'dy' | 'sink'; dump: 'dx' | 'dy' | 's'; decimals: number; optional: boolean }[] = [
+  { key: 'dx', dump: 'dx', decimals: 3, optional: false },
+  { key: 'dy', dump: 'dy', decimals: 3, optional: false },
+  { key: 'sink', dump: 's', decimals: 2, optional: true },
+];
+const INTENT_STRIDE = INTENT_KEYS.length;
+/** bird floats per frame: x, y, vx, vy */
+const BIRD_STRIDE = 4;
+/** `fx` bits: the effect's presence per frame, and the bird's flags */
+const FX_INTENT = 1, FX_BIRD = 2, FX_DROPPED = 4, FX_LONG = 8, FX_GROUND = 16, FX_PERCHED = 32, FX_DYING = 64;
+const U16 = 65535;
 
 /** The game side of a frame, as `main.ts` sees it when the frame arrives. */
 export interface BlackBoxContext {
@@ -25,6 +53,39 @@ export interface BlackBoxContext {
   flapping: boolean;
   /** ms the pose model took on the frame */
   inferenceMs: number;
+  /**
+   * the pointing intent the bird is given now (`PoseSession.controls(...).pointing`): null when there is none (not
+   * playing, a stale pose, flapping mode); absent: not recorded
+   */
+  intent?: PointingIntent | null;
+  /** the bird when the frame arrives (`Game.birdState`); absent: not recorded */
+  bird?: BirdSample | null;
+  /** camera frames dropped before this one (`PoseTiming.dropped`); null or absent: unknown (no frame metadata) */
+  dropped?: number | null;
+  /** long render frames since the previous pose frame (`TrackingStats.longRenderFrames`); absent: not counted */
+  longRender?: number;
+}
+
+/** The recorded intent in a dump: the mode and `PointingIntent`'s numbers, `s` the sink (absent when 0). */
+export interface BlackBoxIntent {
+  m: PointingMode;
+  dx: number;
+  dy: number;
+  s?: number;
+}
+
+/** The recorded bird in a dump: world px, px per physics step; the flags only when true. */
+export interface BlackBoxBird {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  /** on the ground or on something (or perched) */
+  gr?: true;
+  /** perched on a branch */
+  pe?: true;
+  /** dying */
+  die?: true;
 }
 
 /** One frame of a dump: a replayable `RecordedFrame` (raw landmarks, null: nobody) plus the game side. */
@@ -40,6 +101,14 @@ export interface BlackBoxFrame extends RecordedFrame {
   ctl: { lift: number; tilt: number; hover: number; flapping: boolean };
   /** inference ms */
   ms: number;
+  /** format 2 on (each absent when not recorded): the pointing intent the bird was given (null: none) */
+  pi?: BlackBoxIntent | null;
+  /** the bird when the frame arrived */
+  bd?: BlackBoxBird;
+  /** camera frames dropped before this one (absent: unknown) */
+  dr?: number;
+  /** long render frames since the previous pose frame */
+  lr?: number;
 }
 
 /**
@@ -58,6 +127,15 @@ export interface BlackBoxDump extends PoseRecording {
     delegate: string;
     /** the options that differ from the defaults */
     config: Record<string, unknown>;
+    /** `BLACK_BOX_FORMAT` (absent in older dumps: no effect recorded) */
+    format?: number;
+    /** where the frames' time came from at the dump (`FrameClock`), null: unknown */
+    source?: FrameSource | null;
+    /** camera frames dropped over the dump (frames whose drops are known), and long render frames */
+    dropped?: number;
+    longRender?: number;
+    /** the world the bird's numbers are in: px, and the physics step its velocity is per (ms) */
+    world?: { width: number; height: number; groundY: number; stepMs: number };
   };
 }
 
@@ -66,9 +144,13 @@ export interface BlackBoxDump extends PoseRecording {
  * and the calibrations (the shoot detector's baseline), so that after a failure in play (press B) the stream can be
  * saved and replayed in the tests. Frames older than the window are dropped by time, whatever the frame rate.
  *
+ * Per frame also the effect: the pointing intent the bird was given, the bird's position and velocity, the camera
+ * frames dropped before it and the long render frames since the previous one (`BlackBoxContext`, format 2), so a
+ * dump says what the bird was told and did, not only what the camera saw.
+ *
  * Memory is bounded and allocated once: capacity = seconds * 60 fps frames, each 33 landmarks * 4 floats * 4 bytes
- * = 528 B of landmarks plus ~40 B of the rest. For 60 s that is 3600 frames, about 2 MB (a 30 fps camera fills
- * half of it). `add` allocates nothing.
+ * = 528 B of landmarks plus 60 B of the rest (26 B time, inference, controls, flags, state; 34 B the effect). For
+ * 60 s that is 3600 frames, about 2.1 MB (a 30 fps camera fills half of it). `add` allocates nothing.
  */
 export class BlackBox {
   private readonly cap: number;
@@ -84,6 +166,13 @@ export class BlackBox {
   private readonly flags: Uint8Array;
   private readonly state: Uint8Array;
   private readonly stateNames: string[] = [];
+  /** the effect: `FX_*` bits, intent mode (index in `MODES` + 1, 0: none) and numbers, bird, drops, long renders */
+  private readonly fx: Uint8Array;
+  private readonly mode: Uint8Array;
+  private readonly intent: Float32Array;
+  private readonly bird: Float32Array;
+  private readonly dropped: Uint16Array;
+  private readonly longRender: Uint16Array;
   private head = 0;
   private n = 0;
   aspect = 16 / 9;
@@ -97,6 +186,12 @@ export class BlackBox {
     this.ctl = new Float32Array(this.cap * 3);
     this.flags = new Uint8Array(this.cap);
     this.state = new Uint8Array(this.cap);
+    this.fx = new Uint8Array(this.cap);
+    this.mode = new Uint8Array(this.cap);
+    this.intent = new Float32Array(this.cap * INTENT_STRIDE);
+    this.bird = new Float32Array(this.cap * BIRD_STRIDE);
+    this.dropped = new Uint16Array(this.cap);
+    this.longRender = new Uint16Array(this.cap);
   }
 
   get length() {
@@ -133,11 +228,41 @@ export class BlackBox {
     }
     this.flags[i] = f;
     this.state[i] = this.stateIndex(ctx.state);
+    this.addEffect(i, ctx);
     // the window is time, not frames: at 30 fps the ring would otherwise hold twice the seconds
     while (this.n > 1 && this.t[this.head] < t - this.windowMs) {
       this.head = (this.head + 1) % this.cap;
       this.n--;
     }
+  }
+
+  private addEffect(i: number, ctx: BlackBoxContext) {
+    let fx = 0;
+    const p = ctx.intent;
+    if (p !== undefined) {
+      fx |= FX_INTENT;
+      this.mode[i] = p ? MODES.indexOf(p.mode) + 1 : 0;
+      const o = i * INTENT_STRIDE;
+      for (let k = 0; k < INTENT_STRIDE; k++) this.intent[o + k] = p?.[INTENT_KEYS[k].key] ?? 0;
+    }
+    const b = ctx.bird;
+    if (b) {
+      fx |= FX_BIRD | (b.onGround ? FX_GROUND : 0) | (b.perched ? FX_PERCHED : 0) | (b.dying ? FX_DYING : 0);
+      const o = i * BIRD_STRIDE;
+      this.bird[o] = b.x;
+      this.bird[o + 1] = b.y;
+      this.bird[o + 2] = b.vx;
+      this.bird[o + 3] = b.vy;
+    }
+    if (ctx.dropped != null) {
+      fx |= FX_DROPPED;
+      this.dropped[i] = Math.min(U16, Math.max(0, ctx.dropped));
+    }
+    if (ctx.longRender !== undefined) {
+      fx |= FX_LONG;
+      this.longRender[i] = Math.min(U16, Math.max(0, ctx.longRender));
+    }
+    this.fx[i] = fx;
   }
 
   /** A calibration finished at `t` (ms, frames' time): the shoot detector's baseline from then on. */
@@ -154,7 +279,10 @@ export class BlackBox {
   }
 
   /** The buffer as a replayable dump (allocates: call on the hotkey, not per frame). Null when it is empty. */
-  dump(info: { model: string; delegate: string; config: Record<string, unknown>; flapping: boolean }, now = new Date()): BlackBoxDump | null {
+  dump(
+    info: { model: string; delegate: string; config: Record<string, unknown>; flapping: boolean; source?: FrameSource | null },
+    now = new Date(),
+  ): BlackBoxDump | null {
     if (this.n === 0) return null;
     const t0 = this.t[this.at(0)];
     this.pruneCalibrations();
@@ -162,6 +290,8 @@ export class BlackBox {
     const during = this.calibrations.filter((c) => c.t > t0);
     const frames: BlackBoxFrame[] = [];
     let last = -Infinity;
+    let dropped = 0;
+    let longRender = 0;
     for (let k = 0; k < this.n; k++) {
       const i = this.at(k);
       const f = this.flags[i];
@@ -186,7 +316,10 @@ export class BlackBox {
         in: !!(f & 16),
         ctl: { lift: round(this.ctl[i * 3], 1), tilt: round(this.ctl[i * 3 + 1], 1), hover: round(this.ctl[i * 3 + 2], 2), flapping: !!(f & 32) },
         ms: round(this.ms[i], 1),
+        ...this.effectOf(i),
       });
+      if (this.fx[i] & FX_DROPPED) dropped += this.dropped[i];
+      if (this.fx[i] & FX_LONG) longRender += this.longRender[i];
     }
     return {
       version: 1,
@@ -205,8 +338,44 @@ export class BlackBox {
         model: info.model,
         delegate: info.delegate,
         config: info.config,
+        format: BLACK_BOX_FORMAT,
+        source: info.source ?? null,
+        dropped,
+        longRender,
+        world: { width: WORLD.width, height: WORLD.height, groundY: WORLD.groundY, stepMs: round(STEP_MS, 3) },
       },
     };
+  }
+
+  /** a frame's effect as dump keys, each only when recorded */
+  private effectOf(i: number): Pick<BlackBoxFrame, 'pi' | 'bd' | 'dr' | 'lr'> {
+    const fx = this.fx[i];
+    const e: Pick<BlackBoxFrame, 'pi' | 'bd' | 'dr' | 'lr'> = {};
+    if (fx & FX_INTENT) {
+      const m = this.mode[i];
+      if (m === 0) e.pi = null;
+      else {
+        const o = i * INTENT_STRIDE;
+        const pi: BlackBoxIntent = { m: MODES[m - 1], dx: 0, dy: 0 };
+        for (let k = 0; k < INTENT_STRIDE; k++) {
+          const { dump, decimals, optional } = INTENT_KEYS[k];
+          const v = round(this.intent[o + k], decimals);
+          if (v || !optional) pi[dump] = v;
+        }
+        e.pi = pi;
+      }
+    }
+    if (fx & FX_BIRD) {
+      const o = i * BIRD_STRIDE;
+      const bd: BlackBoxBird = { x: round(this.bird[o], 1), y: round(this.bird[o + 1], 1), vx: round(this.bird[o + 2], 2), vy: round(this.bird[o + 3], 2) };
+      if (fx & FX_GROUND) bd.gr = true;
+      if (fx & FX_PERCHED) bd.pe = true;
+      if (fx & FX_DYING) bd.die = true;
+      e.bd = bd;
+    }
+    if (fx & FX_DROPPED) e.dr = this.dropped[i];
+    if (fx & FX_LONG) e.lr = this.longRender[i];
+    return e;
   }
 
   /** Keeps the calibration in force at the oldest frame and the later ones (a handful at most). */
@@ -255,6 +424,67 @@ export function parseBlackBox(json: unknown): PoseRecording {
     frames: d.frames.map((f) => ({ t: f.t, lm: f.lm })),
   };
 }
+
+/** One frame's effect as `blackBoxEffect` reads it back: null where it was not recorded. */
+export interface BlackBoxEffectFrame {
+  /** ms from the dump's first frame (the frame's `t`) */
+  t: number;
+  /** whether the intent was recorded on this frame (false: `intent` null means unknown, not "no intent") */
+  hasIntent: boolean;
+  /** the pointing intent the bird was given; null: none (or not recorded, see `hasIntent`) */
+  intent: PointingIntent | null;
+  bird: BirdSample | null;
+  /** camera frames dropped before this one; null: unknown */
+  dropped: number | null;
+  /** long render frames since the previous pose frame; null: not counted */
+  longRender: number | null;
+}
+
+/** What `blackBoxEffect` returns: the header's totals and the frames. */
+export interface BlackBoxEffect {
+  format: number;
+  source: FrameSource | null;
+  dropped: number;
+  longRender: number;
+  world: { width: number; height: number; groundY: number; stepMs: number } | null;
+  frames: BlackBoxEffectFrame[];
+}
+
+/**
+ * Reads the effect back from a dump (a parsed JSON file): per frame the intent the bird was given and the bird's
+ * state, for tests and analysis scripts. Null for a dump without it (written before format 2, or a plain recording).
+ * Frames parallel `parseBlackBox(json).frames`.
+ */
+export function blackBoxEffect(json: unknown): BlackBoxEffect | null {
+  const d = json as Partial<BlackBoxDump> | null;
+  const h = d?.blackBox;
+  if (!h || typeof h.format !== 'number' || h.format < 2 || !Array.isArray(d.frames)) return null;
+  return {
+    format: h.format,
+    source: h.source ?? null,
+    dropped: h.dropped ?? 0,
+    longRender: h.longRender ?? 0,
+    world: h.world ?? null,
+    frames: d.frames.map((f) => ({
+      t: f.t,
+      hasIntent: f.pi !== undefined,
+      intent: f.pi ? intentOf(f.pi) : null,
+      bird: f.bd ? birdOf(f.bd) : null,
+      dropped: typeof f.dr === 'number' ? f.dr : null,
+      longRender: typeof f.lr === 'number' ? f.lr : null,
+    })),
+  };
+}
+
+const intentOf = (p: BlackBoxIntent): PointingIntent => {
+  const out: PointingIntent = { mode: p.m, dx: 0, dy: 0 };
+  for (const { key, dump, optional } of INTENT_KEYS) {
+    const v = p[dump];
+    if (typeof v === 'number' && (v || !optional)) out[key] = v;
+  }
+  return out;
+};
+const birdOf = (b: BlackBoxBird): BirdSample => ({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, onGround: !!b.gr, perched: !!b.pe, dying: !!b.die });
 
 const round = (x: number, d: number) => {
   const m = 10 ** d;
