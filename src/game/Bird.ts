@@ -14,8 +14,8 @@ type BirdAnim = keyof typeof birdDef.animations;
 /**
  * continuous steering: on the ground, no lift-off within this long (ms) of the command asking to descend. A slow
  * descent's sink comes and goes from one camera frame to the next (on the recordings of play it starts or stops
- * within 200 ms of its last change 8-16 times each), and
- * each gap would kick the bird up only for the descent to bring it back: ~4 frames
+ * within 200 ms of its last change 8-16 times each), and each gap would kick the bird up only for the descent to
+ * bring it back. 150 ms is about 4 camera frames.
  */
 const LIFT_AFTER_DESCENT_MS = 150;
 

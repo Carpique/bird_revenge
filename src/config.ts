@@ -371,10 +371,11 @@ export const config = {
      * `cruiseSpeed`, as now); what is left of it is a T: a tilted one drifts towards the lower hand (`tiltDeadZone`
      * .. `tiltFull`), a lowered tilted one also descends (`descend*`). With the arms spread, every sideways move goes
      * towards the lower hand (a lopsided V climbs that way, a lowered tilted T descends that way: 97% of the descent
-     * on a recording, 74% before). So a V climbs, faster the higher the arms, and arms low and apart descend. Only the arms hanging (`restCone`) let the bird fall; `ambiguousMs`, `tMaxArm`,
-     * `tMaxRaise`, `parallelMax`, `vUp` and the hystereses don't apply. On the recordings of play (open loop: the
-     * player steered the poses' bird) no time at all without a command (14-19% with the poses), no drops for want of
-     * one (9-10 a minute), no jolts, and the velocity asked for lags the arms 48-83 ms instead of 105-159
+     * on a recording, 74% before). So a V climbs, faster the higher the arms, and arms low and apart descend. Only
+     * the arms hanging (`restCone`) let the bird fall; `ambiguousMs`, `tMaxArm`, `tMaxRaise`, `parallelMax`, `vUp`
+     * and the hystereses don't apply. On the recordings of play (open loop: the player steered the poses' bird) no
+     * time at all without a command (14-19% with the poses), no drops for want of one (9-10 a minute), no jolts, and
+     * the velocity asked for lags the arms 48-83 ms instead of 105-159
      */
     continuous: false,
     /**
