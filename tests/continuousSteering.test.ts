@@ -127,9 +127,9 @@ describe('continuousArms: spread arms bank towards the lower hand', () => {
       for (const side of [1, -1] as const) {
         let lastVy = 0;
         // down to where the lower arm starts to hang or the rest cone: 75° below level without one arm steering
-        // (past it, the spread weight fades out), `restCone` − 10 from straight down with it (past it, the other arm
+        // (past it, the spread weight fades out), `restCone` − 5 from straight down with it (past it, the other arm
         // starts to be the one pointing: `oneArmWeight`)
-        const lowest = config.pointing.oneArm ? Math.min(75, 100 - config.pointing.restCone) : 75;
+        const lowest = config.pointing.oneArm ? Math.min(75, 95 - config.pointing.restCone) : 75;
         for (let low = 0; tilt + low <= lowest; low += 1) {
           const t = side * tilt;
           const p = continuousArms(...T(t, low));
@@ -197,9 +197,9 @@ describe('continuousArms: continuity', () => {
     // one arm starting to hang (75°..90° below level, the spread weight's fade) with the other lowered out to its
     // side. The flight's sideways part turns there from the lower hand to the mean's own (the outstretched arm's)
     // within 15°: 2 · cruise · |s_x| / |s| (~0.5) · smoothstep's 0.1 per degree = ~0.7 px/step (0.70 measured).
-    // With one arm steering the steepest is where an arm starts to hang beside one pointing 20° below level: the
-    // tilted T's descent towards the lower hand turns into the flight towards the pointing arm (~7 px/step apart)
-    // within 15° (0.73 measured)
+    // With one arm steering it is as steep where an arm starts to hang beside one about level: the tilted T's
+    // drift towards the lower hand turns into the flight towards the pointing arm (~7 px/step apart) within 15°
+    // (0.69 measured)
     expect(worst).toBeLessThan(0.75);
   });
 });

@@ -374,17 +374,29 @@ describe('continuous steering by one arm', () => {
     expect(half.vy).toBeCloseTo(-3.5, 2);
   });
 
-  it('a tilted T with its lower arm 25° and more from straight down, and arms pointing together, are as without it', () => {
+  it('a tilted T with its lower arm 30° and more from straight down, and arms pointing together, are as without it', () => {
     const same = (l: { x: number; y: number }, r: { x: number; y: number }) => {
       const p = continuousArms(l, r), q = bothArms(l, r);
       expect(p.vx).toBeCloseTo(q.vx, 9);
       expect(p.vy).toBeCloseTo(q.vy, 9);
       expect(p.oneArm).toBeUndefined();
     };
-    for (const low of [25, 30, 34, 45, 60]) for (const high of [60, 75, 90, 110, 140]) same(leftArm(low), rightArm(high));
+    for (const low of [30, 34, 45, 60]) for (const high of [60, 75, 90, 110, 140]) same(leftArm(low), rightArm(high));
     // pointing together, one of them in the cone: both arms' flight
     for (const [l, r] of [[-50, 25], [10, -40], [30, -50]]) same(leftArm(l), rightArm(r));
     expect(oneArmWeight(leftArm(30), rightArm(90)).w).toBe(0);
+  });
+
+  it('beside a level arm the bird turns from the pointing arm to the lower hand with the hanging arm 25° out, as the poses do', () => {
+    // an arm hanging as arms do (up to ~20° out): mostly the one-arm flight
+    expect(oneArmWeight(leftArm(15), rightArm(90)).w).toBeCloseTo(1, 6);
+    expect(oneArmWeight(leftArm(20), rightArm(90)).w).toBeGreaterThan(0.7);
+    expect(continuousArms(leftArm(20), rightArm(90)).vx).toBeGreaterThan(2.5);
+    // 25° out: neither way, as the discrete map's T begins there; further out, towards the lower hand
+    expect(Math.abs(continuousArms(leftArm(25), rightArm(90)).vx!)).toBeLessThan(0.3);
+    expect(continuousArms(leftArm(28), rightArm(90)).vx).toBeLessThan(-0.8);
+    expect(classifyArms(leftArm(24), rightArm(90))).toMatchObject({ oneArm: true, dx: 1 });
+    expect(classifyArms(leftArm(26), rightArm(90))).toMatchObject({ mode: 'drift', dx: -1 });
   });
 
   it('but with the pointing arm raised steeply (no T reaches there) the whole rest cone hangs', () => {

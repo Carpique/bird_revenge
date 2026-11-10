@@ -212,9 +212,11 @@ export function bothArms(left: Vec, right: Vec): { vx: number; vy: number; g: nu
  * the pointing arm's direction (unit, y up). As the discrete map reads it, with every limit a smooth fade, so the
  * command never jumps:
  * - the other arm points fully from `oneArmMinOut` from straight down, not at all at `restCone`
- * - an arm hangs fully within `restCone` − 25 of straight down and not at all from `restCone` − 10 (where a T's arm
- *   ends, at the default `tMaxArm`), so a tilted T whose lower arm is that far out still goes towards the lower hand
- *   (seconds of it on a recording of play); with the pointing arm raised steeply, though (65° to 80° above level and
+ * - an arm hangs fully within `restCone` − 20 of straight down and not at all from `restCone` − 5, so that beside
+ *   an arm held level the bird turns from the pointing arm to the lower hand with the hanging arm 25° out, where
+ *   the discrete map's T begins (the default `tMaxArm`): a tilted T whose lower arm is further out still goes
+ *   towards the lower hand (seconds of it on a recording of play), and an arm hanging as arms do (8-24° out at rest
+ *   on the recordings) mostly counts; with the pointing arm raised steeply, though (65° to 80° above level and
  *   beyond, past any T), the whole `restCone` hangs (fading out over 15° about its edge)
  * - arms pointing together (within `parallelMax` of each other, fading out over 15° more) are both arms' flight
  * Only one arm can be the pointing one (it is outside the cone the other is in).
@@ -225,7 +227,7 @@ export function oneArmWeight(left: Vec, right: Vec, on = config.pointing.oneArm)
   const points = (arm: Vec) => smoothstep(between(arm, DOWN), cfg.restCone, cfg.oneArmMinOut);
   const hangs = (arm: Vec, other: Vec, otherSide: -1 | 1) => {
     const d = between(arm, DOWN);
-    const narrow = 1 - smoothstep(d, cfg.restCone - 25, cfg.restCone - 10);
+    const narrow = 1 - smoothstep(d, cfg.restCone - 20, cfg.restCone - 5);
     const wide = 1 - smoothstep(d, cfg.restCone - 7.5, cfg.restCone + 7.5);
     return narrow + (wide - narrow) * smoothstep(Math.abs(outwardElevation(other, otherSide)), 65, 80);
   };
