@@ -25,9 +25,10 @@ const BRIDGE_MS = 100;
 export interface Latency {
   /** pose changes in the raw geometry */
   changes: number;
-  /** ms from a new pose to the bird told the same: median, 90th percentile; and how many were followed at all */
+  /** ms from a new pose to the bird told the same: median, 90th percentile, mean; and how many were followed at all */
   p50: number;
   p90: number;
+  mean: number;
   followed: number;
   /** changes of the bird's mode per minute of play, and of those how many lasted under 200 ms (flicker) */
   switchesPerMin: number;
@@ -110,6 +111,7 @@ export function latency(rec: Recording): Latency {
     changes,
     p50: Math.round(quantile(delays, 0.5)),
     p90: Math.round(quantile(delays, 0.9)),
+    mean: delays.length ? Math.round(delays.reduce((a, b) => a + b, 0) / delays.length) : NaN,
     followed: delays.length,
     switchesPerMin: Math.round((modes.length / minutes) * 10) / 10,
     flicker: modes.filter((m) => m.t1 - m.t0 < 200).length,
