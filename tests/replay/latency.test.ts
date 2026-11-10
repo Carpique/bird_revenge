@@ -3,6 +3,9 @@ import { config } from '../../src/config';
 import { allRecordings } from './harness';
 import { latency } from './latency';
 
+// the poses, not continuous steering (the default): what these tests measure
+config.pointing.continuous = false;
+
 /**
  * Responsiveness on recordings of real play (`tests/replay/recordings`, black-box dumps of the raw stream): how
  * long the bird takes to follow a new pose of the arms, and that it does not flicker for it. See `latency.ts`.

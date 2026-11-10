@@ -291,7 +291,7 @@ export const config = {
    * - one arm pointing while the other hangs (`oneArm`) → the bird flies where it points, a little slower
    * - a T (arms spread out, roughly level) → hover: the bird keeps its place in the air
    * - a tilted T → the bird moves slowly (`driftSpeed`) sideways towards the lower hand, keeping its altitude
-   * `continuous` replaces the poses with a velocity that follows the arms smoothly (off by default).
+   * `continuous` replaces the poses with a velocity that follows the arms smoothly (on by default).
    * Pooping is the same as in flapping mode (`shoot`).
    */
   pointing: {
@@ -405,7 +405,7 @@ export const config = {
     /** time constant (ms) of the sinking speed's changes, so starting or stopping the descent doesn't jolt */
     descendSmoothMs: 80,
     /**
-     * continuous steering, for an A/B in play (off: the poses above). The arms ask for a velocity every frame, with
+     * continuous steering (on by default; off: the poses above, for an A/B in play). The arms ask for a velocity every frame, with
      * no poses to match and nothing to wait for but the rest: the mean of the two arms' directions flies the bird
      * that way, faster the more they point together (`togetherZero` .. `togetherFull`; parallel arms at
      * `cruiseSpeed`, as now); what is left of it is a T: a tilted one drifts towards the lower hand (`tiltDeadZone`
@@ -417,7 +417,7 @@ export const config = {
      * time at all without a command (14-19% with the poses), no drops for want of one (9-10 a minute), no jolts, and
      * the velocity asked for lags the arms 48-83 ms instead of 105-159
      */
-    continuous: false,
+    continuous: true,
     /**
      * continuous steering: how much the arms point together is the length of the mean of their two unit directions
      * (1: parallel, 0: a T, tilted or not; a V or an A with each arm 45° from level 0.71). At or below this, none of

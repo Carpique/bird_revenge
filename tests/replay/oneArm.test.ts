@@ -7,6 +7,9 @@ import { toPoseFrame } from '../../src/tutorial/recording';
 import { fly, jolts } from './flight';
 import { allRecordings, simulate, tutorialRecording, type Recording, type Tick } from './harness';
 
+// the poses, not continuous steering (the default): what these tests measure
+config.pointing.continuous = false;
+
 /**
  * One arm steering (`pointing.oneArm`) on the recordings of real play (black-box dumps), through the full pipeline:
  * where the bird flies by one arm, for how long, how fast (flown with Matter.js, `flight.ts`), and that arms on

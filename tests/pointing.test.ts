@@ -5,6 +5,9 @@ import { STEP_MS } from '../src/game/physics';
 import { PointingDetector } from '../src/gestures/PointingDetector';
 import { frames } from './synthetic';
 
+// the poses, not continuous steering (the default): what these tests measure
+config.pointing.continuous = false;
+
 /** direction on screen (y up) at `deg` (0 = right, 90 = up) */
 const dir = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180) });
 

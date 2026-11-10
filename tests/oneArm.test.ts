@@ -5,6 +5,9 @@ import { STEP_MS } from '../src/game/physics';
 import { PointingDetector, type PointingOutput } from '../src/gestures/PointingDetector';
 import { synthPose } from './synthetic';
 
+// the poses, not continuous steering (the default): what these tests measure
+config.pointing.continuous = false;
+
 /**
  * One arm steering (`pointing.oneArm`): one arm hanging and the other pointing flies the bird where it points, a
  * little slower than both arms; arms raised or lowered one after the other don't fly by it; the speed eases between

@@ -3,6 +3,9 @@ import { config } from '../../src/config';
 import { PoseDetectors } from '../../src/input/poseControls';
 import { allRecordings, SimTracker, simulate, type Recording } from './harness';
 
+// the poses, not continuous steering (the default): what these tests measure
+config.pointing.continuous = false;
+
 /**
  * Which poses the arms match on recordings of real play (black-box dumps), frame by frame through the real pipeline
  * (`SimTracker`, `PoseDetectors`), over the frames recorded in play: how much of the time they match none, and how

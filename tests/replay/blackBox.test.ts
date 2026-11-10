@@ -19,6 +19,9 @@ import { synthPose, type SynthPose } from '../synthetic';
 import { allRecordings, simulate, toRecording, type TF } from './harness';
 import tutorialJson from '../../src/tutorial/control-tutorial.json?raw';
 
+// the poses, not continuous steering (the default): what these tests measure
+config.pointing.continuous = false;
+
 const recordingsJson = import.meta.glob<string>('./recordings/*.json', { eager: true, query: '?raw', import: 'default' });
 
 const ctx = (over: Partial<BlackBoxContext> = {}): BlackBoxContext => ({

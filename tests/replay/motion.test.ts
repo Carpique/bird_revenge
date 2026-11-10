@@ -4,6 +4,9 @@ import { STEP_MS } from '../../src/game/physics';
 import { fly, jolts } from './flight';
 import { allRecordings, simulate, type Tick } from './harness';
 
+// the poses, not continuous steering (the default): what these tests measure
+config.pointing.continuous = false;
+
 /**
  * The bird's motion on recordings of real play (black-box dumps): the full pose pipeline's controls each tick,
  * flown with Matter.js (`flight.ts`).
