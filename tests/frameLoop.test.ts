@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { config } from '../src/config';
-import { FrameLoop, type LoopEnv, type LoopVideo } from '../src/pose/FrameLoop';
+import type { FrameMeta } from '../src/pose/FrameClock';
+import { FrameLoop, type LoopEnv, type LoopFrame, type LoopVideo } from '../src/pose/FrameLoop';
 import { PoseTracker } from '../src/pose/PoseTracker';
 
 /** A clock with timers, and a video whose frame callbacks the test fires itself (or not: the browser dropping them). */
@@ -19,7 +20,7 @@ function fakes() {
     clearInterval: (h) => void intervals.delete(h),
     hidden: () => false,
   };
-  const callbacks = new Map<number, () => void>();
+  const callbacks = new Map<number, (now: number, meta: FrameMeta) => void>();
   const video: LoopVideo & { videoWidth: number; videoHeight: number } = {
     paused: false,
     ended: false,
@@ -36,11 +37,15 @@ function fakes() {
     env,
     video,
     callbacks,
-    /** a video frame arrives: the pending callbacks fire */
-    frame() {
+    /** a video frame arrives: the pending callbacks fire, with the frame's metadata (none given: empty) */
+    frame(meta: FrameMeta = {}, at = now) {
       const pending = [...callbacks.values()];
       callbacks.clear();
-      pending.forEach((cb) => cb());
+      pending.forEach((cb) => cb(at, meta));
+    },
+    /** the fake clock moves on (no timers fire) */
+    set now(t: number) {
+      now = t;
     },
     /** time passes, the timers fire */
     advance(ms: number) {
@@ -155,11 +160,37 @@ describe('FrameLoop', () => {
     raf.shift()!();
     expect(m).toBe(2);
   });
+
+  it("hands step the frame's callback time and metadata (null on the first step and on the animation-frame fallback)", () => {
+    const f = fakes();
+    const got: LoopFrame[] = [];
+    new FrameLoop(f.video, (fr) => void got.push(fr), { onError: () => {}, onWatchdog: () => {} }, f.env).start();
+    f.now = 40;
+    const meta = { captureTime: 10, mediaTime: 0.5, presentedFrames: 7 };
+    f.frame(meta, 33);
+    expect(got).toEqual([
+      { now: 0, meta: null },
+      { now: 33, meta },
+    ]);
+
+    const raf: Array<() => void> = [];
+    const g = fakes();
+    g.env.requestAnimationFrame = (cb) => raf.push(cb);
+    delete g.video.requestVideoFrameCallback;
+    const fb: LoopFrame[] = [];
+    new FrameLoop(g.video, (fr) => void fb.push(fr), { onError: () => {}, onWatchdog: () => {} }, g.env).start();
+    g.now = 16;
+    raf.shift()!();
+    expect(fb).toEqual([
+      { now: 0, meta: null },
+      { now: 16, meta: null },
+    ]);
+  });
 });
 
 describe('PoseTracker frame loop', () => {
   /** a tracker over a fake landmarker, with the loop's callbacks fired by hand */
-  function tracker(detect: () => unknown) {
+  function tracker(detect: (video: unknown, ts: number) => unknown) {
     const f = fakes();
     // the tracker's constructor is private (the model loads in `create`); a test builds one over fakes
     const T = PoseTracker as unknown as new (l: unknown, v: unknown, fellBack: boolean, env: LoopEnv) => PoseTracker;
@@ -190,6 +221,34 @@ describe('PoseTracker frame loop', () => {
     expect(t.stats.errors).toEqual({ detect: 1, frame: 1 });
     expect(t.stats.lastError).toMatch(/^frame: onFrame failed/);
     expect(frames).toBe(4); // the failed detect gave none
+    t.stop();
+  });
+
+  it("gives one frame's time to the model, the smoothing, the telemetry and onFrame alike", () => {
+    const detectTs: number[] = [];
+    const { f, t } = tracker((_v: unknown, ts: number) => (detectTs.push(ts), person()));
+    const smoothTs: number[] = [];
+    const process = t.smoother.process.bind(t.smoother);
+    vi.spyOn(t.smoother, 'process').mockImplementation((raw, aspect, ts) => (smoothTs.push(ts), process(raw, aspect, ts)));
+    const statsTs: number[] = [];
+    const frame = t.stats.frame.bind(t.stats);
+    vi.spyOn(t.stats, 'frame').mockImplementation((ts, ...rest) => (statsTs.push(ts), frame(ts, ...rest)));
+    const got: Array<{ frameT: number | undefined; timingT: number; dropped: number | null }> = [];
+    t.onFrame = (fr, timing) => void got.push({ frameT: fr?.t, timingT: timing.t, dropped: timing.dropped });
+    f.now = 1000;
+    t.start(); // the first step has no metadata: the callback's time
+    // the camera's clock 700 ms behind the page's; the callbacks come late by a varying amount, one frame missed
+    f.frame({ captureTime: 300, mediaTime: 0.3, presentedFrames: 1 }, 1010);
+    f.frame({ captureTime: 333, mediaTime: 0.333, presentedFrames: 2 }, 1050);
+    f.frame({ captureTime: 400, mediaTime: 0.4, presentedFrames: 4 }, 1105);
+    expect(detectTs).toEqual(smoothTs);
+    expect(detectTs).toEqual(statsTs);
+    expect(got.map((g) => g.frameT)).toEqual(detectTs);
+    expect(got.map((g) => g.timingT)).toEqual(detectTs);
+    // 1010: anchored on the first frame (offset 710); 1043: the source's 33 ms on (plus 0.02 ms of creep), not the
+    // late callback's 40; 1105: an earlier arrival than any so far lowers the offset to 705
+    expect(detectTs.map((x) => Math.round(x * 100) / 100)).toEqual([1000, 1010, 1043.02, 1105]);
+    expect(got.map((g) => g.dropped)).toEqual([null, 0, 0, 1]);
     t.stop();
   });
 

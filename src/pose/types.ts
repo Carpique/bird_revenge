@@ -8,7 +8,11 @@ export interface Landmark {
 }
 
 export interface PoseFrame {
-  /** ms timestamp (performance.now()) */
+  /**
+   * ms, `performance.now()` timebase: the frame's own time (`FrameClock`: the camera's clock mapped onto the page's,
+   * the earliest the frame could have arrived), not when the callback or the model happened to run. The one time the
+   * model, the smoothing, the detectors, the session and the recordings all use for this frame.
+   */
   t: number;
   /** 33 smoothed landmarks */
   lm: Landmark[];

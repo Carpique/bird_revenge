@@ -19,7 +19,7 @@ import { PoseSession, type PoseStep } from './input/poseSession';
 import { BlackBox } from './pose/blackBox';
 import { startCamera, stopCamera } from './pose/camera';
 import { REQUIRED_PARTS } from './pose/landmarks';
-import { PoseTracker } from './pose/PoseTracker';
+import { PoseTracker, type PoseTiming } from './pose/PoseTracker';
 import { outOfFrameCause, recalCause } from './pose/trackingStats';
 import type { PoseFrame } from './pose/types';
 import { loadAllAssets } from './render/assets';
@@ -476,8 +476,10 @@ async function main() {
     if (step.recalibrate) recalibrate();
   };
 
-  const onPose = (f: PoseFrame | null) => {
-    const now = performance.now();
+  // one clock for the pose path: everything below runs on the frame's own time (`PoseTiming.t`, `FrameClock`), not on
+  // a second `performance.now()` after inference; the render ticker's `performance.now()` is the same timebase
+  const onPose = (f: PoseFrame | null, timing: PoseTiming) => {
+    const now = timing.t;
     frame = f;
     // always run the detectors so their state stays continuous; only *apply* them while playing
     const reading = detectors.update(f, now);

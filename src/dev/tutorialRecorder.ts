@@ -10,7 +10,7 @@ import { controlsFrom, PoseDetectors } from '../input/poseControls';
 import { poseGap } from '../pose/freshness';
 import { levels, onLevelEdited } from '../levels';
 import { startCamera } from '../pose/camera';
-import { PoseTracker } from '../pose/PoseTracker';
+import { PoseTracker, type PoseTiming } from '../pose/PoseTracker';
 import type { PoseFrame } from '../pose/types';
 import { loadAllAssets } from '../render/assets';
 import { scenery } from '../scenery/scenery';
@@ -314,8 +314,9 @@ async function main() {
     return moved && t - a.t >= STILL_MS;
   };
 
-  const onPose = (f: PoseFrame | null) => {
-    const now = performance.now();
+  // the frame's own time (`PoseTiming.t`), as in the game; the ticker's `performance.now()` is the same timebase
+  const onPose = (f: PoseFrame | null, timing: PoseTiming) => {
+    const now = timing.t;
     const r = detectors.update(f, now);
     liveFrame = f;
     liveVis = r.vis;
@@ -329,7 +330,8 @@ async function main() {
         audio.play('button');
       }
     }
-    if (mode === 'countdown' || mode === 'recording')
+    // a frame from before the take started (its time is the camera's, earlier than the callback) is not in it
+    if ((mode === 'countdown' || mode === 'recording') && now >= takeStart)
       take.push(tracing ? traceLog.add(f, now - takeStart, r, tracker?.raw ?? null, tracker?.inferenceMs ?? 0, tracker?.smoother.occlusion.standIn) : toRecordedFrame(f, now - takeStart));
     // a debug trace runs until Esc: holding a pose still is what it's for
     if (mode === 'recording' && !tracing && standingStill(f, now)) stopRecording();

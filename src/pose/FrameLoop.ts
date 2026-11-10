@@ -1,11 +1,13 @@
 import { config } from '../config';
+import type { FrameMeta } from './FrameClock';
 
 /** The parts of a video element the loop looks at. */
 export interface LoopVideo {
   paused: boolean;
   ended: boolean;
   readyState: number;
-  requestVideoFrameCallback?: (cb: () => void) => number;
+  /** the browser calls back with `(now, metadata)` (lib.dom's `VideoFrameRequestCallback`) */
+  requestVideoFrameCallback?: (cb: (now: number, meta: FrameMeta) => void) => number;
   cancelVideoFrameCallback?: (handle: number) => void;
 }
 
@@ -28,6 +30,16 @@ const browserEnv = (): LoopEnv => ({
   clearInterval: (h) => window.clearInterval(h),
   hidden: () => typeof document !== 'undefined' && document.hidden,
 });
+
+/**
+ * What the loop knows about the frame it hands `step`: `now`, the callback's time (`performance.now()` timebase; for
+ * `requestVideoFrameCallback` the rendering step's time, as `requestAnimationFrame` gets), and the frame's metadata,
+ * null on the `requestAnimationFrame` fallback and on the first step at `start()` (then `now` is the loop's clock).
+ */
+export interface LoopFrame {
+  now: number;
+  meta: FrameMeta | null;
+}
 
 export interface LoopHooks {
   /** `step` threw (the loop carries on) */
@@ -56,7 +68,7 @@ export class FrameLoop {
 
   constructor(
     private readonly video: LoopVideo,
-    private readonly step: () => boolean | void,
+    private readonly step: (frame: LoopFrame) => boolean | void,
     private readonly hooks: LoopHooks,
     private readonly env: LoopEnv = browserEnv(),
   ) {}
@@ -67,7 +79,7 @@ export class FrameLoop {
     this.lastBeat = this.env.now();
     const gen = ++this.generation;
     this.timer = this.env.setInterval(() => this.check(), Math.max(100, config.pose.watchdogMs / 4));
-    this.tick(gen);
+    this.tick(gen, this.env.now(), null);
   }
 
   stop() {
@@ -78,11 +90,11 @@ export class FrameLoop {
     this.timer = null;
   }
 
-  private tick(gen: number) {
+  private tick(gen: number, now: number, meta: FrameMeta | null) {
     if (!this.running || gen !== this.generation) return;
     this.handle = null;
     try {
-      if (this.step() !== false) this.lastBeat = this.env.now();
+      if (this.step({ now, meta }) !== false) this.lastBeat = this.env.now();
     } catch (e) {
       this.lastBeat = this.env.now(); // frames do come, the step is what fails
       try {
@@ -96,8 +108,13 @@ export class FrameLoop {
   }
 
   private arm(gen: number) {
-    const cb = () => this.tick(gen);
-    this.handle = this.video.requestVideoFrameCallback ? this.video.requestVideoFrameCallback(cb) : this.env.requestAnimationFrame(cb);
+    if (this.video.requestVideoFrameCallback) {
+      this.handle = this.video.requestVideoFrameCallback((now, meta) =>
+        this.tick(gen, Number.isFinite(now) ? now : this.env.now(), meta ?? null),
+      );
+    } else {
+      this.handle = this.env.requestAnimationFrame(() => this.tick(gen, this.env.now(), null));
+    }
   }
 
   private cancel() {
