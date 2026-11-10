@@ -427,5 +427,9 @@ describe('continuous steering compared with the poses on recordings of play', ()
     if (!a) return;
     expect(a.descN).toBeGreaterThan(50);
     expect(q(a.descSinkC, 0.5)).toBeGreaterThan(0.5);
+    // and towards the same side, the lower hand, also with the arms lowered past the T (97 % of the 164 frames; 74 %
+    // before spread arms banked towards the lower hand)
+    expect(pct(a.descSame, a.descN)).toBeGreaterThan(90);
+    expect(pct(a.descInTSame, a.descInT)).toBeGreaterThan(90);
   });
 });

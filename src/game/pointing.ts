@@ -104,7 +104,9 @@ const HOVER_SPEED = 0.25;
  * Continuous steering (`pointing.continuous`): one frame's arms (as for `classifyArms`) straight to a velocity, with
  * no poses to match. Both arms within `restCone` of straight down → rest; otherwise, with `s` the mean of the two
  * arms' unit directions and `g` = smoothstep(|s|; `togetherZero`, `togetherFull`) (1: the arms point together, 0: a
- * T, whatever its tilt), the velocity is `g` · `cruiseSpeed` along `s`, plus (1 − `g`) times:
+ * T, whatever its tilt), the velocity is `g` · `cruiseSpeed` along `s`, plus (1 − `g`) times (with the arms spread,
+ * `s`'s sideways part always points towards the lower hand, so a lopsided V and a lowered tilted T both go that way;
+ * arms pointing together across the body fly where they point):
  * - a drift sideways towards the lower hand, `driftSpeed` times the tilt's ramp (smoothstep of half the arms'
  *   angle difference from `tiltDeadZone` to `tiltFull`), only while the arms are spread (each out to its own side;
  *   faded out from 75° to 90° above or below level, so an arm turning across the body doesn't jump)
@@ -131,8 +133,14 @@ export function continuousArms(left: Vec, right: Vec): PointingIntent {
   const tiltK = spread * smoothstep(Math.abs(tilt), cfg.tiltDeadZone, cfg.tiltFull);
   const drift = -Math.sign(tilt) * tiltK * cfg.driftSpeed;
   const sink = cfg.descend ? tiltK * cfg.descendSpeed * ramp(-(eL + eR) / 2, cfg.descendZero, cfg.descendFull) : 0;
+  // spread arms fly sideways towards the lower hand, as the tilted T drifts. The mean's own sideways part points to
+  // the arm nearer level: the lower hand above level (a lopsided V), but the higher one below it, so two lowered,
+  // tilted arms used to descend towards the higher hand (38 of 164 descending frames on a recording). Only its sign
+  // is replaced, by the spread weight: the identity for every V, and arms pointing together across the body still
+  // fly where they point
+  const fx = spread * -Math.sign(tilt) * Math.abs(sx) + (1 - spread) * sx;
   // y down on screen, like the bird's velocity
-  const vx = (g * cfg.cruiseSpeed * sx) / (m || 1) + (1 - g) * drift;
+  const vx = (g * cfg.cruiseSpeed * fx) / (m || 1) + (1 - g) * drift;
   const vy = (-g * cfg.cruiseSpeed * sy) / (m || 1) + (1 - g) * sink;
   const speed = Math.hypot(vx, vy);
   const mode: PointingMode = g >= 0.5 ? 'fly' : speed < HOVER_SPEED ? 'hover' : 'drift';

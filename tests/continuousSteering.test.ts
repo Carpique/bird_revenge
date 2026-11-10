@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { config } from '../src/config';
-import { classifyArms, continuousArms, pointingFlapRate, pointingLean, pointingStep, type PointingIntent } from '../src/game/pointing';
+import { classifyArms, continuousArms, outwardElevation, pointingFlapRate, pointingLean, pointingStep, type PointingIntent } from '../src/game/pointing';
 import { STEP_MS } from '../src/game/physics';
 import { PointingDetector } from '../src/gestures/PointingDetector';
 import { frames } from './synthetic';
@@ -85,6 +85,97 @@ describe('continuousArms: the pure poses', () => {
   });
 });
 
+/** an arm's outward elevation (deg) to its direction on screen: `side` -1 the left arm, +1 the right */
+const arm = (side: -1 | 1, elev: number) => dir(side < 0 ? 180 - elev : elev);
+const ss = (x: number, a: number, b: number) => {
+  const k = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return k * k * (3 - 2 * k);
+};
+/** the map before spread arms banked towards the lower hand (e71fb9e): the mean's own sideways part */
+function preFix(l: { x: number; y: number }, r: { x: number; y: number }) {
+  const cfg = config.pointing;
+  const sx = (l.x + r.x) / 2, sy = (l.y + r.y) / 2, m = Math.hypot(sx, sy);
+  const g = ss(m, cfg.togetherZero, cfg.togetherFull);
+  const eL = outwardElevation(l, -1), eR = outwardElevation(r, 1);
+  const spread = (1 - ss(Math.abs(eL), 75, 90)) * (1 - ss(Math.abs(eR), 75, 90));
+  const tilt = (eR - eL) / 2;
+  const tiltK = spread * ss(Math.abs(tilt), cfg.tiltDeadZone, cfg.tiltFull);
+  const lowered = Math.max(0, Math.min(1, (-(eL + eR) / 2 - cfg.descendZero) / (cfg.descendFull - cfg.descendZero)));
+  const sink = tiltK * cfg.descendSpeed * lowered;
+  return {
+    vx: (g * cfg.cruiseSpeed * sx) / (m || 1) + (1 - g) * -Math.sign(tilt) * tiltK * cfg.driftSpeed,
+    vy: (-g * cfg.cruiseSpeed * sy) / (m || 1) + (1 - g) * sink,
+  };
+}
+
+describe('continuousArms: spread arms bank towards the lower hand', () => {
+  it('the worked example: a tilted T lowered past the point where the mean leaned the other way', () => {
+    // left -55 / right -15: the right hand higher by 20, the bird descends to the left at the tilt ramp's half drift
+    const a = continuousArms(arm(-1, -55), arm(1, -15));
+    expect(a.vx).toBeCloseTo(-0.93, 2);
+    expect(a.vy).toBeCloseTo(1.0, 2);
+    expect(preFix(arm(-1, -55), arm(1, -15)).vx).toBeCloseTo(-0.84, 2);
+    // 5° lower: before, the flight term all but cancelled the drift (-0.15); now it adds to it
+    const b = continuousArms(arm(-1, -60), arm(1, -20));
+    expect(b.vx).toBeCloseTo(-1.24, 2);
+    expect(b.vy).toBeCloseTo(2.19, 2);
+    expect(preFix(arm(-1, -60), arm(1, -20)).vx).toBeCloseTo(-0.15, 2);
+  });
+
+  it('lowering a tilted T: sideways always towards the lower hand, descending no slower the lower the arms', () => {
+    for (const tilt of [10, 15, 20, 25, 30, 35, 40])
+      for (const side of [1, -1] as const) {
+        let lastVy = 0;
+        // down to where the lower arm starts to hang (75° below level: past it, the spread weight fades out) or
+        // the rest cone
+        for (let low = 0; tilt + low <= 75; low += 1) {
+          const t = side * tilt;
+          const p = continuousArms(...T(t, low));
+          if (p.mode === 'rest') break;
+          // + tilt: the right hand higher, the lower hand on the left
+          expect(Math.sign(t) * p.vx!, `tilt ${t} low ${low}`).toBeLessThanOrEqual(1e-9);
+          expect(p.vy!, `tilt ${t} low ${low}`).toBeGreaterThanOrEqual(lastVy - 1e-9);
+          lastVy = p.vy!;
+        }
+        // well lowered, it really descends diagonally (past the tilt's dead zone)
+        if (tilt >= 20) expect(Math.abs(continuousArms(...T(side * tilt, 70 - tilt)).vx!)).toBeGreaterThan(0.8);
+      }
+  });
+
+  it('every V and every pair of arms pointing together the same way: the same command as before', () => {
+    let worst = 0;
+    // both arms raised (or level), each out to its own side or across the body
+    for (let eL = 0; eL <= 180; eL += 2)
+      for (let eR = 0; eR <= 180; eR += 2) {
+        const p = continuousArms(arm(-1, eL), arm(1, eR));
+        const q = preFix(arm(-1, eL), arm(1, eR));
+        worst = Math.max(worst, Math.hypot(p.vx! - q.vx, p.vy! - q.vy));
+      }
+    // parallel within parallelMax (as the poses read it), in every direction, outside the rest cone, except arms
+    // straddling straight down (below)
+    for (let deg = -180; deg < 180; deg += 2)
+      for (let d = 0; d <= config.pointing.parallelMax / 2; d += 1) {
+        const [l, r] = [dir(deg + d), dir(deg - d)];
+        for (const [a, b] of [[l, r], [r, l]]) {
+          const p = continuousArms(a, b);
+          if (p.mode === 'rest') continue;
+          if (outwardElevation(a, -1) < 0 && outwardElevation(a, -1) > -90 && outwardElevation(b, 1) < 0 && outwardElevation(b, 1) > -90) continue;
+          const q = preFix(a, b);
+          worst = Math.max(worst, Math.hypot(p.vx! - q.vx, p.vy! - q.vy));
+        }
+      }
+    expect(worst).toBeLessThan(1e-9);
+  });
+
+  it('arms within parallelMax but either side of straight down (a narrowed A) go towards the lower hand too', () => {
+    // left -52, right -78: 50° apart, the poses read them as parallel and flew down and left; now down and right
+    const p = continuousArms(arm(-1, -52), arm(1, -78));
+    expect(preFix(arm(-1, -52), arm(1, -78)).vx).toBeLessThan(-1.5);
+    expect(p.vx).toBeGreaterThan(1.2);
+    expect(p.vy).toBeCloseTo(preFix(arm(-1, -52), arm(1, -78)).vy, 9);
+  });
+});
+
 describe('continuousArms: continuity', () => {
   it('outside the rest cone, a 1° change of an arm changes the command by little', () => {
     const inCone = (deg: number) => Math.abs(((deg + 90 + 540) % 360) - 180) <= config.pointing.restCone;
@@ -100,8 +191,11 @@ describe('continuousArms: continuity', () => {
         }
       }
     // the steepest ramp: `togetherZero`..`togetherFull` (smoothstep, slope 1.5 / 0.3) times the cruising speed, with
-    // one arm's degree moving the mean by up to 0.5° worth: ~0.3 px/step (the cruising speed is 7)
-    expect(worst).toBeLessThan(0.35);
+    // one arm's degree moving the mean by up to 0.5° worth: ~0.3 px/step (the cruising speed is 7). Steeper still:
+    // one arm starting to hang (75°..90° below level, the spread weight's fade) with the other lowered out to its
+    // side. The flight's sideways part turns there from the lower hand to the mean's own (the outstretched arm's)
+    // within 15°: 2 · cruise · |s_x| / |s| (~0.5) · smoothstep's 0.1 per degree = ~0.7 px/step (0.70 measured)
+    expect(worst).toBeLessThan(0.75);
   });
 });
 
