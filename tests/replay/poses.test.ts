@@ -45,6 +45,11 @@ function poses(rec: Recording) {
   return { unmatchedPct: pct(unmatchedMs), vPct: pct(vMs), falls, fallMs: Math.round(fallMs) };
 }
 
+/** the first player's recordings, which the V was tuned on (the limits below are theirs) */
+const first = dumps.filter((r) => r.name.startsWith('2026-11-09-'));
+/** the second, smaller player's */
+const second = dumps.filter((r) => r.name.startsWith('2026-11-10-drugi-gracz-'));
+
 describe('poses on recordings of play', () => {
   const vUp = config.pointing.vUp;
   afterEach(() => {
@@ -57,7 +62,7 @@ describe('poses on recordings of play', () => {
 
   // with vUp off (on): unmatched 22.2 / 35.9 / 27.6 % (14.1 / 18.7 / 15.3 %) of play; the bird dropped for want of
   // a pose 12x 7.0 s / 11x 11.7 s / 15x 9.6 s (9x 4.3 s / 8x 5.8 s / 10x 5.3 s) on po-strojeniu / gra / trening
-  for (const r of dumps) {
+  for (const r of first) {
     it(`${r.name}: arms raised in a V fly up: far less time matching no pose, far fewer drops for it`, () => {
       config.pointing.vUp = false;
       const off = poses(r);
@@ -71,6 +76,23 @@ describe('poses on recordings of play', () => {
       expect(on.fallMs).toBeLessThan(6500);
       expect(on.fallMs).toBeLessThan(off.fallMs * 0.65);
       expect(on.falls).toBeLessThan(off.falls);
+    });
+  }
+
+  // the second player raised a V less (7.4 / 7.4 % of play against 8.7-17.3 %) and matched more without it (unmatched
+  // 11.6 / 15.9 % with the V off, 4.4 / 11.9 % with it on): a smaller gain than the first player's, never a loss
+  for (const r of second) {
+    it(`${r.name}: the V flies up there too, with no more drops`, () => {
+      config.pointing.vUp = false;
+      const off = poses(r);
+      config.pointing.vUp = true;
+      const on = poses(r);
+      console.log(`poses ${r.name}: vUp off ${JSON.stringify(off)}, on ${JSON.stringify(on)}`);
+      expect(off.vPct).toBe(0);
+      expect(on.vPct).toBeGreaterThan(3);
+      expect(on.unmatchedPct).toBeLessThan(off.unmatchedPct);
+      expect(on.fallMs).toBeLessThanOrEqual(off.fallMs);
+      expect(on.falls).toBeLessThanOrEqual(off.falls);
     });
   }
 

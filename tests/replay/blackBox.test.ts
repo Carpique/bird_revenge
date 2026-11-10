@@ -227,6 +227,9 @@ describe('BlackBox', () => {
   });
 });
 
+/** the recordings made with the effect (format 2): the second player's, 2026-11-10 */
+const NEW_DUMPS = Object.entries(recordingsJson).filter(([name]) => /2026-11-10-drugi-gracz/.test(name));
+
 const bird = (over: Partial<BirdSample> = {}): BirdSample => ({ x: 640, y: 300, vx: 0, vy: 0, onGround: false, perched: false, dying: false, ...over });
 const roundTrip = (d: BlackBoxDump | null) => JSON.parse(JSON.stringify(d));
 
@@ -362,8 +365,36 @@ describe('BlackBox: the effect (format 2)', () => {
     check(dc, 500 - dc.frames.length);
   });
 
+  it('real dumps with the effect (the second player): what the game told the bird is what the replay tells it', () => {
+    expect(NEW_DUMPS).toHaveLength(2);
+    for (const [file, text] of NEW_DUMPS) {
+      const json = JSON.parse(text);
+      const e = blackBoxEffect(json)!;
+      expect(e, file).not.toBeNull();
+      expect(e.format).toBe(2);
+      expect(e.source).toBe('capture');
+      // a few camera frames dropped (3% of them), far more long render frames
+      expect(e.dropped).toBeGreaterThan(20);
+      expect(e.dropped / (e.frames.length + e.dropped)).toBeLessThan(0.05);
+      expect(e.longRender).toBeGreaterThan(e.dropped);
+      const rec = allRecordings().find((r) => file.endsWith(`${r.name}.json`))!;
+      const replayed: (PointingIntent | null)[] = [];
+      simulate(rec, rec.frames, { startState: 'playing', onFrame: (_f, _s, c) => replayed.push(c.pointing) });
+      expect(replayed.length).toBeGreaterThanOrEqual(e.frames.length - 1); // the last 60 Hz tick may come before the last frame
+      let same = 0, known = 0;
+      e.frames.forEach((f, i) => {
+        if (!f.hasIntent || !f.intent || i >= replayed.length) return;
+        known++;
+        if (replayed[i]?.mode === f.intent.mode) same++;
+      });
+      expect(known, file).toBeGreaterThan(1500);
+      // the detectors' warm-up at the start of the dump is the only difference (~0.3 s)
+      expect(same / known, file).toBeGreaterThan(0.98);
+    }
+  });
+
   it('a dump from before the effect (no format) parses as before and yields no effect', () => {
-    const old: [string, string][] = [['control-tutorial', tutorialJson], ...Object.entries(recordingsJson)];
+    const old: [string, string][] = [['control-tutorial', tutorialJson], ...Object.entries(recordingsJson).filter(([name]) => !/2026-11-10-drugi-gracz/.test(name))];
     expect(old.length).toBe(4);
     for (const [name, text] of old) {
       const json = JSON.parse(text);
@@ -372,7 +403,7 @@ describe('BlackBox: the effect (format 2)', () => {
       expect(json.frames.some((f: object) => 'pi' in f || 'bd' in f), name).toBe(false);
     }
     // the replay suite's view of them is unchanged (same frames as the harness loads)
-    expect(allRecordings()).toHaveLength(4);
+    expect(allRecordings()).toHaveLength(old.length + NEW_DUMPS.length);
 
     // a new dump: the same recording for the replay as the dump without its effect and header additions
     const b = new BlackBox(2);

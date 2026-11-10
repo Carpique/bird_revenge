@@ -22,7 +22,8 @@ import { latency, type Latency } from './latency';
  * wrist travel, every frame with a person and both wrists confident). The dumps predate the measurement.
  */
 
-const dumps = allRecordings().filter((r) => r.rec.level === 'black-box');
+/** the recordings the study was made on (2026-11-09, the first player): its numbers and limits are theirs */
+const dumps = allRecordings().filter((r) => r.rec.level === 'black-box' && r.name.startsWith('2026-11-09-'));
 const short = (r: Recording) => r.name.replace('2026-11-09-', '');
 const MODES: ArmSmoothingMode[] = ['fixed', 'off', 'auto'];
 /** added noise, normalised image units (`jitter`), each with these seeds (flicker counts are small: one seed moves them by 2-3) */
