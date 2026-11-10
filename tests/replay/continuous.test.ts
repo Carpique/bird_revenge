@@ -344,9 +344,20 @@ describe('continuous steering compared with the poses on recordings of play', ()
     if (!a) return;
     expect(a.descN).toBeGreaterThan(50);
     expect(q(a.descSinkC, 0.5)).toBeGreaterThan(0.5);
-    // and towards the same side, the lower hand, also with the arms lowered past the T (97 % of the 164 frames; 74 %
-    // before spread arms banked towards the lower hand)
-    expect(pct(a.descSame, a.descN)).toBeGreaterThan(90);
+    // and towards the same side, the lower hand: within the T on 97 % of the 126 frames. Past the T the poses only
+    // hold the descent (for `ambiguousMs`, or while the one-arm pose waits) with the lower arm already hanging,
+    // which continuous steering reads as one arm pointing (`pointing.oneArm`: the detector hovers there until the
+    // pose has lasted): the same side on 90 % of all 164 frames, 97 % without one arm steering (74 % before spread
+    // arms banked towards the lower hand)
     expect(pct(a.descInTSame, a.descInT)).toBeGreaterThan(90);
+    expect(pct(a.descSame, a.descN)).toBeGreaterThan(85);
+    const p = config.pointing, was = p.oneArm;
+    p.oneArm = false;
+    try {
+      const off = agreement(withCfg('vUp', () => perFrame(dumps.find((r) => r.name === '2026-11-09-gra-po-strojeniu')!)));
+      expect(pct(off.descSame, off.descN)).toBeGreaterThan(95);
+    } finally {
+      p.oneArm = was;
+    }
   });
 });
