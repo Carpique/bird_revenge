@@ -8,12 +8,16 @@
  * telling the bird the same, for at least `MATCH_HOLD_MS`.
  *
  * Only for recordings of the raw stream (`BlackBox` dumps): the tutorial recording is smoothed already.
+ *
+ * `opts.frames`: what the pipeline gets instead of the recording (a worse camera: `jitter`), the reference staying
+ * the recording's own frames; `opts.sim`: options for `simulate` (the arms' measured noise); `opts.ticks`: the
+ * pipeline's ticks in play where the caller simulated them already (with those frames and options).
  */
 import { classifyArms, type PointingIntent } from '../../src/game/pointing';
 import { pt } from '../../src/gestures/geometry';
 import { L } from '../../src/pose/landmarks';
 import type { PoseFrame } from '../../src/pose/types';
-import { simulate, type Recording } from './harness';
+import { simulate, type Recording, type SimOptions, type TF, type Tick } from './harness';
 
 const STABLE_MS = 300;
 const MATCH_HOLD_MS = 150;
@@ -48,7 +52,7 @@ const same = (a: PointingIntent | null, b: PointingIntent | null) =>
   !!a && !!b && a.mode === b.mode && (a.mode !== 'fly' || angDiff(ang(a), ang(b)) < 30) && (a.mode !== 'drift' || a.dx === b.dx);
 const quantile = (xs: number[], q: number) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(q * (xs.length - 1))] : NaN);
 
-export function latency(rec: Recording): Latency {
+export function latency(rec: Recording, opts: { frames?: TF[]; sim?: SimOptions; ticks?: Tick[] } = {}): Latency {
   // the raw geometry, frame by frame
   const raw = rec.frames.map(({ t, f }) => ({ t, nobody: !f, p: f ? classifyArms(dirOf(f, 'left'), dirOf(f, 'right'), null) : null }));
   // a pose held: the same reading frame after frame; a frame with nobody in view ends it, and so does a gap of
@@ -63,7 +67,7 @@ export function latency(rec: Recording): Latency {
   const stable = segs.filter((s) => s.t1 - s.t0 >= STABLE_MS);
 
   // the full pipeline, as the game plays it (a dump starts in play)
-  const ticks = simulate(rec, rec.frames, { startState: 'playing' }).ticks.filter((k) => k.state === 'playing');
+  const ticks = opts.ticks ?? simulate(rec, opts.frames ?? rec.frames, { ...opts.sim, startState: 'playing' }).ticks.filter((k) => k.state === 'playing');
   const intents = ticks.map((k) => ({
     t: k.t,
     p: (k.mode === 'fly'
