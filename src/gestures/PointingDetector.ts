@@ -1,5 +1,6 @@
 import { config } from '../config';
 import { classifyArms, continuousArms, outwardElevation, type PointingIntent, type PointingMode } from '../game/pointing';
+import { armFilterFor, type ArmNoise } from '../pose/armSmoothing';
 import { L } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
 import { pt, type Side, type Vec } from './geometry';
@@ -34,6 +35,11 @@ const angleOf = (v: Vec) => (Math.atan2(v.y, v.x) * 180) / Math.PI;
  * arms ask for a velocity every frame instead (`continuousArms`), and only the rest is debounced.
  */
 export class PointingDetector {
+  /**
+   * the arms' noise measured at the last calibration, as `PoseSmoother.armNoise` (set both together): the EMA of the
+   * arm directions runs only where `smoothing.arms` keeps today's chain (`fixed`, or `auto` with nothing measured)
+   */
+  armNoise: ArmNoise | null = null;
   private left: Vec | null = null;
   private right: Vec | null = null;
   private intent: PointingIntent = { mode: 'rest', dx: 0, dy: 0 };
@@ -64,7 +70,8 @@ export class PointingDetector {
     // an EMA over time, not frames: the factor for this frame's time step (a slower camera: bigger steps)
     const dt = this.lastT === null ? Infinity : Math.max(0, f.t - this.lastT);
     this.lastT = f.t;
-    const tau = config.pointing.smoothingMs;
+    // the EMA is part of the fixed chain only (`smoothing.arms`): off has no filter, auto its one stage in `PoseSmoother`
+    const tau = armFilterFor(config.smoothing.arms, this.armNoise).kind === 'fixed' ? config.pointing.smoothingMs : 0;
     const a = tau <= 0 ? 1 : 1 - Math.exp(-dt / tau);
     const ema = (prev: Vec | null, v: Vec): Vec => {
       if (!prev) return v;

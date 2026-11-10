@@ -5,6 +5,7 @@ import type { TiltOutput } from '../gestures/TiltDetector';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { config } from '../config';
 import { sideAmount } from '../game/flight';
+import { armFilterLabel, type ArmFilter, type ArmNoise } from '../pose/armSmoothing';
 import { PART_NAMES, SKELETON } from '../pose/landmarks';
 import { NULL_RUN_LABELS, RECAL_CAUSES, RECENT_S, type TrackingStats } from '../pose/trackingStats';
 import type { PoseFrame } from '../pose/types';
@@ -61,6 +62,8 @@ export class DebugPanel {
     stats: TrackingStats | null;
     /** seconds of raw pose stream in the black box (B saves it) */
     blackBoxSeconds: number;
+    /** the arms' smoothing in force (`smoothing.arms`, `PoseSmoother.armFilter`) and the noise the calibration measured */
+    arms?: { filter: ArmFilter; noise: ArmNoise | null };
     now: number;
   }) {
     if (!this.visible) return;
@@ -154,6 +157,7 @@ export class DebugPanel {
       `pose      ${n(info.fps)} fps processed` + (info.stats?.cameraFps ? ` of ${info.stats.cameraFps.toFixed(0)} camera` : '') + `  ${n(info.inferenceMs, 1)} ms`,
       ...trackingLines(info.stats, info.now),
       `blackbox  ${info.blackBoxSeconds.toFixed(0)} s buffered (B saves)`,
+      info.arms ? armsLine(info.arms.filter, info.arms.noise) : '',
       '',
       fl ? `arm  angle   vel  power strk  Hz  primed` : '',
       fl ? `L   ${n(fl.left.angle)} ${n(fl.left.velocity)} ${n(fl.left.power)} ${String(fl.left.strokes).padStart(4)} ${fl.left.frequency.toFixed(1).padStart(4)}  ${fl.left.primed ? '▲' : '·'}` : '',
@@ -234,4 +238,10 @@ function renderLine(st: TrackingStats): string {
     `render    >${config.telemetry.longRenderMs} ms: ${r.count} in ${RECENT_S}s (${(r.share * 100).toFixed(1)}%)  ${st.longRenderFrames} all` +
     (st.longestRenderMs ? `  max ${st.longestRenderMs.toFixed(0)} ms` : '')
   );
+}
+
+/** The arms' smoothing: the switch, the filter in force, the noise the calibration measured. */
+export function armsLine(filter: ArmFilter, noise: ArmNoise | null): string {
+  const measured = noise ? `noise ${noise.deg.toFixed(2)}° ${(noise.norm * 1000).toFixed(1)}e-3 @${noise.fps.toFixed(0)} fps` : 'noise not measured';
+  return `arms      ${config.smoothing.arms} → ${armFilterLabel(filter)}  ${measured}`;
 }

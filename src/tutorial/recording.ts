@@ -1,4 +1,5 @@
 import type { ShootBaseline } from '../gestures/ShootDetector';
+import type { ArmNoise } from '../pose/armSmoothing';
 import type { PoseFrame } from '../pose/types';
 
 /** The level the instructions page plays its demonstration in, and the name of its recording. */
@@ -28,8 +29,13 @@ export interface PoseRecording {
   flapping: boolean;
   /** the standing hip angles from the calibration, for the shoot detector */
   baseline: ShootBaseline | null;
-  /** calibrations during the recording (ms, in the frames' time): the shoot detector takes the new baseline from there on */
-  calibrations?: { t: number; baseline: ShootBaseline }[];
+  /** the arms' noise measured at that calibration (`smoothing.arms` = auto); absent or null: not measured (older dumps) */
+  armNoise?: ArmNoise | null;
+  /**
+   * calibrations during the recording (ms, in the frames' time): the shoot detector takes the new baseline from there
+   * on, and the arms' smoothing the noise measured with it (absent: not measured)
+   */
+  calibrations?: { t: number; baseline: ShootBaseline; armNoise?: ArmNoise | null }[];
   /** the clip played: from here (ms; the frames before it only warm the detectors up)... */
   startMs: number;
   /** ...to here */

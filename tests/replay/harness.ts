@@ -1,7 +1,8 @@
 /**
  * Replay harness: recorded pose sessions played through the real pipeline, with the game side of `main.ts`.
  *
- * What is real: `PoseSmoother` (arm stand-in + One-Euro filters, as in `PoseTracker.process`), `PoseDetectors` (visibility
+ * What is real: `PoseSmoother` (arm stand-in + One-Euro filters, as in `PoseTracker.process`; the arms' smoothing
+ * as `smoothing.arms` and the noise the recording's calibrations measured make it), `PoseDetectors` (visibility
  * monitor, flap / shoot / tilt / pointing), `PoseSession` (the game's rules on the pose stream: state changes,
  * controls, staleness) and `config`.
  *
@@ -21,6 +22,7 @@ import { PoseDetectors, type PoseReading } from '../../src/input/poseControls';
 import type { Controls } from '../../src/input/controls';
 import type { PointingIntent } from '../../src/game/pointing';
 import { PoseSession } from '../../src/input/poseSession';
+import type { ArmNoise } from '../../src/pose/armSmoothing';
 import { PoseSmoother } from '../../src/pose/PoseSmoother';
 import type { PoseFrame } from '../../src/pose/types';
 import type { PoseRecording } from '../../src/tutorial/recording';
@@ -177,7 +179,7 @@ export function rng(seed: number) {
 
 /** `PoseTracker.process` for a frame list: the real `PoseSmoother` (arm stand-in, One-Euro filters; a short gap leaves them be) */
 export class SimTracker {
-  private smoother = new PoseSmoother();
+  readonly smoother = new PoseSmoother();
 
   process(f: PoseFrame | null): PoseFrame | null {
     if (!f) return null;
@@ -227,6 +229,18 @@ export interface SimOptions {
    * tracker got it (before smoothing), the state and the controls the session gives the bird at the frame's time
    */
   onFrame?: (frame: TF, state: SimState, controls: Controls) => void;
+  /**
+   * the arms' noise measured at calibration (`smoothing.arms` = auto) for the whole replay, in place of the one the
+   * recording carries (`PoseRecording.armNoise`, then each later calibration's from its time on: one that measured
+   * nothing replaces it with none, as in the game); null: not measured
+   */
+  armNoise?: ArmNoise | null;
+}
+
+/** the arms' noise a calibration measured (`PoseSmoother.armNoise`), into the tracker and the pointing detector together */
+export function setArmNoise(tracker: SimTracker, detectors: PoseDetectors, noise: ArmNoise | null) {
+  tracker.smoother.armNoise = noise;
+  detectors.pointing.armNoise = noise;
 }
 
 /** Plays `frames` (what the tracker delivers: perturbed or not) through the pipeline and the game's rules. */
@@ -239,6 +253,8 @@ export function simulate(rec: Recording, frames: TF[], opts: SimOptions = {}): S
   let ci = 0;
   const session = new PoseSession();
   const tracker = new SimTracker();
+  const fixedNoise = opts.armNoise !== undefined;
+  setArmNoise(tracker, detectors, fixedNoise ? opts.armNoise! : (rec.rec.armNoise ?? null));
   const out: SimResult = { ticks: [], events: [], triggers: [] };
   const ev = (t: number, type: SimEvent['type']) => out.events.push({ t, type });
 
@@ -252,7 +268,11 @@ export function simulate(rec: Recording, frames: TF[], opts: SimOptions = {}): S
     while (fi < frames.length && frames[fi].t <= tick) {
       const frame = frames[fi++];
       const { t } = frame;
-      while (ci < calibrations.length && calibrations[ci].t <= t) detectors.shoot.calibrate({ ...calibrations[ci++].baseline });
+      while (ci < calibrations.length && calibrations[ci].t <= t) {
+        const c = calibrations[ci++];
+        detectors.shoot.calibrate({ ...c.baseline });
+        if (!fixedNoise) setArmNoise(tracker, detectors, c.armNoise ?? null);
+      }
       const f = tracker.process(frame.f);
       const reading: PoseReading = detectors.update(f, t);
       const step = session.update(state, reading, t);

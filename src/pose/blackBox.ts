@@ -4,6 +4,7 @@ import { STEP_MS } from '../game/physics';
 import type { PointingIntent, PointingMode } from '../game/pointing';
 import type { ShootBaseline } from '../gestures/ShootDetector';
 import type { PoseRecording, RecordedFrame } from '../tutorial/recording';
+import type { ArmNoise } from './armSmoothing';
 import type { FrameSource } from './FrameClock';
 
 const N = 33;
@@ -166,7 +167,7 @@ export class BlackBox {
   /** the window, ms: older frames are dropped */
   private readonly windowMs: number;
   /** calibrations (ms, frames' time): the one in force at the oldest frame, and those after it */
-  private calibrations: { t: number; baseline: ShootBaseline }[] = [];
+  private calibrations: { t: number; baseline: ShootBaseline; armNoise: ArmNoise | null }[] = [];
   private readonly lm: Float32Array;
   private readonly t: Float64Array;
   private readonly ms: Float32Array;
@@ -274,9 +275,12 @@ export class BlackBox {
     this.fx[i] = fx;
   }
 
-  /** A calibration finished at `t` (ms, frames' time): the shoot detector's baseline from then on. */
-  calibrated(t: number, baseline: ShootBaseline) {
-    this.calibrations.push({ t, baseline: { ...baseline } });
+  /**
+   * A calibration finished at `t` (ms, frames' time): the shoot detector's baseline from then on, and the arms' noise
+   * measured during its hold (null: not measured), so a dump replays with the arms' smoothing the game had.
+   */
+  calibrated(t: number, baseline: ShootBaseline, armNoise: ArmNoise | null = null) {
+    this.calibrations.push({ t, baseline: { ...baseline }, armNoise: armNoise && { ...armNoise } });
     this.pruneCalibrations();
   }
 
@@ -337,7 +341,10 @@ export class BlackBox {
       flapping: info.flapping,
       // the baseline in force at the first frame, and the calibrations after it, so the replay shoots as the game did
       baseline: before.length ? { ...before[before.length - 1].baseline } : null,
-      ...(during.length ? { calibrations: during.map((c) => ({ t: Math.round(c.t - t0), baseline: { ...c.baseline } })) } : {}),
+      ...(before.length && before[before.length - 1].armNoise ? { armNoise: { ...before[before.length - 1].armNoise! } } : {}),
+      ...(during.length
+        ? { calibrations: during.map((c) => ({ t: Math.round(c.t - t0), baseline: { ...c.baseline }, ...(c.armNoise ? { armNoise: { ...c.armNoise } } : {}) })) }
+        : {}),
       startMs: 0,
       endMs: last,
       frames,
@@ -407,6 +414,9 @@ export class BlackBox {
   }
 }
 
+const isArmNoise = (n: unknown): n is ArmNoise =>
+  !!n && typeof n === 'object' && ['deg', 'norm', 'fps', 'frames'].every((k) => typeof (n as Record<string, unknown>)[k] === 'number');
+
 /**
  * Reads a dump (a parsed JSON file) back as a `PoseRecording` for the replay suite; throws on anything else.
  * Frames of a plain recording (`Recorder`, the tutorial recorder) are fine too: only `t` and `lm` are needed.
@@ -427,7 +437,11 @@ export function parseBlackBox(json: unknown): PoseRecording {
     aspect: d.aspect,
     flapping: d.flapping ?? config.pointing.flapping,
     baseline: d.baseline ?? null,
-    ...(Array.isArray(d.calibrations) ? { calibrations: d.calibrations } : {}),
+    // the arms' noise measured at calibration: absent in older dumps (not measured, `auto` replays as `fixed`)
+    ...(isArmNoise(d.armNoise) ? { armNoise: d.armNoise } : {}),
+    ...(Array.isArray(d.calibrations)
+      ? { calibrations: d.calibrations.map((c) => ({ t: c.t, baseline: c.baseline, ...(isArmNoise(c.armNoise) ? { armNoise: c.armNoise } : {}) })) }
+      : {}),
     startMs: d.startMs ?? 0,
     endMs: d.endMs ?? end,
     frames: d.frames.map((f) => ({ t: f.t, lm: f.lm })),

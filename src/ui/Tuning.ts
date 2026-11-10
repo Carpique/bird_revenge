@@ -161,6 +161,11 @@ const RANGES: Record<string, [number, number, number]> = {
   'telemetry.blackBoxSeconds': [10, 300, 10],
 };
 
+/** Dropdowns for the options that take one of a few names. */
+const CHOICES: Record<string, readonly string[]> = {
+  'smoothing.arms': ['fixed', 'off', 'auto'],
+};
+
 const SECTIONS = ['pointing', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'bat', 'friend', 'coin', 'player', 'audio', 'telemetry'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
@@ -175,12 +180,15 @@ export class Tuning {
       if (DOCS[section]) folder.$title.title = DOCS[section];
       for (const key of Object.keys(obj)) {
         const r = RANGES[`${section}.${key}`];
+        const choices = CHOICES[`${section}.${key}`];
         const controller =
           section === 'pointing' && key === 'flapping'
             ? folder.add(obj, key).name('Flapping (off: pointing)')
-            : r
-              ? folder.add(obj, key, r[0], r[1], r[2])
-              : folder.add(obj, key);
+            : choices
+              ? folder.add(obj, key, choices)
+              : r
+                ? folder.add(obj, key, r[0], r[1], r[2])
+                : folder.add(obj, key);
         const doc = DOCS[`${section}.${key}`];
         if (doc) controller.domElement.title = doc;
       }

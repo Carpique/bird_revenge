@@ -524,10 +524,14 @@ async function main() {
     });
     // the calibration dialog, also on the frame that brought it up
     if (state === 'calibrating') {
-      calibStatus = calibration.update(f, vis);
+      // MediaPipe's own landmarks too: the arms' noise during the hold (`smoothing.arms` = auto)
+      calibStatus = calibration.update(f, vis, tracker?.raw ?? null);
       if (calibStatus.done) {
         detectors.shoot.calibrate(calibStatus.done);
-        blackBox.calibrated(now, calibStatus.done);
+        // the smoothing and the pointing detector's EMA follow it together (kept until the next calibration)
+        if (tracker) tracker.smoother.armNoise = calibStatus.armNoise;
+        detectors.pointing.armNoise = calibStatus.armNoise;
+        blackBox.calibrated(now, calibStatus.done, calibStatus.armNoise);
         startCountdown();
       }
     }
@@ -621,6 +625,7 @@ async function main() {
       inferenceMs: tracker?.inferenceMs ?? 0,
       stats: tracker?.stats ?? null,
       blackBoxSeconds: blackBox.seconds,
+      arms: tracker ? { filter: tracker.smoother.armFilter, noise: tracker.smoother.armNoise } : undefined,
       now,
     });
   });

@@ -1,6 +1,6 @@
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { describe, expect, it } from 'vitest';
-import { WORLD } from '../../src/config';
+import { config, WORLD } from '../../src/config';
 import type { BirdSample } from '../../src/game/Bird';
 import type { PointingIntent } from '../../src/game/pointing';
 import {
@@ -12,6 +12,7 @@ import {
   type BlackBoxContext,
   type BlackBoxDump,
 } from '../../src/pose/blackBox';
+import type { ArmNoise } from '../../src/pose/armSmoothing';
 import { L } from '../../src/pose/landmarks';
 import { PoseSmoother } from '../../src/pose/PoseSmoother';
 import { synthPose, type SynthPose } from '../synthetic';
@@ -170,6 +171,59 @@ describe('BlackBox', () => {
     const dc = c.dump(info)!;
     expect(dc.baseline).toEqual(baseline);
     expect(dc.calibrations).toBeUndefined();
+  });
+
+  it("keeps the arms' noise measured at each calibration; a dump without it replays as not measured", () => {
+    const baseline = { left: 0, right: 0 };
+    const n1: ArmNoise = { deg: 2.5, norm: 0.008, fps: 29.7, frames: 36 };
+    const n2: ArmNoise = { deg: 0.4, norm: 0.0012, fps: 24, frames: 29 };
+    const b = new BlackBox(60);
+    b.calibrated(0, baseline, n1);
+    for (let t = 0; t < 6000; t += 33) {
+      if (t === 2013) b.calibrated(t, baseline, n2);
+      if (t === 4026) b.calibrated(t, baseline); // the keyboard's way: nothing measured
+      b.add(t, raw(t), ctx());
+    }
+    const d = roundTrip(b.dump(info));
+    expect(d.armNoise).toEqual(n1);
+    expect(d.calibrations).toEqual([{ t: 2013, baseline, armNoise: n2 }, { t: 4026, baseline }]);
+    const rec = parseBlackBox(d);
+    expect(rec.armNoise).toEqual(n1);
+    expect(rec.calibrations).toEqual([{ t: 2013, baseline, armNoise: n2 }, { t: 4026, baseline }]);
+    // an older dump: absent, not measured
+    const old = parseBlackBox({ ...d, armNoise: undefined, calibrations: [{ t: 2013, baseline }] });
+    expect(old.armNoise).toBeUndefined();
+    expect(old.calibrations).toEqual([{ t: 2013, baseline }]);
+    // something else in its place is dropped
+    expect(parseBlackBox({ ...d, armNoise: { deg: 'x' } }).armNoise).toBeUndefined();
+  });
+
+  it("the replay takes the arms' noise from the recording (from its time on for a later calibration), or from the options", () => {
+    const was = config.smoothing.arms;
+    config.smoothing.arms = 'auto';
+    try {
+      const rec = allRecordings().find((r) => r.name === '2026-11-09-gra')!;
+      const noisy: ArmNoise = { deg: 3, norm: 0.01, fps: 28, frames: 34 };
+      const modes = (r: ReturnType<typeof toRecording>, opts = {}) => simulate(r, rec.frames, opts).ticks.map((k) => `${k.mode}${Math.round(k.ang)}`);
+      const unmeasured = modes(rec);
+      config.smoothing.arms = 'fixed';
+      expect(modes(rec)).toEqual(unmeasured); // auto with nothing measured: fixed
+      config.smoothing.arms = 'auto';
+      // in force from the start (the recording's own calibration left out: one that measured nothing replaces it)
+      const bare = toRecording(rec.name, { ...rec.rec, calibrations: undefined });
+      const fromRec = modes(toRecording(rec.name, { ...rec.rec, calibrations: undefined, armNoise: noisy }));
+      expect(fromRec).not.toEqual(modes(bare));
+      expect(modes(bare, { armNoise: noisy })).toEqual(fromRec);
+      expect(modes(toRecording(rec.name, { ...rec.rec, armNoise: noisy }))).toEqual(unmeasured);
+      // the recording's calibration at 9.9 s brings the noise in: the same as unmeasured before it
+      const cal = rec.rec.calibrations![0];
+      const later = modes(toRecording(rec.name, { ...rec.rec, calibrations: [{ ...cal, armNoise: noisy }] }));
+      const before = Math.floor(cal.t / (1000 / 60));
+      expect(later.slice(0, before)).toEqual(unmeasured.slice(0, before));
+      expect(later).not.toEqual(unmeasured);
+    } finally {
+      config.smoothing.arms = was;
+    }
   });
 });
 

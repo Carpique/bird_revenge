@@ -54,9 +54,29 @@ export const config = {
    * one for the elbows, wrists and hands, which steer the bird: at 0.3 it barely opened (a wrist at 0.6 /s: 2.2 Hz
    * instead of 2), so a quick turn of the arms lagged like a slow one; 10 takes ~45 ms off every change of
    * direction on the recordings of play (tests/replay/recordings), mode flicker unchanged. The rest (hips, knees:
-   * the shoot gesture) keeps `beta` 0.3: opened up too, their noise fires spurious poos.
+   * the shoot gesture) keeps `beta` 0.3: opened up too, their noise fires spurious poos. `arms` switches the arms'
+   * smoothing (this filter on the arms plus `pointing.smoothingMs`) between that chain, none, and one stage matched
+   * to the noise measured at calibration.
    */
-  smoothing: { minCutoff: 2.0, beta: 0.3, armBeta: 10, dCutoff: 1.0 },
+  smoothing: {
+    minCutoff: 2.0,
+    beta: 0.3,
+    armBeta: 10,
+    dCutoff: 1.0,
+    /**
+     * the arms' smoothing under pointing control (flapping keeps `fixed` whatever this says). `fixed`: the One-Euro
+     * above on the elbows, wrists and hands plus the EMA of the arm directions (`pointing.smoothingMs`). `off`: the
+     * arms as MediaPipe gives them, no EMA (the shoulders, hips and knees keep their filter). `auto`: the noise is
+     * measured during the calibration hold (`ArmNoiseMeter`); at or below 1 deg of arm angle no filter (as `off`),
+     * above it the arms' One-Euro alone, its minCutoff brought down until the noise is 1 deg (as `fixed` until a
+     * calibration measured it). On the recordings of play MediaPipe's arm angle has 0.3 deg of noise, which the
+     * chain does not lower while it lags 30-35 ms: `off` (there the same as `auto`) cuts the mean delay of a change
+     * from 160 / 95 / 122 to 130 / 63 / 89 ms, with flicker 5 / 1 / 5 -> 6 / 1 / 6, so `fixed` stays the default.
+     * With noise added (a worse camera) `auto` keeps continuous steering's flicker near `fixed`'s where `off`'s
+     * doubles (ARCHITECTURE.md, tests/replay/armSmoothing.test.ts)
+     */
+    arms: 'fixed' as 'fixed' | 'off' | 'auto',
+  },
 
   /**
    * One arm hidden behind the other (both pointing to one side turn the body sideways): MediaPipe loses the far
@@ -279,7 +299,8 @@ export const config = {
     /**
      * time constant (ms) of the smoothing of the arm directions, on top of the One-Euro filter (higher = steadier,
      * laggier). In ms, not per frame, so a slower camera doesn't make it laggier. 35: like an EMA factor of 0.7 at
-     * 23 fps; the old 0.4 per frame (~95 ms at 23 fps) added ~60 ms of delay to every change of direction.
+     * 23 fps; the old 0.4 per frame (~95 ms at 23 fps) added ~60 ms of delay to every change of direction. Part of
+     * the `fixed` arm smoothing only (`smoothing.arms`: off and auto skip it).
      */
     smoothingMs: 35,
     /** arms within this (deg) of straight down are hanging: rest */

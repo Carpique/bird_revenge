@@ -1,4 +1,5 @@
 import { config } from '../config';
+import { ArmNoiseMeter, type ArmNoise } from '../pose/armSmoothing';
 import { L } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
 import { hipAbduction, hipCenter, kneeAngle, torsoLength } from './geometry';
@@ -12,26 +13,32 @@ export interface CalibrationStatus {
   /** what the player should do now */
   message: string;
   done: ShootBaseline | null;
+  /** with `done`: the arms' noise measured during the hold (`ArmNoiseMeter`, for `smoothing.arms` = auto); null: not measured */
+  armNoise: ArmNoise | null;
 }
 
 /**
  * Calibration: player stands in the outline (at least torso and arms in view), arms raised and spread
- * in an X (so the raised hands are known to be in view), legs straight, and holds still. We then record the standing hip angles.
+ * in an X (so the raised hands are known to be in view), legs straight, and holds still. We then record the standing hip angles,
+ * and, fed MediaPipe's raw landmarks, the arms' noise during the hold (`smoothing.arms` = auto picks the arms' filter from it).
  */
 export class Calibration {
   private holdStart: number | null = null;
   private samples: { hipY: number; torso: number; left: number; right: number }[] = [];
+  private readonly noise = new ArmNoiseMeter();
 
   reset() {
     this.holdStart = null;
     this.samples = [];
+    this.noise.reset();
   }
 
-  update(f: PoseFrame | null, vis: VisibilityOutput): CalibrationStatus {
+  /** @param raw MediaPipe's own landmarks for `f` (before smoothing), for the arms' noise; null / absent: not measured */
+  update(f: PoseFrame | null, vis: VisibilityOutput, raw: readonly { x: number; y: number }[] | null = null): CalibrationStatus {
     const cfg = config.calibration;
     const fail = (message: string): CalibrationStatus => {
       this.reset();
-      return { progress: 0, message, done: null };
+      return { progress: 0, message, done: null, armNoise: null };
     };
     if (!f || !vis.inFrame) return fail(vis.hint ?? t('Get into view'));
 
@@ -50,20 +57,22 @@ export class Calibration {
       const first = this.samples[0];
       if (Math.abs(sample.hipY - first.hipY) / first.torso > cfg.maxMovement) {
         this.reset();
-        return { progress: 0, message: t('Hold still…'), done: null };
+        return { progress: 0, message: t('Hold still…'), done: null, armNoise: null };
       }
     }
     this.holdStart ??= f.t;
     this.samples.push(sample);
+    if (raw) this.noise.add(raw, f.aspect, f.t);
     const progress = Math.min(1, (f.t - this.holdStart) / cfg.holdMs);
-    if (progress < 1) return { progress, message: t('Hold still…'), done: null };
+    if (progress < 1) return { progress, message: t('Hold still…'), done: null, armNoise: null };
 
     const n = this.samples.length;
     const done = {
       left: this.samples.reduce((s, x) => s + x.left, 0) / n,
       right: this.samples.reduce((s, x) => s + x.right, 0) / n,
     };
+    const armNoise = this.noise.result();
     this.reset();
-    return { progress: 1, message: t('Great!'), done };
+    return { progress: 1, message: t('Great!'), done, armNoise };
   }
 }
