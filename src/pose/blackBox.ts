@@ -22,14 +22,18 @@ export const BLACK_BOX_FORMAT = 2;
 /** pointing modes as stored (index + 1; 0: no intent) */
 const MODES: readonly PointingMode[] = ['rest', 'hover', 'drift', 'fly'];
 /**
- * the intent's numbers stored per frame: `PointingIntent`'s key, the dump's key, decimals in the dump, and whether
- * the dump leaves it out when 0 (an optional key). One more number (a speed) is one more entry here and its key in
- * `BlackBoxIntent`; storage, dump and `blackBoxEffect` follow the table.
+ * the intent's numbers stored per frame: `PointingIntent`'s key, the dump's key, decimals in the dump, and when the
+ * dump leaves it out: `never`, when 0 (`zero`: the intent reads back without it, as 0 means none), or when the intent
+ * has no such key (`absent`: stored as NaN, so a 0 is kept). One more number is one more entry here and its key in
+ * `BlackBoxIntent`; storage, dump and `blackBoxEffect` follow the table. A dump from before a key simply lacks it.
  */
-const INTENT_KEYS: readonly { key: 'dx' | 'dy' | 'sink'; dump: 'dx' | 'dy' | 's'; decimals: number; optional: boolean }[] = [
-  { key: 'dx', dump: 'dx', decimals: 3, optional: false },
-  { key: 'dy', dump: 'dy', decimals: 3, optional: false },
-  { key: 'sink', dump: 's', decimals: 2, optional: true },
+const INTENT_KEYS: readonly { key: 'dx' | 'dy' | 'sink' | 'vx' | 'vy'; dump: 'dx' | 'dy' | 's' | 'vx' | 'vy'; decimals: number; omit: 'never' | 'zero' | 'absent' }[] = [
+  { key: 'dx', dump: 'dx', decimals: 3, omit: 'never' },
+  { key: 'dy', dump: 'dy', decimals: 3, omit: 'never' },
+  { key: 'sink', dump: 's', decimals: 2, omit: 'zero' },
+  // continuous steering's velocity (`pointing.continuous`)
+  { key: 'vx', dump: 'vx', decimals: 2, omit: 'absent' },
+  { key: 'vy', dump: 'vy', decimals: 2, omit: 'absent' },
 ];
 const INTENT_STRIDE = INTENT_KEYS.length;
 /** bird floats per frame: x, y, vx, vy */
@@ -66,12 +70,17 @@ export interface BlackBoxContext {
   longRender?: number;
 }
 
-/** The recorded intent in a dump: the mode and `PointingIntent`'s numbers, `s` the sink (absent when 0). */
+/**
+ * The recorded intent in a dump: the mode and `PointingIntent`'s numbers, `s` the sink (absent when 0), `vx`/`vy`
+ * the velocity asked for by continuous steering (absent without it).
+ */
 export interface BlackBoxIntent {
   m: PointingMode;
   dx: number;
   dy: number;
   s?: number;
+  vx?: number;
+  vy?: number;
 }
 
 /** The recorded bird in a dump: world px, px per physics step; the flags only when true. */
@@ -243,7 +252,7 @@ export class BlackBox {
       fx |= FX_INTENT;
       this.mode[i] = p ? MODES.indexOf(p.mode) + 1 : 0;
       const o = i * INTENT_STRIDE;
-      for (let k = 0; k < INTENT_STRIDE; k++) this.intent[o + k] = p?.[INTENT_KEYS[k].key] ?? 0;
+      for (let k = 0; k < INTENT_STRIDE; k++) this.intent[o + k] = p?.[INTENT_KEYS[k].key] ?? (INTENT_KEYS[k].omit === 'absent' ? NaN : 0);
     }
     const b = ctx.bird;
     if (b) {
@@ -358,9 +367,9 @@ export class BlackBox {
         const o = i * INTENT_STRIDE;
         const pi: BlackBoxIntent = { m: MODES[m - 1], dx: 0, dy: 0 };
         for (let k = 0; k < INTENT_STRIDE; k++) {
-          const { dump, decimals, optional } = INTENT_KEYS[k];
+          const { dump, decimals, omit } = INTENT_KEYS[k];
           const v = round(this.intent[o + k], decimals);
-          if (v || !optional) pi[dump] = v;
+          if (omit === 'never' || (omit === 'zero' && v) || (omit === 'absent' && !Number.isNaN(v))) pi[dump] = v;
         }
         e.pi = pi;
       }
@@ -478,9 +487,9 @@ export function blackBoxEffect(json: unknown): BlackBoxEffect | null {
 
 const intentOf = (p: BlackBoxIntent): PointingIntent => {
   const out: PointingIntent = { mode: p.m, dx: 0, dy: 0 };
-  for (const { key, dump, optional } of INTENT_KEYS) {
+  for (const { key, dump, omit } of INTENT_KEYS) {
     const v = p[dump];
-    if (typeof v === 'number' && (v || !optional)) out[key] = v;
+    if (typeof v === 'number' && (v || omit !== 'zero')) out[key] = v;
   }
   return out;
 };

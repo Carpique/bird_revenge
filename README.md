@@ -27,6 +27,8 @@ By default the arms steer the bird by **pointing** (directions as seen on screen
 | a tilted T with both arms lowered (on average ~20° or more below level) | descends diagonally towards the lower hand, steeper the lower the arms (switch off: tuning panel **G**, *pointing* → descend) |
 | a leg raised sideways (the shoot pose) | poos (the poo drops straight down) |
 
+**Continuous steering** is an alternative way of pointing, off by default, for trying out in play: tuning panel **G**, *pointing* → continuous. There are no poses to match: the arms always ask for a velocity, and only both hanging down lets the bird fall. The more the two arms point the same way, the more the bird flies where they point together (parallel arms at the cruising speed, as above); a T hovers, a tilted T drifts towards the lower hand and descends when lowered, as above. In between the speed follows the arms: a V climbs, faster the higher the arms; arms low and apart descend; one arm hanging and the other held level flies diagonally down, and the other raised hovers.
+
 **Flapping mode** is the alternative: tick "Flapping (off: pointing)" in the tuning panel (**G**, section *pointing*). It replaces pointing with flapping, tilt and hover (pooping stays the same). The keyboard works the same in both modes:
 
 | Action | Body (flapping mode) | Keyboard |

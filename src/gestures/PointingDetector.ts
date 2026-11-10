@@ -1,5 +1,5 @@
 import { config } from '../config';
-import { classifyArms, outwardElevation, type PointingIntent, type PointingMode } from '../game/pointing';
+import { classifyArms, continuousArms, outwardElevation, type PointingIntent, type PointingMode } from '../game/pointing';
 import { L } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/types';
 import { pt, type Side, type Vec } from './geometry';
@@ -30,7 +30,8 @@ const angleOf = (v: Vec) => (Math.atan2(v.y, v.x) * 180) / Math.PI;
  * before the bird follows it (so the arms sweeping through other poses on the way don't count); while flying, the
  * direction follows the arms straight away. Arms matching no pose keep the current mode for `ambiguousMs`, then
  * the bird rests. A drift (tilted T) with the arms lowered descends (`pointing.descend`): the sinking speed follows
- * how low the arms are, with a hysteresis to start and stop it and a smoothed speed.
+ * how low the arms are, with a hysteresis to start and stop it and a smoothed speed. With `pointing.continuous` the
+ * arms ask for a velocity every frame instead (`continuousArms`), and only the rest is debounced.
  */
 export class PointingDetector {
   private left: Vec | null = null;
@@ -81,6 +82,7 @@ export class PointingDetector {
     }
 
     const cfg = config.pointing;
+    if (cfg.continuous) return { ...angles, ...this.continuous(f.t) };
     const candidate = classifyArms(this.left, this.right, this.intent.mode);
     if (!candidate) {
       this.pending = null;
@@ -103,6 +105,36 @@ export class PointingDetector {
       }
     }
     return { ...angles, candidate, intent: this.withSink(f.t, dt) };
+  }
+
+  /**
+   * Continuous steering (`pointing.continuous`): the command follows the arms every frame (`continuousArms`); only
+   * going to rest and leaving it must hold for `enterMs` (meanwhile the bird keeps what it had), so arms swinging
+   * through the rest cone on their way don't drop it.
+   */
+  private continuous(t: number): Pick<PointingOutput, 'candidate' | 'intent'> {
+    const candidate = continuousArms(this.left!, this.right!);
+    this.ambiguousSince = null;
+    this.descending = false;
+    this.descendSince = null;
+    this.sink = 0;
+    const resting = this.intent.mode === 'rest';
+    if ((candidate.mode === 'rest') === resting) {
+      this.pending = null;
+      this.intent = candidate;
+    } else {
+      // going to rest or leaving it is the only change that waits: pending since the first frame of it, whatever
+      // label the command has meanwhile
+      if (this.pending === null) {
+        this.pending = candidate.mode;
+        this.pendingSince = t;
+      }
+      if (t - this.pendingSince >= config.pointing.enterMs) {
+        this.pending = null;
+        this.intent = candidate;
+      }
+    }
+    return { candidate, intent: this.intent };
   }
 
   /** The intent, a drift with the arms lowered descending (`pointing.descend*`). */

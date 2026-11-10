@@ -220,6 +220,39 @@ describe('BlackBox: the effect (format 2)', () => {
     expect(Object.keys(parseBlackBox(d).frames[0]).sort()).toEqual(['lm', 't']);
   });
 
+  it("round-trips continuous steering's velocity, a zero included; an intent without one reads back without it", () => {
+    const b = new BlackBox(2);
+    const drift: PointingIntent = { mode: 'drift', dx: -1, dy: 0, vx: -1.234, vy: 0 };
+    const fly: PointingIntent = { mode: 'fly', dx: 0.6, dy: 0.8, vx: 4.2, vy: -5.6 };
+    const hover: PointingIntent = { mode: 'hover', dx: 0, dy: 0, vx: 0, vy: 0 };
+    b.add(0, raw(0), ctx({ intent: drift }));
+    b.add(33, raw(33), ctx({ intent: fly }));
+    b.add(66, raw(66), ctx({ intent: hover }));
+    b.add(99, raw(99), ctx({ intent: { mode: 'fly', dx: 1, dy: 0 } }));
+    const d = roundTrip(b.dump(info));
+    expect(d.frames[0].pi).toEqual({ m: 'drift', dx: -1, dy: 0, vx: -1.23, vy: 0 });
+    expect(d.frames[2].pi).toEqual({ m: 'hover', dx: 0, dy: 0, vx: 0, vy: 0 });
+    expect(d.frames[3].pi).toEqual({ m: 'fly', dx: 1, dy: 0 });
+    const e = blackBoxEffect(d)!;
+    expect(e.frames.map((f) => f.intent)).toEqual([
+      { mode: 'drift', dx: -1, dy: 0, vx: -1.23, vy: 0 },
+      { mode: 'fly', dx: 0.6, dy: 0.8, vx: 4.2, vy: -5.6 },
+      { mode: 'hover', dx: 0, dy: 0, vx: 0, vy: 0 },
+      { mode: 'fly', dx: 1, dy: 0 },
+    ]);
+  });
+
+  it('a format-2 dump written before the velocity reads as before', () => {
+    const b = new BlackBox(2);
+    b.add(0, raw(0), ctx({ intent: { mode: 'hover', dx: 0, dy: 0 } }));
+    const d = roundTrip(b.dump(info));
+    d.frames = [{ t: 0, lm: [], pi: { m: 'drift', dx: 1, dy: 0, s: 0.5 } }, { t: 33, lm: [], pi: { m: 'hover', dx: 0, dy: 0 } }];
+    expect(blackBoxEffect(d)!.frames.map((f) => f.intent)).toEqual([
+      { mode: 'drift', dx: 1, dy: 0, sink: 0.5 },
+      { mode: 'hover', dx: 0, dy: 0 },
+    ]);
+  });
+
   it('a null intent and unknown drops are represented and read back as such; what was not given is absent', () => {
     const b = new BlackBox(2);
     b.add(0, null, ctx({ state: 'calibrating', intent: null, bird: bird(), dropped: null, longRender: 0 }));

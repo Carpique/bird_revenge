@@ -6,7 +6,7 @@ import type { Branch } from '../level/types';
 import { landingBranch } from './branches';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { climbPitch, flightStep, leanFor, liftShare, sideAmount, smoothLift } from './flight';
-import { pointingLean, pointingStep } from './pointing';
+import { pointingFlapRate, pointingLean, pointingStep } from './pointing';
 import { BIRD_GROUP, Bodies, Body, forceFor, Query, type MBody } from './physics';
 
 type BirdAnim = keyof typeof birdDef.animations;
@@ -308,8 +308,8 @@ export class Bird {
 
     const p = this.pointing ? c.pointing : null;
     // pointing control: flap while flying; hovering or drifting, the wings beat fast as in the flapping mode's hover
-    if (p?.mode === 'fly') this.sprite.play('flap', config.pointing.flapRate);
-    else if (p && p.mode !== 'rest') this.sprite.play('flap', config.tilt.holdFlapRate);
+    const pointingRate = p ? pointingFlapRate(p) : null;
+    if (pointingRate !== null) this.sprite.play('flap', pointingRate);
     else if (this.onGround && c.lift < 50 && !c.flapping) this.sprite.play('idle');
     // flapping mode, the player flapping (the smoothed lift at least a quarter of gravity): the wings beat fast, as
     // in sideways flight, level or tilted

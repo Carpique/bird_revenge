@@ -19,6 +19,7 @@ import tutorialJson from '../../src/tutorial/control-tutorial.json?raw';
 import { config } from '../../src/config';
 import { PoseDetectors, type PoseReading } from '../../src/input/poseControls';
 import type { Controls } from '../../src/input/controls';
+import type { PointingIntent } from '../../src/game/pointing';
 import { PoseSession } from '../../src/input/poseSession';
 import { PoseSmoother } from '../../src/pose/PoseSmoother';
 import type { PoseFrame } from '../../src/pose/types';
@@ -201,6 +202,8 @@ export interface Tick {
   ang: number;
   /** drift with the arms lowered: the sinking speed (px per physics step), else 0 */
   sink: number;
+  /** the pointing intent itself while playing (with the velocity under continuous steering); null otherwise */
+  intent: PointingIntent | null;
 }
 
 export interface SimEvent {
@@ -297,7 +300,7 @@ export function simulate(rec: Recording, frames: TF[], opts: SimOptions = {}): S
       if (p?.mode === 'fly') ang = (Math.atan2(p.dy, p.dx) * 180) / Math.PI;
       else if (p?.mode === 'drift') ang = p.dx > 0 ? 0 : 180;
     }
-    out.ticks.push({ t: tick, state, mode, ang, sink: state === 'playing' && p?.mode === 'drift' ? (p.sink ?? 0) : 0 });
+    out.ticks.push({ t: tick, state, mode, ang, sink: state === 'playing' && p?.mode === 'drift' ? (p.sink ?? 0) : 0, intent: state === 'playing' ? p : null });
   }
   return out;
 }

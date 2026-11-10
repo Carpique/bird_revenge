@@ -270,6 +270,7 @@ export const config = {
    * - both arms raised in a V (`vUp`) → the bird flies up at `cruiseSpeed` (a lopsided V: up and to the side)
    * - a T (arms spread out, roughly level) → hover: the bird keeps its place in the air
    * - a tilted T → the bird moves slowly (`driftSpeed`) sideways towards the lower hand, keeping its altitude
+   * `continuous` replaces the poses with a velocity that follows the arms smoothly (off by default).
    * Pooping is the same as in flapping mode (`shoot`).
    */
   pointing: {
@@ -342,6 +343,35 @@ export const config = {
     descendSpeed: 1.8,
     /** time constant (ms) of the sinking speed's changes, so starting or stopping the descent doesn't jolt */
     descendSmoothMs: 80,
+    /**
+     * continuous steering, for an A/B in play (off: the poses above). The arms ask for a velocity every frame, with
+     * no poses to match and nothing to wait for but the rest: the mean of the two arms' directions flies the bird
+     * that way, faster the more they point together (`togetherZero` .. `togetherFull`; parallel arms at
+     * `cruiseSpeed`, as now); what is left of it is a T: a tilted one drifts towards the lower hand (`tiltDeadZone`
+     * .. `tiltFull`), a lowered tilted one also descends (`descend*`). So a V climbs, faster the higher the arms, and
+     * arms low and apart descend. Only the arms hanging (`restCone`) let the bird fall; `ambiguousMs`, `tMaxArm`,
+     * `tMaxRaise`, `parallelMax`, `vUp` and the hystereses don't apply. On the recordings of play (open loop: the
+     * player steered the poses' bird) no time at all without a command (14-19% with the poses), no drops for want of
+     * one (9-10 a minute), no jolts, and the velocity asked for lags the arms 48-83 ms instead of 105-159
+     */
+    continuous: false,
+    /**
+     * continuous steering: how much the arms point together is the length of the mean of their two unit directions
+     * (1: parallel, 0: a T, tilted or not; a V or an A with each arm 45° from level 0.71). At or below this, none of
+     * the flight: the T's hover, drift or descent, so a V climbs from ~33° above level. Where the poses read a level
+     * T on the recordings of play, the bird's speed p90 was 1.9-3.0 px per step at 0.35 (the review's prototype),
+     * 0.6-1.6 at 0.45, 0.1-0.8 at 0.5 and 0-0.1 at 0.55 (median 0 from 0.45); a V's speed (p50, of cruise) 0.96 at
+     * 0.35, 0.90 at 0.55
+     */
+    togetherZero: 0.55,
+    /** continuous steering: at or above this (the arms within ~60° of each other), all flight, at `cruiseSpeed` */
+    togetherFull: 0.85,
+    /**
+     * continuous steering: the tilted T's drift (and descent) rises from none at `tiltDeadZone` to full at this tilt
+     * (deg). Where the poses read a drift on the recordings, the speed p50 1.80 at 25 (1.47-1.80 at 30), p10 0-0.5
+     * (1.3 at 20, a near step)
+     */
+    tiltFull: 25,
     /**
      * how quickly the bird reaches its speed (or stops, in the hover), px/s². 2400: half the cruising speed in a new
      * direction after ~90 ms, a turn round in ~350 ms. 3600 felt abrupt in play: with Matter.js, 8-13 jolts per
