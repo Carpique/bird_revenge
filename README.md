@@ -21,6 +21,7 @@ By default the arms steer the bird by **pointing** (directions as seen on screen
 |---|---|
 | both hanging down | no force: rests, or falls freely with its momentum fading |
 | both straight, pointing the same way | flies that way at a fixed cruising speed (almost any direction, up, sideways, diagonally, down) |
+| both raised in a V (each at least ~15° above level, too high for a T) | flies up at the cruising speed; a lopsided V flies up and towards the lower arm (switch off: tuning panel **G**, *pointing* → vUp) |
 | spread out in a T (a sloppy T, slightly raised or drooping, counts) | hovers in place |
 | a tilted T (one hand clearly lower) | moves slowly sideways towards the lower hand, keeping its altitude: for precise positioning |
 | a tilted T with both arms lowered (on average ~20° or more below level) | descends diagonally towards the lower hand, steeper the lower the arms (switch off: tuning panel **G**, *pointing* → descend) |

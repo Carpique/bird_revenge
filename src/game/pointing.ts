@@ -7,7 +7,7 @@ import type { FlightVelocity } from './flight';
  * - `rest`: arms hanging down: no force, the bird rests or falls freely, its momentum fading
  * - `hover`: a T (arms spread out, roughly level): the bird keeps its place in the air
  * - `drift`: a tilted T: the bird moves slowly sideways towards the lower hand, keeping its altitude
- * - `fly`: both arms pointing the same way: the bird flies that way at the cruising speed
+ * - `fly`: both arms pointing the same way, or raised in a V (`vUp`): the bird flies that way at the cruising speed
  */
 export type PointingMode = 'rest' | 'hover' | 'drift' | 'fly';
 
@@ -49,6 +49,10 @@ const DOWN: Vec = { x: 0, y: -1 };
  * 2. a T: each arm out to its own side within `tMaxArm` of level, on average within `tMaxRaise` (so a T raised
  *    into a shallow V or drooping counts too) → hover; tilted past `tiltDeadZone` → drift towards the lower hand
  * 3. the arms parallel within `parallelMax` → fly where they point (on average)
+ * 4. a V (`vUp`): both arms raised at least `vMinArm`, on average more than `tMaxRaise` (too high for a T) → fly
+ *    where the two arms point together: a symmetric V straight up, a lopsided one up and towards the lower arm.
+ *    Once flying, a V a little lower (`vHysteresis`) still flies, and is checked before the T, so arms held at about
+ *    `tMaxRaise` don't flip between hover and flying up
  */
 export function classifyArms(left: Vec, right: Vec, current: PointingMode | null = null): PointingIntent | null {
   const cfg = config.pointing;
@@ -56,6 +60,8 @@ export function classifyArms(left: Vec, right: Vec, current: PointingMode | null
 
   const eL = outwardElevation(left, -1);
   const eR = outwardElevation(right, 1);
+  const isV = (slack: number) => cfg.vUp && Math.min(eL, eR) >= cfg.vMinArm - slack && (eL + eR) / 2 > cfg.tMaxRaise - slack;
+  if (current === 'fly' && isV(cfg.vHysteresis)) return together(left, right);
   if (Math.abs(eL) <= cfg.tMaxArm && Math.abs(eR) <= cfg.tMaxArm && Math.abs((eL + eR) / 2) <= cfg.tMaxRaise) {
     // + = the right hand higher
     const tilt = (eR - eL) / 2;
@@ -65,13 +71,16 @@ export function classifyArms(left: Vec, right: Vec, current: PointingMode | null
     return { mode: 'drift', dx: tilt > 0 ? -1 : 1, dy: 0 };
   }
 
-  if (between(left, right) <= cfg.parallelMax) {
-    const sx = left.x / (Math.hypot(left.x, left.y) || 1) + right.x / (Math.hypot(right.x, right.y) || 1);
-    const sy = left.y / (Math.hypot(left.x, left.y) || 1) + right.y / (Math.hypot(right.x, right.y) || 1);
-    const n = Math.hypot(sx, sy) || 1;
-    return { mode: 'fly', dx: sx / n, dy: sy / n };
-  }
+  if (between(left, right) <= cfg.parallelMax || isV(0)) return together(left, right);
   return null;
+}
+
+/** Flying where the two arms point together: the normalised sum of their directions. */
+function together(left: Vec, right: Vec): PointingIntent {
+  const sx = left.x / (Math.hypot(left.x, left.y) || 1) + right.x / (Math.hypot(right.x, right.y) || 1);
+  const sy = left.y / (Math.hypot(left.x, left.y) || 1) + right.y / (Math.hypot(right.x, right.y) || 1);
+  const n = Math.hypot(sx, sy) || 1;
+  return { mode: 'fly', dx: sx / n, dy: sy / n };
 }
 
 /** Moves `v` towards `t` by at most `maxDv` (as a vector). */

@@ -267,6 +267,7 @@ export const config = {
    * shoulder → wrist, as seen on the screen:
    * - both arms hanging down → no force: the bird rests, or falls freely with its momentum fading
    * - both arms pointing the same way → the bird flies that way at `cruiseSpeed` (almost any direction)
+   * - both arms raised in a V (`vUp`) → the bird flies up at `cruiseSpeed` (a lopsided V: up and to the side)
    * - a T (arms spread out, roughly level) → hover: the bird keeps its place in the air
    * - a tilted T → the bird moves slowly (`driftSpeed`) sideways towards the lower hand, keeping its altitude
    * Pooping is the same as in flapping mode (`shoot`).
@@ -297,6 +298,25 @@ export const config = {
      * flicker, the flying direction a little less steady (the average of two arms further apart)
      */
     parallelMax: 50,
+    /**
+     * arms raised in a V (both above level, too high for a T, too far apart to point together) fly the bird up, or
+     * up and to the side for a lopsided V, at `cruiseSpeed`. Off: a V matches no pose, and after `ambiguousMs` the
+     * bird drops to rest. On the recordings of play a V was 9-17% of play, the commonest pose matching nothing; with
+     * it the time matching no pose fell from 22-36% to 14-19%, the drops for want of a pose from 11-15 to 8-10
+     */
+    vUp: true,
+    /**
+     * V: each arm at least this far (deg) above level. On the recordings an arm 10-20 deg above level in a V came
+     * between flights up; below 10 it was mostly on the way between a tilted T and a flight up. 15 against 0:
+     * unmatched 14 / 19 / 15% of play instead of 13 / 14 / 14%, but a steep tilted T stays a tilted T
+     */
+    vMinArm: 15,
+    /**
+     * once flying, a V this much lower (deg, both `vMinArm` and the arms' average against `tMaxRaise`) still flies.
+     * 0 -> 5: mode switches 50 -> 44 per minute on one recording, flicker 6 -> 5; 10 keeps flying up too long when
+     * the arms come down to a T (the bird follows it ~30 ms later at the 90th percentile)
+     */
+    vHysteresis: 5,
     /** a new pose must hold this long (ms) before the bird follows it (100 -> 60: ~20 ms faster, no more flicker on the recordings) */
     enterMs: 60,
     /** arms matching no pose keep the current one for this long (ms), then the bird rests */

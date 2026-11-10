@@ -63,6 +63,8 @@ const RANGES: Record<string, [number, number, number]> = {
   'pointing.tiltDeadZone': [0, 60, 1],
   'pointing.tiltHysteresis': [0, 20, 1],
   'pointing.parallelMax': [5, 90, 1],
+  'pointing.vMinArm': [0, 90, 1],
+  'pointing.vHysteresis': [0, 20, 1],
   'pointing.enterMs': [0, 1000, 10],
   'pointing.ambiguousMs': [0, 2000, 50],
   'pointing.cruiseSpeed': [0, 20, 0.5],
