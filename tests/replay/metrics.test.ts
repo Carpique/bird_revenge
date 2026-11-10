@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { allRecordings, cleanRun, type Metrics } from './harness';
 import { runScenario, SCENARIOS } from './scenarios';
 
@@ -27,22 +27,31 @@ const COLUMNS: [keyof Metrics, string][] = [
   ['redetects', 'redet'],
 ];
 
-it('prints the metrics of every perturbation', () => {
-  const all: Record<string, Record<string, Metrics>> = {};
-  const lines: string[] = [];
+/** generous: a busy CI runner or machine runs the whole suite in parallel, and this table replays every scenario */
+const TIMEOUT_MS = 120_000;
+
+const all: Record<string, Record<string, Metrics>> = {};
+
+describe('replay metrics (a table per recording)', () => {
   for (const rec of allRecordings()) {
-    const clean = cleanRun(rec);
-    const pad = (s: string, n: number) => s.padStart(n);
-    lines.push(`\n== ${rec.name}: clip ${(clean.from / 1000).toFixed(1)}..${(clean.to / 1000).toFixed(1)} s, mean over the insertion points`);
-    lines.push(['scenario'.padEnd(34), ...COLUMNS.map(([, h]) => pad(h, 9))].join(' '));
-    all[rec.name] = {};
-    for (const sc of SCENARIOS) {
-      const r = runScenario(rec, sc, clean);
-      all[rec.name][sc.name] = r.mean;
-      for (const v of Object.values(r.mean)) if (v !== null) expect(Number.isFinite(v)).toBe(true);
-      lines.push([sc.name.padEnd(34), ...COLUMNS.map(([k]) => pad(r.mean[k] === null ? '-' : String(r.mean[k]), 9))].join(' '));
-    }
+    it(`prints the metrics of every perturbation: ${rec.name}`, () => {
+      const clean = cleanRun(rec);
+      const pad = (s: string, n: number) => s.padStart(n);
+      const lines: string[] = [];
+      lines.push(`\n== ${rec.name}: clip ${(clean.from / 1000).toFixed(1)}..${(clean.to / 1000).toFixed(1)} s, mean over the insertion points`);
+      lines.push(['scenario'.padEnd(34), ...COLUMNS.map(([, h]) => pad(h, 9))].join(' '));
+      all[rec.name] = {};
+      for (const sc of SCENARIOS) {
+        const r = runScenario(rec, sc, clean);
+        all[rec.name][sc.name] = r.mean;
+        for (const v of Object.values(r.mean)) if (v !== null) expect(Number.isFinite(v)).toBe(true);
+        lines.push([sc.name.padEnd(34), ...COLUMNS.map(([k]) => pad(r.mean[k] === null ? '-' : String(r.mean[k]), 9))].join(' '));
+      }
+      console.log(lines.join('\n'));
+    }, TIMEOUT_MS);
   }
-  console.log(lines.join('\n'));
-  if (import.meta.env.VITE_REPLAY_JSON) console.log(`REPLAY_METRICS_JSON ${JSON.stringify(all)}`);
-}, 30_000);
+
+  afterAll(() => {
+    if (import.meta.env.VITE_REPLAY_JSON) console.log(`REPLAY_METRICS_JSON ${JSON.stringify(all)}`);
+  });
+});
