@@ -87,6 +87,8 @@ export class PoseReplay {
     const rec = this.rec!;
     this.game.loadLevel(this.level());
     this.detectors = new PoseDetectors();
+    // as it was recorded: a recording from before one arm steering is played without it
+    this.detectors.pointing.oneArm = rec.oneArm ?? false;
     if (rec.baseline) this.detectors.shoot.calibrate(rec.baseline);
     this.controls = noControls();
     this.lastPoseT = -Infinity;

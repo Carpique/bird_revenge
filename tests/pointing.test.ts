@@ -133,6 +133,9 @@ describe('classifyArms', () => {
         return null;
       };
       let vs = 0;
+      // and before one arm steering, which reads some of what matched nothing
+      const oneArm = config.pointing.oneArm;
+      config.pointing.oneArm = false;
       // b off the 5° grid, so no pose sits exactly on a threshold (rounding would decide it)
       withV(false, () => {
         for (let a = -180; a < 180; a += 5)
@@ -150,6 +153,7 @@ describe('classifyArms', () => {
       });
       // and on, some of those poses are a V
       for (let a = -180; a < 180; a += 5) for (let b = -178.5; b < 180; b += 5) if (!before(dir(a), dir(b), null) && classifyArms(dir(a), dir(b))) vs++;
+      config.pointing.oneArm = oneArm;
       expect(vs).toBeGreaterThan(50);
     });
   });

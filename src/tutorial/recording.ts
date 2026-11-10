@@ -27,6 +27,11 @@ export interface PoseRecording {
   aspect: number;
   /** recorded with flapping control (`config.pointing.flapping`), not pointing */
   flapping: boolean;
+  /**
+   * recorded with one arm steering (`config.pointing.oneArm`); absent: made before it. The demonstration plays the
+   * stream back as it was recorded, so a wave of one arm in an older recording doesn't fly its bird off
+   */
+  oneArm?: boolean;
   /** the standing hip angles from the calibration, for the shoot detector */
   baseline: ShootBaseline | null;
   /** the arms' noise measured at that calibration (`smoothing.arms` = auto); absent or null: not measured (older dumps) */

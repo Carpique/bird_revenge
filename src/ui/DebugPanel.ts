@@ -180,7 +180,10 @@ export class DebugPanel {
             ? ` → ${info.pointing.intent.mode.toUpperCase()}` +
               (info.pointing.intent.mode === 'fly' || info.pointing.intent.mode === 'drift'
                 ? ` at ${n((Math.atan2(info.pointing.intent.dy, info.pointing.intent.dx) * 180) / Math.PI)}°` +
-                  (info.pointing.intent.sink ? ` sink ${info.pointing.intent.sink.toFixed(2)}` : '')
+                  (info.pointing.intent.sink ? ` sink ${info.pointing.intent.sink.toFixed(2)}` : '') +
+                  // flying by one arm, or easing back from it: the fraction of the cruising speed
+                  (info.pointing.intent.oneArm ? ' one arm' : '') +
+                  (info.pointing.intent.speed !== undefined ? ` ×${info.pointing.intent.speed.toFixed(2)}` : '')
                 : '') +
               // continuous steering: the speed asked for, px per step
               (info.pointing.intent.vx !== undefined ? ` ${Math.hypot(info.pointing.intent.vx, info.pointing.intent.vy ?? 0).toFixed(1)} px` : '')

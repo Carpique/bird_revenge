@@ -7,7 +7,8 @@ import type { FlightVelocity } from './flight';
  * - `rest`: arms hanging down: no force, the bird rests or falls freely, its momentum fading
  * - `hover`: a T (arms spread out, roughly level): the bird keeps its place in the air
  * - `drift`: a tilted T: the bird moves slowly sideways towards the lower hand, keeping its altitude
- * - `fly`: both arms pointing the same way, or raised in a V (`vUp`): the bird flies that way at the cruising speed
+ * - `fly`: both arms pointing the same way, or raised in a V (`vUp`): the bird flies that way at the cruising speed;
+ *   one arm pointing while the other hangs (`oneArm`): that way, a little slower
  */
 export type PointingMode = 'rest' | 'hover' | 'drift' | 'fly';
 
@@ -21,6 +22,10 @@ export interface PointingIntent {
   dy: number;
   /** `drift` with the arms lowered: sinking speed, px per physics step (0 or absent: keeps the altitude) */
   sink?: number;
+  /** `fly`: the speed as a fraction of `cruiseSpeed` (absent: 1); less with one arm pointing (`pointing.oneArm`) */
+  speed?: number;
+  /** `fly` where one arm points while the other hangs (`pointing.oneArm`); absent: both arms */
+  oneArm?: boolean;
   /**
    * continuous steering (`pointing.continuous`): the velocity asked for, px per physics step, y down on screen like
    * the bird's own; the mode is then only a label for it. Absent: the mode's own velocity (the discrete map)
@@ -59,11 +64,21 @@ const DOWN: Vec = { x: 0, y: -1 };
  *    where the two arms point together: a symmetric V straight up, a lopsided one up and towards the lower arm.
  *    Once flying, a V a little lower (`vHysteresis`) still flies, and is checked before the T, so arms held at about
  *    `tMaxRaise` don't flip between hover and flying up
+ * 5. one arm (`oneArm`): one arm hanging (within `restCone` of straight down) and the other pointing, at least
+ *    `oneArmMinOut` from straight down → fly where that arm points, at `oneArmSpeed` of the cruising speed. It comes
+ *    last, so it only reads what matched nothing before: a hanging arm 25-35° out with the other within the T's
+ *    range is still a tilted T (towards the lower hand). `oneArm`: the bird is flying by one arm now; it then keeps
+ *    doing so `oneArmHysteresis` beyond both limits, checked before the T. `oneArmOn`: whether the map reads one
+ *    arm at all (`pointing.oneArm`, unless the caller knows better: a recording made before it)
  */
-export function classifyArms(left: Vec, right: Vec, current: PointingMode | null = null): PointingIntent | null {
+export function classifyArms(left: Vec, right: Vec, current: PointingMode | null = null, oneArm = false, oneArmOn = config.pointing.oneArm): PointingIntent | null {
   const cfg = config.pointing;
   if (between(left, DOWN) <= cfg.restCone && between(right, DOWN) <= cfg.restCone) return { mode: 'rest', dx: 0, dy: 0 };
 
+  if (current === 'fly' && oneArm && oneArmOn) {
+    const arm = pointingArm(left, right, cfg.oneArmHysteresis);
+    if (arm) return byOneArm(arm);
+  }
   const eL = outwardElevation(left, -1);
   const eR = outwardElevation(right, 1);
   const isV = (slack: number) => cfg.vUp && Math.min(eL, eR) >= cfg.vMinArm - slack && (eL + eR) / 2 > cfg.tMaxRaise - slack;
@@ -78,7 +93,28 @@ export function classifyArms(left: Vec, right: Vec, current: PointingMode | null
   }
 
   if (between(left, right) <= cfg.parallelMax || isV(0)) return together(left, right);
+  const arm = oneArmOn ? pointingArm(left, right, 0) : null;
+  return arm ? byOneArm(arm) : null;
+}
+
+/**
+ * One arm steering (`pointing.oneArm`): the arm that points while the other hangs, or null. Hanging: within
+ * `restCone` of straight down; pointing: at least `oneArmMinOut` from straight down; each `slack` deg more lenient.
+ */
+function pointingArm(left: Vec, right: Vec, slack: number): Vec | null {
+  const cfg = config.pointing;
+  const dL = between(left, DOWN), dR = between(right, DOWN);
+  const hangs = (d: number) => d <= cfg.restCone + slack;
+  const points = (d: number) => d >= cfg.oneArmMinOut - slack;
+  if (hangs(dL) && points(dR)) return right;
+  if (hangs(dR) && points(dL)) return left;
   return null;
+}
+
+/** Flying where the one pointing arm points, at `oneArmSpeed` of the cruising speed. */
+function byOneArm(arm: Vec): PointingIntent {
+  const n = Math.hypot(arm.x, arm.y) || 1;
+  return { mode: 'fly', dx: arm.x / n, dy: arm.y / n, speed: config.pointing.oneArmSpeed, oneArm: true };
 }
 
 /** Flying where the two arms point together: the normalised sum of their directions. */
@@ -117,10 +153,38 @@ const HOVER_SPEED = 0.25;
  * The mode is a label for the animation, the debug panel and the black box: `fly` when `g` ≥ 0.5, else `hover`
  * below a crawl and `drift` otherwise (with `sink`, the downward speed, when it descends). `dx`/`dy`: the velocity's
  * direction (y up).
+ * One arm (`oneArm`): with `w` = `oneArmWeight` (1: one arm hangs and the other points), the velocity above fades
+ * out by 1 − `w` and the one-arm flight comes in: `oneArmSpeed` · `cruiseSpeed` where the pointing arm points. The
+ * detector lets it in (`one.gain`, 0..1, eased) only once the pose has lasted, so arms raised or lowered one after
+ * the other don't fly by it; what is not let in yet is `one.carry`, the flight the bird was on (none: a hover). It
+ * is labelled `fly`, with `oneArm`, once it is most of the command. `one.on`: whether one arm is read at all
+ * (`pointing.oneArm`, unless the caller knows better).
  */
-export function continuousArms(left: Vec, right: Vec): PointingIntent {
+export function continuousArms(left: Vec, right: Vec, one: { gain: number; carry?: { vx: number; vy: number } | null; on?: boolean } = { gain: 1 }): PointingIntent {
   const cfg = config.pointing;
   if (between(left, DOWN) <= cfg.restCone && between(right, DOWN) <= cfg.restCone) return { mode: 'rest', dx: 0, dy: 0 };
+  const two = bothArms(left, right);
+  const arm = oneArmWeight(left, right, one.on);
+  const k = arm.w * one.gain * cfg.oneArmSpeed * cfg.cruiseSpeed, held = arm.w * (1 - one.gain);
+  // y down on screen, like the bird's velocity
+  const vx = (1 - arm.w) * two.vx + k * arm.x + held * (one.carry?.vx ?? 0);
+  const vy = (1 - arm.w) * two.vy - k * arm.y + held * (one.carry?.vy ?? 0);
+  const speed = Math.hypot(vx, vy);
+  const byOne = arm.w * one.gain >= 0.5;
+  const flying = (1 - arm.w) * two.g + arm.w * one.gain + (one.carry ? held : 0) >= 0.5;
+  const mode: PointingMode = flying ? 'fly' : speed < HOVER_SPEED ? 'hover' : 'drift';
+  const out: PointingIntent = { mode, dx: speed > 0 ? vx / speed : 0, dy: speed > 0 ? -vy / speed : 0, vx, vy };
+  if (mode === 'drift' && vy > 0) out.sink = vy;
+  if (byOne) out.oneArm = true;
+  return out;
+}
+
+/**
+ * Continuous steering by both arms (all of it without `oneArm`): the velocity asked for (px per step, y down) and
+ * `g`, how much of it is the flight where the arms point together (0: a T's hover, drift or descent).
+ */
+export function bothArms(left: Vec, right: Vec): { vx: number; vy: number; g: number } {
+  const cfg = config.pointing;
   const nl = Math.hypot(left.x, left.y) || 1, nr = Math.hypot(right.x, right.y) || 1;
   const sx = (left.x / nl + right.x / nr) / 2, sy = (left.y / nl + right.y / nr) / 2;
   const m = Math.hypot(sx, sy);
@@ -140,13 +204,37 @@ export function continuousArms(left: Vec, right: Vec): PointingIntent {
   // fly where they point
   const fx = spread * -Math.sign(tilt) * Math.abs(sx) + (1 - spread) * sx;
   // y down on screen, like the bird's velocity
-  const vx = (g * cfg.cruiseSpeed * fx) / (m || 1) + (1 - g) * drift;
-  const vy = (-g * cfg.cruiseSpeed * sy) / (m || 1) + (1 - g) * sink;
-  const speed = Math.hypot(vx, vy);
-  const mode: PointingMode = g >= 0.5 ? 'fly' : speed < HOVER_SPEED ? 'hover' : 'drift';
-  const out: PointingIntent = { mode, dx: speed > 0 ? vx / speed : 0, dy: speed > 0 ? -vy / speed : 0, vx, vy };
-  if (mode === 'drift' && vy > 0) out.sink = vy;
-  return out;
+  return { vx: (g * cfg.cruiseSpeed * fx) / (m || 1) + (1 - g) * drift, vy: (-g * cfg.cruiseSpeed * sy) / (m || 1) + (1 - g) * sink, g };
+}
+
+/**
+ * Continuous steering by one arm (`pointing.oneArm`): how much the arms are one hanging and one pointing, 0..1, and
+ * the pointing arm's direction (unit, y up). As the discrete map reads it, with every limit a smooth fade, so the
+ * command never jumps:
+ * - the other arm points fully from `oneArmMinOut` from straight down, not at all at `restCone`
+ * - an arm hangs fully within `restCone` − 25 of straight down and not at all from `restCone` − 10 (where a T's arm
+ *   ends, at the default `tMaxArm`), so a tilted T whose lower arm is that far out still goes towards the lower hand
+ *   (seconds of it on a recording of play); with the pointing arm raised steeply, though (65° to 80° above level and
+ *   beyond, past any T), the whole `restCone` hangs (fading out over 15° about its edge)
+ * - arms pointing together (within `parallelMax` of each other, fading out over 15° more) are both arms' flight
+ * Only one arm can be the pointing one (it is outside the cone the other is in).
+ */
+export function oneArmWeight(left: Vec, right: Vec, on = config.pointing.oneArm): { w: number; x: number; y: number } {
+  const cfg = config.pointing;
+  if (!on) return { w: 0, x: 0, y: 0 };
+  const points = (arm: Vec) => smoothstep(between(arm, DOWN), cfg.restCone, cfg.oneArmMinOut);
+  const hangs = (arm: Vec, other: Vec, otherSide: -1 | 1) => {
+    const d = between(arm, DOWN);
+    const narrow = 1 - smoothstep(d, cfg.restCone - 25, cfg.restCone - 10);
+    const wide = 1 - smoothstep(d, cfg.restCone - 7.5, cfg.restCone + 7.5);
+    return narrow + (wide - narrow) * smoothstep(Math.abs(outwardElevation(other, otherSide)), 65, 80);
+  };
+  const apart = smoothstep(between(left, right), cfg.parallelMax, cfg.parallelMax + 15);
+  // the right arm points while the left hangs, or the other way round
+  const wR = hangs(left, right, 1) * points(right), wL = hangs(right, left, -1) * points(left);
+  const arm = wR >= wL ? right : left;
+  const n = Math.hypot(arm.x, arm.y) || 1;
+  return { w: apart * Math.max(wR, wL), x: arm.x / n, y: arm.y / n };
 }
 
 /** Moves `v` towards `t` by at most `maxDv` (as a vector). */
@@ -177,8 +265,10 @@ export function pointingStep(v: { x: number; y: number }, p: PointingIntent, ste
     case 'drift':
       // y down on screen: a positive sink descends
       return { ...approach(v, { x: p.dx * cfg.driftSpeed, y: p.sink ?? 0 }, maxDv), gravity: 0 };
-    case 'fly':
-      return { ...approach(v, { x: p.dx * cfg.cruiseSpeed, y: -p.dy * cfg.cruiseSpeed }, maxDv), gravity: 0 };
+    case 'fly': {
+      const speed = cfg.cruiseSpeed * (p.speed ?? 1);
+      return { ...approach(v, { x: p.dx * speed, y: -p.dy * speed }, maxDv), gravity: 0 };
+    }
   }
 }
 

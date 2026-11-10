@@ -125,6 +125,9 @@ interface Agreement {
   descInTSinkD: number[];
   none: { up: number; down: number; side: number; still: number; n: number; speed: number[] };
   oneArm: { up: number; down: number; side: number; still: number; n: number; speed: number[] };
+  /** where (ii)'s bird flies by one arm (`pointing.oneArm`, the pose held): the direction's difference (deg) and the speed, of `oneArmSpeed` · cruise */
+  byOneAng: number[];
+  byOneSpeed: number[];
 }
 
 const kind = (v: Vec) => {
@@ -142,6 +145,7 @@ function agreement(rows: FrameRow[], extra: Partial<typeof config.pointing> = {}
     descSinkD: [], descSinkC: [], descSame: 0, descN: 0, descInT: 0, descInTSame: 0, descInTSinkC: [], descInTSinkD: [],
     none: { up: 0, down: 0, side: 0, still: 0, n: 0, speed: [] },
     oneArm: { up: 0, down: 0, side: 0, still: 0, n: 0, speed: [] },
+    byOneAng: [], byOneSpeed: [],
   };
   withCfg('cont', () => {
     for (const { out } of rows) {
@@ -149,7 +153,14 @@ function agreement(rows: FrameRow[], extra: Partial<typeof config.pointing> = {}
       const c = continuousArms(dir(out.left!), dir(out.right!));
       if (c.mode === 'rest') continue;
       const v = velocityOf(c), sp = speedOf(c);
-      if (cand?.mode === 'fly') {
+      if (cand?.oneArm) {
+        // the pose alone is often arms on their way (a lowered T coming down, towards the lower hand in both maps):
+        // compared where the bird flies by it
+        if (intent.oneArm) {
+          a.byOneAng.push(angDiff(Math.atan2(cand.dy, cand.dx) * DEG, Math.atan2(-v.y, v.x) * DEG));
+          a.byOneSpeed.push(sp / (config.pointing.oneArmSpeed * config.pointing.cruiseSpeed));
+        }
+      } else if (cand?.mode === 'fly') {
         const d = angDiff(Math.atan2(cand.dy, cand.dx) * DEG, Math.atan2(-v.y, v.x) * DEG);
         const parallel = angDiff(out.left!, out.right!) <= config.pointing.parallelMax;
         (parallel ? a.parAng : a.vAng).push(d);
@@ -309,6 +320,17 @@ describe('continuous steering compared with the poses on recordings of play', ()
       it('a tilted T drifts the same way', () => {
         const a = res().agree;
         expect(pct(a.driftSame, a.driftN)).toBeGreaterThan(DRIFT_SAME_PCT[short(r)] ?? 90);
+      });
+
+      it('one arm pointing flies the same way, at the one-arm speed (where the poses read it)', () => {
+        const a = res().agree;
+        if (a.byOneAng.length < 10) return;
+        console.log(`one arm ${short(r)}: ${a.byOneAng.length} frames, direction p50 ${f1(q(a.byOneAng, 0.5))} p80 ${f1(q(a.byOneAng, 0.8))} p90 ${f1(q(a.byOneAng, 0.9))} deg, speed p10 ${f2(q(a.byOneSpeed, 0.1))} p50 ${f2(q(a.byOneSpeed, 0.5))}`);
+        expect(q(a.byOneAng, 0.5)).toBeLessThan(3);
+        // the rest is the discrete map's hysteresis (it keeps flying by one arm a little past both limits)
+        expect(q(a.byOneAng, 0.8)).toBeLessThan(25);
+        expect(q(a.byOneSpeed, 0.5)).toBeGreaterThan(0.8);
+        expect(q(a.byOneSpeed, 0.9)).toBeLessThan(1.05);
       });
 
       it('the command changes smoothly from frame to frame', () => {

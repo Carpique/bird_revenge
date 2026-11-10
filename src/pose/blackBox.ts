@@ -28,13 +28,15 @@ const MODES: readonly PointingMode[] = ['rest', 'hover', 'drift', 'fly'];
  * has no such key (`absent`: stored as NaN, so a 0 is kept). One more number is one more entry here and its key in
  * `BlackBoxIntent`; storage, dump and `blackBoxEffect` follow the table. A dump from before a key simply lacks it.
  */
-const INTENT_KEYS: readonly { key: 'dx' | 'dy' | 'sink' | 'vx' | 'vy'; dump: 'dx' | 'dy' | 's' | 'vx' | 'vy'; decimals: number; omit: 'never' | 'zero' | 'absent' }[] = [
+const INTENT_KEYS: readonly { key: 'dx' | 'dy' | 'sink' | 'vx' | 'vy' | 'speed'; dump: 'dx' | 'dy' | 's' | 'vx' | 'vy' | 'sp'; decimals: number; omit: 'never' | 'zero' | 'absent' }[] = [
   { key: 'dx', dump: 'dx', decimals: 3, omit: 'never' },
   { key: 'dy', dump: 'dy', decimals: 3, omit: 'never' },
   { key: 'sink', dump: 's', decimals: 2, omit: 'zero' },
   // continuous steering's velocity (`pointing.continuous`)
   { key: 'vx', dump: 'vx', decimals: 2, omit: 'absent' },
   { key: 'vy', dump: 'vy', decimals: 2, omit: 'absent' },
+  // a flight's speed as a fraction of the cruising speed: below 1 flying by one arm (`pointing.oneArm`)
+  { key: 'speed', dump: 'sp', decimals: 2, omit: 'absent' },
 ];
 const INTENT_STRIDE = INTENT_KEYS.length;
 /** bird floats per frame: x, y, vx, vy */
@@ -73,7 +75,8 @@ export interface BlackBoxContext {
 
 /**
  * The recorded intent in a dump: the mode and `PointingIntent`'s numbers, `s` the sink (absent when 0), `vx`/`vy`
- * the velocity asked for by continuous steering (absent without it).
+ * the velocity asked for by continuous steering (absent without it), `sp` a flight's speed as a fraction of the
+ * cruising speed (absent at 1: below it the bird flies by one arm, `pointing.oneArm`).
  */
 export interface BlackBoxIntent {
   m: PointingMode;
@@ -82,6 +85,7 @@ export interface BlackBoxIntent {
   s?: number;
   vx?: number;
   vy?: number;
+  sp?: number;
 }
 
 /** The recorded bird in a dump: world px, px per physics step; the flags only when true. */

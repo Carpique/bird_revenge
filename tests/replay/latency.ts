@@ -5,7 +5,8 @@
  * no EMA and no debounce. Wherever that reading holds still for `STABLE_MS` it is a pose the player took; a change
  * from one such pose to another is a change the bird should follow. Its delay is from the first frame of the new
  * pose to the full pipeline (`simulate`: One-Euro, arm stand-in, wrist gate, detectors, session; 60 Hz ticks)
- * telling the bird the same, for at least `MATCH_HOLD_MS`.
+ * telling the bird the same, for at least `MATCH_HOLD_MS`. A change to one arm pointing (`pointing.oneArm`) waits
+ * `oneArmEnterMs` on purpose, so it is counted apart (`oneArm`), not in the delays of the poses.
  *
  * Only for recordings of the raw stream (`BlackBox` dumps): the tutorial recording is smoothed already.
  *
@@ -37,6 +38,8 @@ export interface Latency {
   /** changes of the bird's mode per minute of play, and of those how many lasted under 200 ms (flicker) */
   switchesPerMin: number;
   flicker: number;
+  /** changes to one arm pointing (not among `changes`): how many, how many followed, the median and the longest delay, ms */
+  oneArm: { changes: number; followed: number; p50: number; max: number };
 }
 
 const dirOf = (f: PoseFrame, side: 'left' | 'right') => {
@@ -50,6 +53,8 @@ const ang = (p: { dx: number; dy: number }) => (Math.atan2(p.dy, p.dx) * 180) / 
 const angDiff = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
 const same = (a: PointingIntent | null, b: PointingIntent | null) =>
   !!a && !!b && a.mode === b.mode && (a.mode !== 'fly' || angDiff(ang(a), ang(b)) < 30) && (a.mode !== 'drift' || a.dx === b.dx);
+/** the same pose of the arms: as `same`, and one arm pointing is not both */
+const samePose = (a: PointingIntent, b: PointingIntent) => same(a, b) && !!a.oneArm === !!b.oneArm;
 const quantile = (xs: number[], q: number) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(q * (xs.length - 1))] : NaN);
 
 export function latency(rec: Recording, opts: { frames?: TF[]; sim?: SimOptions; ticks?: Tick[] } = {}): Latency {
@@ -61,7 +66,7 @@ export function latency(rec: Recording, opts: { frames?: TF[]; sim?: SimOptions;
   let cur: { t0: number; t1: number; p: PointingIntent } | null = null;
   for (const e of raw) {
     if (e.nobody) cur = null;
-    else if (e.p && cur && same(e.p, cur.p) && e.t - cur.t1 <= BRIDGE_MS) cur.t1 = e.t;
+    else if (e.p && cur && samePose(e.p, cur.p) && e.t - cur.t1 <= BRIDGE_MS) cur.t1 = e.t;
     else if (e.p) segs.push((cur = { t0: e.t, t1: e.t, p: e.p }));
   }
   const stable = segs.filter((s) => s.t1 - s.t0 >= STABLE_MS);
@@ -79,12 +84,13 @@ export function latency(rec: Recording, opts: { frames?: TF[]; sim?: SimOptions;
           : null) as PointingIntent | null,
   }));
 
-  const delays: number[] = [];
-  let changes = 0;
+  const delays: number[] = [], oneArmDelays: number[] = [];
+  let changes = 0, oneArmChanges = 0;
   for (let i = 1; i < stable.length; i++) {
     const s = stable[i];
-    if (same(s.p, stable[i - 1].p)) continue;
-    changes++;
+    if (samePose(s.p, stable[i - 1].p)) continue;
+    if (s.p.oneArm) oneArmChanges++;
+    else changes++;
     // followed: the bird told the same for MATCH_HOLD_MS in full, within the window
     let start: number | null = null;
     let followedAt: number | null = null;
@@ -99,7 +105,7 @@ export function latency(rec: Recording, opts: { frames?: TF[]; sim?: SimOptions;
         }
       } else start = null;
     }
-    if (followedAt !== null) delays.push(Math.max(0, followedAt - s.t0));
+    if (followedAt !== null) (s.p.oneArm ? oneArmDelays : delays).push(Math.max(0, followedAt - s.t0));
   }
 
   const modes: { t0: number; t1: number }[] = [];
@@ -119,5 +125,6 @@ export function latency(rec: Recording, opts: { frames?: TF[]; sim?: SimOptions;
     followed: delays.length,
     switchesPerMin: Math.round((modes.length / minutes) * 10) / 10,
     flicker: modes.filter((m) => m.t1 - m.t0 < 200).length,
+    oneArm: { changes: oneArmChanges, followed: oneArmDelays.length, p50: Math.round(quantile(oneArmDelays, 0.5)), max: oneArmDelays.length ? Math.round(Math.max(...oneArmDelays)) : NaN },
   };
 }

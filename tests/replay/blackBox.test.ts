@@ -365,31 +365,50 @@ describe('BlackBox: the effect (format 2)', () => {
     check(dc, 500 - dc.frames.length);
   });
 
+  it('a flight by one arm keeps its speed (sp), and a flight by both arms has none', () => {
+    const b = new BlackBox(2);
+    b.add(0, raw(0), ctx({ intent: { mode: 'fly', dx: 1, dy: 0, speed: 0.7, oneArm: true }, bird: bird() }));
+    b.add(33, raw(33), ctx({ intent: { mode: 'fly', dx: 1, dy: 0, speed: 0.846 }, bird: bird() }));
+    b.add(66, raw(66), ctx({ intent: { mode: 'fly', dx: 1, dy: 0 }, bird: bird() }));
+    const d = roundTrip(b.dump(info));
+    expect(d.frames.map((f: { pi: { sp?: number } }) => f.pi.sp)).toEqual([0.7, 0.85, undefined]);
+    const e = blackBoxEffect(d)!;
+    expect(e.frames[0].intent).toEqual({ mode: 'fly', dx: 1, dy: 0, speed: 0.7 });
+    expect(e.frames[2].intent).toEqual({ mode: 'fly', dx: 1, dy: 0 });
+  });
+
   it('real dumps with the effect (the second player): what the game told the bird is what the replay tells it', () => {
     expect(NEW_DUMPS).toHaveLength(2);
-    for (const [file, text] of NEW_DUMPS) {
-      const json = JSON.parse(text);
-      const e = blackBoxEffect(json)!;
-      expect(e, file).not.toBeNull();
-      expect(e.format).toBe(2);
-      expect(e.source).toBe('capture');
-      // a few camera frames dropped (3% of them), far more long render frames
-      expect(e.dropped).toBeGreaterThan(20);
-      expect(e.dropped / (e.frames.length + e.dropped)).toBeLessThan(0.05);
-      expect(e.longRender).toBeGreaterThan(e.dropped);
-      const rec = allRecordings().find((r) => file.endsWith(`${r.name}.json`))!;
-      const replayed: (PointingIntent | null)[] = [];
-      simulate(rec, rec.frames, { startState: 'playing', onFrame: (_f, _s, c) => replayed.push(c.pointing) });
-      expect(replayed.length).toBeGreaterThanOrEqual(e.frames.length - 1); // the last 60 Hz tick may come before the last frame
-      let same = 0, known = 0;
-      e.frames.forEach((f, i) => {
-        if (!f.hasIntent || !f.intent || i >= replayed.length) return;
-        known++;
-        if (replayed[i]?.mode === f.intent.mode) same++;
-      });
-      expect(known, file).toBeGreaterThan(1500);
-      // the detectors' warm-up at the start of the dump is the only difference (~0.3 s)
-      expect(same / known, file).toBeGreaterThan(0.98);
+    const was = config.pointing.oneArm;
+    // the game that made them had no one-arm steering yet
+    config.pointing.oneArm = false;
+    try {
+      for (const [file, text] of NEW_DUMPS) {
+        const json = JSON.parse(text);
+        const e = blackBoxEffect(json)!;
+        expect(e, file).not.toBeNull();
+        expect(e.format).toBe(2);
+        expect(e.source).toBe('capture');
+        // a few camera frames dropped (3% of them), far more long render frames
+        expect(e.dropped).toBeGreaterThan(20);
+        expect(e.dropped / (e.frames.length + e.dropped)).toBeLessThan(0.05);
+        expect(e.longRender).toBeGreaterThan(e.dropped);
+        const rec = allRecordings().find((r) => file.endsWith(`${r.name}.json`))!;
+        const replayed: (PointingIntent | null)[] = [];
+        simulate(rec, rec.frames, { startState: 'playing', onFrame: (_f, _s, c) => replayed.push(c.pointing) });
+        expect(replayed.length).toBeGreaterThanOrEqual(e.frames.length - 1); // the last 60 Hz tick may come before the last frame
+        let same = 0, known = 0;
+        e.frames.forEach((f, i) => {
+          if (!f.hasIntent || !f.intent || i >= replayed.length) return;
+          known++;
+          if (replayed[i]?.mode === f.intent.mode) same++;
+        });
+        expect(known, file).toBeGreaterThan(1500);
+        // the detectors' warm-up at the start of the dump is the only difference (~0.3 s)
+        expect(same / known, file).toBeGreaterThan(0.98);
+      }
+    } finally {
+      config.pointing.oneArm = was;
     }
   });
 

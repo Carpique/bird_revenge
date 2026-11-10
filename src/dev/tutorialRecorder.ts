@@ -191,6 +191,7 @@ async function main() {
       level: levelName,
       aspect,
       flapping: config.pointing.flapping,
+      oneArm: config.pointing.oneArm,
       baseline,
       startMs: recStartMs,
       endMs: last,

@@ -17,7 +17,7 @@ import { setArmNoise, SimTracker, type Recording, type Tick } from './harness';
 /** the velocity a discrete intent asks for (px per step, y down); the rest: none */
 export function discreteVelocity(p: PointingIntent): Vec {
   const cfg = config.pointing;
-  if (p.mode === 'fly') return { x: p.dx * cfg.cruiseSpeed, y: -p.dy * cfg.cruiseSpeed };
+  if (p.mode === 'fly') return { x: p.dx * cfg.cruiseSpeed * (p.speed ?? 1), y: -p.dy * cfg.cruiseSpeed * (p.speed ?? 1) };
   if (p.mode === 'drift') return { x: p.dx * cfg.driftSpeed, y: p.sink ?? 0 };
   return { x: 0, y: 0 };
 }

@@ -26,7 +26,7 @@ Present:
   on the ground 23% of the time, 5.8 s of it with the arms pointing down and to a side. Arms 80-90° apart (one up, one
   level) match nothing twice, ~0.9 s each (30.3 s, 41.3 s): the bird falls 70 px
 - `2026-11-10-drugi-gracz-2.json`: the same player further from the camera (the ankles in view), 60 s of play, ~28 fps,
-  format 2. Half of it a T; one arm straight up with the other hanging, which matches nothing
+  format 2. Half of it a T; one arm straight up with the other hanging, which matched nothing before `pointing.oneArm`
   (22.2 s, 24.3-25.3 s, 58.7-60.0 s: 4.5% of play, the bird left on the ground), and a T tilted so steeply that it
   matches nothing either (15.5 s, 20.4-22.2 s: 5.4%). Flying sideways she turns side on to the camera and points down
   and ahead (the far arm hidden: `ArmOcclusion` stands in for it), so the bird skims the ground (12.1 s)
@@ -48,7 +48,9 @@ and in the `blackBox` header: `format`, `source` (where the frames' time came fr
 `blackBoxEffect(json)` (`src/pose/blackBox.ts`) reads the effect back per frame (null for an older dump);
 `parseBlackBox` ignores it, so the replay is the same for both. The three recordings of 2026-11-09 are of the older
 kind; the second player's carry it (56 and 47 camera frames dropped, 3%, never two in a row; 468 and 384 long render
-frames), and the replay tells the bird what the game told it on 99% of their frames (`blackBox.test.ts`).
+frames), and the replay tells the bird what the game told it on 99% of their frames (`blackBox.test.ts`). `pi.sp`
+(dumps made after 2026-11-10): a flight's speed as a fraction of the cruising speed, absent at 1; below it the bird
+flies by one arm (`pointing.oneArm`).
 
 A recording with a name other than the tutorial's gets no pinned shoot-trigger count; add one in
 `tests/replay/behaviour.test.ts` (`EXPECTED_TRIGGERS`) if it should have one.

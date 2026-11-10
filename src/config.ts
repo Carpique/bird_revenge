@@ -288,6 +288,7 @@ export const config = {
    * - both arms hanging down → no force: the bird rests, or falls freely with its momentum fading
    * - both arms pointing the same way → the bird flies that way at `cruiseSpeed` (almost any direction)
    * - both arms raised in a V (`vUp`) → the bird flies up at `cruiseSpeed` (a lopsided V: up and to the side)
+   * - one arm pointing while the other hangs (`oneArm`) → the bird flies where it points, a little slower
    * - a T (arms spread out, roughly level) → hover: the bird keeps its place in the air
    * - a tilted T → the bird moves slowly (`driftSpeed`) sideways towards the lower hand, keeping its altitude
    * `continuous` replaces the poses with a velocity that follows the arms smoothly (off by default).
@@ -341,6 +342,45 @@ export const config = {
     vHysteresis: 5,
     /** a new pose must hold this long (ms) before the bird follows it (100 -> 60: ~20 ms faster, no more flicker on the recordings) */
     enterMs: 60,
+    /**
+     * one arm steering: one arm hanging (within `restCone` of straight down) and the other pointing flies the bird
+     * where that arm points, a little slower than both arms do. Off: it matches no pose, and after `ambiguousMs` the
+     * bird drops to rest. It only reads what matched nothing before (a hanging arm 25-35° out with the other within
+     * the T's range is still a tilted T, towards the lower hand). A second, smaller player held it for seconds
+     * (2026-11-10-drugi-gracz-2: one arm straight up, the other down, the bird left on the ground), and so did the
+     * first in practice: with it the time matching no pose fell from 15.4 to 10.6% and from 11.9 to 7.4% of play on
+     * those two recordings, the drops for want of a pose from 10 (5.3 s) to 9 (2.8 s) and from 5 (5.3 s) to 4 (2.7 s);
+     * nothing else reads differently. With continuous steering the same, blended in smoothly (`oneArmWeight`)
+     */
+    oneArm: true,
+    /**
+     * one arm: the flying speed as a fraction of `cruiseSpeed`. 0.7: 4.9 px per step against 7 with both arms and
+     * 1.8 drifting, so "a little slower" shows without the second arm feeling needed; the change between the two
+     * (2.1 px per step) is well under a jolt (5 within 100 ms)
+     */
+    oneArmSpeed: 0.7,
+    /**
+     * one arm: the pointing arm is at least this far (deg) from straight down (60: up to 30° below level). On the
+     * recordings an arm 35-55° from straight down beside a hanging one was arms on their way or a sloppy rest (up
+     * to 4.5% of play): at 45 three more flights, none of them meant (0.2 s twice with the arms on their way, 0.6 s
+     * out of a rest); 70 reads the same flights as 60
+     */
+    oneArmMinOut: 60,
+    /** one arm: once flying by one arm, both limits (`restCone`, `oneArmMinOut`) are this much (deg) more lenient */
+    oneArmHysteresis: 5,
+    /**
+     * one arm: the pose must hold this long (ms) before the bird flies by it; a flight by both arms carries on as it
+     * was meanwhile. Longer than `enterMs`: arms raised or lowered one after the other pass through the pose. On the
+     * recordings those passes lasted 34-305 ms, the poses held on purpose 340 ms to 1.3 s; at 60 the arms coming
+     * down from a tilted T flew the bird for ~0.3 s three times and an arm going up once, at 150-200 once, at 300
+     * never
+     */
+    oneArmEnterMs: 300,
+    /**
+     * one arm: time constant (ms) of the speed's change between both arms and one arm, so it eases rather than
+     * steps (150: at most 0.75 px per step from one camera frame to the next on the recordings, 2.1 at 0)
+     */
+    oneArmBlendMs: 150,
     /** arms matching no pose keep the current one for this long (ms), then the bird rests */
     ambiguousMs: 400,
     /** flying speed while pointing, px per physics step */

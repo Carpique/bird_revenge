@@ -343,7 +343,7 @@ describe('arm smoothing variants on the recordings of play', () => {
     }
   });
 
-  it('...at the cost of a little more flicker (5 / 1 / 5 -> 6 / 1 / 6); no jolts, the same shots', () => {
+  it('...at the cost of a little more flicker (5 / 1 / 4 -> 6 / 1 / 5; 5 / 1 / 5 -> 6 / 1 / 6 before one arm steering); no jolts, the same shots', () => {
     for (const n of names) {
       const f = clean(n, 'discrete', 'fixed'), o = clean(n, 'discrete', 'off');
       expect(o.lat.flicker, n).toBeLessThanOrEqual(f.lat.flicker + 1);
@@ -385,9 +385,11 @@ describe('arm smoothing variants on the recordings of play', () => {
         const fl = (m: ArmSmoothingMode) => sum(runsOf(n, s, 'discrete', m), (r) => r.lat.flicker);
         expect(meanOf('off'), `${n} ${s}`).toBeLessThan(meanOf('fixed') - 15);
         expect(meanOf('auto'), `${n} ${s}`).toBeLessThan(meanOf('fixed') - 10);
-        // the flicker off / auto add is that of the clean stream (the lag no longer hides the sweep between poses), not the noise's
-        expect(fl('off'), `${n} ${s}`).toBeLessThanOrEqual(fl('fixed') + 3 * SEEDS.length);
-        expect(fl('auto'), `${n} ${s}`).toBeLessThanOrEqual(fl('fixed') + 3 * SEEDS.length);
+        // the flicker off / auto add is that of the clean stream (the lag no longer hides the sweep between poses), not the
+        // noise's. 4 per seed (3 before one arm steering, which took flicker off fixed under noise, less off the others:
+        // trening at 0.005, the sum of three seeds, fixed 9, off 19, auto 17)
+        expect(fl('off'), `${n} ${s}`).toBeLessThanOrEqual(fl('fixed') + 4 * SEEDS.length);
+        expect(fl('auto'), `${n} ${s}`).toBeLessThanOrEqual(fl('fixed') + 4 * SEEDS.length);
       }
   });
 
