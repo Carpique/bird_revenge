@@ -12,7 +12,7 @@ type Kind = VillainKind | 'bat';
 const KINDS: Kind[] = ['villain', 'ghost', 'bat'];
 
 /** ms before the first one comes, and between one leaving the screen and the next coming */
-const FIRST_MS = 1000, GAP_MS = 5000;
+const FIRST_MS = 15000, GAP_MS = 5000;
 /** how far past the screen's edges (world px) one starts and leaves: out of sight there */
 const OFFSCREEN = 100;
 /** a bat flies between these heights (its centre): its wings above the ground, never higher than the villain's head */
