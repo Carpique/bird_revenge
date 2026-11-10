@@ -531,6 +531,10 @@ async function main() {
   // per render frame: state timers, controls, HUD, debug
   app.ticker.add(() => {
     const now = performance.now();
+    // long render frames for the debug panel; the last tick before a suspension (the window hidden or unfocused,
+    // a pause) ends the timing, so the time suspended is no long frame
+    if (suspended) tracker?.stats.renderPaused();
+    else tracker?.stats.renderTick(now);
     audio.update();
     if (state === 'countdown' && now >= countdownEnd) state = 'playing';
     // no camera to be had: the game goes on without it

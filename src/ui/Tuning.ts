@@ -151,9 +151,12 @@ const RANGES: Record<string, [number, number, number]> = {
   'audio.fallFromHz': [100, 3000, 10],
   'audio.fallToHz': [50, 2000, 10],
   'audio.fallMs': [100, 5000, 50],
+  'telemetry.hitchMs': [40, 1000, 10],
+  'telemetry.longRenderMs': [10, 200, 1],
+  'telemetry.blackBoxSeconds': [10, 300, 10],
 };
 
-const SECTIONS = ['pointing', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'bat', 'friend', 'coin', 'player', 'audio'] as const;
+const SECTIONS = ['pointing', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'bat', 'friend', 'coin', 'player', 'audio', 'telemetry'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {

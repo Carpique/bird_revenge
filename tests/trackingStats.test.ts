@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { NULL_RUN_BUCKETS_MS, outOfFrameCause, recalCause, TrackingStats } from '../src/pose/trackingStats';
+import { config } from '../src/config';
+import { NULL_RUN_BUCKETS_MS, outOfFrameCause, RECENT_S, recalCause, TrackingStats } from '../src/pose/trackingStats';
 
 /** frames every `dt` ms from `t0`, with a person (true) or not */
 function feed(s: TrackingStats, t0: number, n: number, hadPose: boolean, dt = 33, ms = 10) {
@@ -59,6 +60,101 @@ describe('TrackingStats', () => {
     const s = new TrackingStats();
     feed(s, 0, 100, true, 1000 / 30);
     expect(s.fps).toBeCloseTo(30, 0);
+  });
+
+  /** a 30 fps camera for `seconds` from `t0`, of whose frames the game sees all but every `every`-th (0: all) */
+  function camera(s: TrackingStats, t0: number, seconds: number, every: number, latencyMs: number | null = 40) {
+    const P = 1000 / 30;
+    let missed = 0;
+    let t = t0;
+    for (let i = 0; i < seconds * 30; i++) {
+      t = t0 + i * P;
+      if (every && i % every === every - 1) {
+        missed++;
+        continue;
+      }
+      s.frame(t, 20, true, { dropped: i === 0 ? 0 : missed, source: 'capture', latencyMs });
+      missed = 0;
+    }
+    return t + P;
+  }
+
+  it('counts camera frames the game never saw, over the session and the last seconds, and the camera rate', () => {
+    const s = new TrackingStats();
+    let t = camera(s, 0, 20, 0); // 20 s without a drop
+    t = camera(s, t, 5, 4); // 5 s losing every 4th frame: 25 %
+    expect(s.droppedFrames).toBe(37);
+    expect(s.metaFrames).toBe(600 + 113);
+    expect(s.dropShare().total).toBeCloseTo(37 / 750, 3);
+    // the last 10 s: half of it with drops
+    expect(s.dropShare().recent).toBeGreaterThan(0.1);
+    expect(s.dropShare().recent).toBeLessThan(0.15);
+    // the processed rate is 22.5, the camera's still 30
+    expect(Math.abs(s.fps - 22.5)).toBeLessThan(1);
+    expect(s.cameraFps).toBeCloseTo(30, 0);
+    expect(s.hasMeta).toBe(true);
+    expect(s.source).toBe('capture');
+    expect(s.latencyMs()).toBe(40);
+    // ten seconds on without drops, the recent rate is back to none, the session's stays
+    camera(s, t, RECENT_S + 1, 0);
+    expect(s.dropShare().recent).toBe(0);
+    expect(s.dropShare().total).toBeGreaterThan(0.01);
+  });
+
+  it('without frame metadata: no drops counted, and it says so', () => {
+    const s = new TrackingStats();
+    feed(s, 0, 100, true, 1000 / 30);
+    expect(s.hasMeta).toBe(false);
+    expect(s.metaFrames).toBe(0);
+    expect(s.cameraFps).toBe(0);
+    expect(s.dropShare()).toEqual({ total: 0, recent: 0 });
+    expect(s.latencyMs()).toBeNull();
+    s.frame(5000, 20, true, { dropped: null, source: 'callback', latencyMs: null });
+    expect(s.source).toBe('callback');
+    expect(s.hasMeta).toBe(false);
+  });
+
+  it('counts long render frames, not the time the render loop was paused', () => {
+    const s = new TrackingStats();
+    const long = config.telemetry.longRenderMs;
+    let t = 1000;
+    for (let i = 0; i < 60; i++) s.renderTick((t += 1000 / 60));
+    s.renderTick((t += long + 20)); // one long frame
+    s.renderTick((t += 1000 / 60));
+    s.renderPaused(); // suspended for a minute
+    t += 60000;
+    s.renderTick(t);
+    s.renderTick((t += 1000 / 60));
+    expect(s.longRenderFrames).toBe(1);
+    expect(s.longestRenderMs).toBeCloseTo(long + 20, 6);
+    expect(s.renderFrames).toBe(62);
+    // the long frame was a minute ago: none in the last seconds
+    expect(s.recentLongRender().count).toBe(0);
+    s.renderTick((t += 40));
+    expect(s.recentLongRender()).toEqual({ count: 1, share: 0.5 });
+  });
+
+  it('a camera stop is no drop and no gap in the camera rate; reset forgets drops and render frames', () => {
+    const s = new TrackingStats();
+    let t = camera(s, 0, 3, 0);
+    s.interrupt();
+    // the frame clock's reset makes the first frame after the stop count no drops
+    t = camera(s, t + 60000, 3, 0);
+    expect(s.droppedFrames).toBe(0);
+    expect(s.cameraFps).toBeCloseTo(30, 0);
+    camera(s, t, 3, 3);
+    s.renderTick(0);
+    s.renderTick(100);
+    expect(s.droppedFrames).toBeGreaterThan(0);
+    s.reset();
+    expect([s.droppedFrames, s.metaFrames, s.renderFrames, s.longRenderFrames, s.longestRenderMs, s.cameraFps]).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(s.dropShare()).toEqual({ total: 0, recent: 0 });
+    expect(s.recentLongRender()).toEqual({ count: 0, share: 0 });
+    expect(s.latencyMs()).toBeNull();
+    expect(s.source).toBeNull();
+    // the render timing starts afresh too: the first tick after a reset is no frame
+    s.renderTick(5000);
+    expect(s.renderFrames).toBe(0);
   });
 
   it('gives median and 95th percentile of the inference time over a window', () => {

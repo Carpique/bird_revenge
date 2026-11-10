@@ -32,7 +32,7 @@ export class PoseTracker {
   raw: NormalizedLandmark[] | null = null;
   /** the arm stand-in and the smoothing; `smoother.occlusion.standIn` says how much an arm is stood in for, for the last frame */
   readonly smoother = new PoseSmoother();
-  /** local telemetry: null runs, hitches, inference times, delegate in use (debug panel) */
+  /** local telemetry: null runs, hitches, inference times, dropped camera frames, delegate in use (debug panel) */
   readonly stats = new TrackingStats();
 
   /** one time per frame for the whole pipeline, from the frame's metadata */
@@ -144,7 +144,7 @@ export class PoseTracker {
     try {
       const raw = result.landmarks?.[0];
       this.raw = raw && raw.length >= N ? raw : null;
-      this.stats.frame(ts, this.inferenceMs, this.raw !== null);
+      this.stats.frame(ts, this.inferenceMs, this.raw !== null, timing);
       // nobody: the smoothing is left as it is, a short gap does not interrupt it (`PoseSmoother`)
       const aspect = video.videoWidth / video.videoHeight;
       const lm = this.smoother.process(this.raw, aspect, ts);
