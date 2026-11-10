@@ -11,6 +11,22 @@ import { BIRD_GROUP, Bodies, Body, forceFor, Query, type MBody } from './physics
 
 type BirdAnim = keyof typeof birdDef.animations;
 
+/** The bird's state at a moment, for the black box (`Bird.sample`, `Game.birdState`). */
+export interface BirdSample {
+  /** centre, world px */
+  x: number;
+  y: number;
+  /** velocity, world px per physics step (`STEP_MS`), y down */
+  vx: number;
+  vy: number;
+  /** standing on the ground or on something, or sitting on a branch (`Bird.onGround`) */
+  onGround: boolean;
+  /** sitting on a branch */
+  perched: boolean;
+  /** knocked off by the villain, falling off the screen (outside the physics world) */
+  dying: boolean;
+}
+
 /** Knocked off by the villain: falls off the screen on its side (animated by hand, outside the physics world). */
 interface Death {
   x: number;
@@ -89,6 +105,20 @@ export class Bird {
   /** ms since dying, or null when alive */
   get deathMs(): number | null {
     return this.death?.t ?? null;
+  }
+
+  /** The state now, written into `out` (allocates nothing): the body, or the death fall while dying. */
+  sample(out: BirdSample): BirdSample {
+    const d = this.death;
+    const b = this.body;
+    out.x = d ? d.x : b.position.x;
+    out.y = d ? d.y : b.position.y;
+    out.vx = d ? d.vx : b.velocity.x;
+    out.vy = d ? d.vy : b.velocity.y;
+    out.onGround = !d && this.onGround;
+    out.perched = !d && this.perched;
+    out.dying = !!d;
+    return out;
   }
 
   /** the death fall has left the bottom of the screen */
