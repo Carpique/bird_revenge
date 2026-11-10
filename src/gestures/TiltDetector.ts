@@ -92,6 +92,15 @@ export class TiltDetector {
   private poseSince: number | null = null;
   private lostSince: number | null = null;
 
+  /** Forget the tilt and hold (after a gap in the pose). */
+  reset() {
+    this.tilt = 0;
+    this.spread = false;
+    this.hold = 0;
+    this.poseSince = null;
+    this.lostSince = null;
+  }
+
   update(f: PoseFrame, leftVisible: boolean, rightVisible: boolean, flap: FlapOutput): TiltOutput {
     const both = leftVisible && rightVisible;
     const left = leftVisible ? armAngleInImage(f, 'left') : null;

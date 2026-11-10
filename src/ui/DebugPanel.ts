@@ -5,7 +5,9 @@ import type { TiltOutput } from '../gestures/TiltDetector';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { config } from '../config';
 import { sideAmount } from '../game/flight';
+import { armFilterLabel, type ArmFilter, type ArmNoise } from '../pose/armSmoothing';
 import { PART_NAMES, SKELETON } from '../pose/landmarks';
+import { NULL_RUN_LABELS, RECAL_CAUSES, RECENT_S, type TrackingStats } from '../pose/trackingStats';
 import type { PoseFrame } from '../pose/types';
 
 interface Sample {
@@ -56,6 +58,12 @@ export class DebugPanel {
     pointing: PointingOutput | null;
     fps: number;
     inferenceMs: number;
+    /** the tracker's telemetry, null before it exists */
+    stats: TrackingStats | null;
+    /** seconds of raw pose stream in the black box (B saves it) */
+    blackBoxSeconds: number;
+    /** the arms' smoothing in force (`smoothing.arms`, `PoseSmoother.armFilter`) and the noise the calibration measured */
+    arms?: { filter: ArmFilter; noise: ArmNoise | null };
     now: number;
   }) {
     if (!this.visible) return;
@@ -145,7 +153,11 @@ export class DebugPanel {
     const n = (x: number, d = 0) => x.toFixed(d).padStart(5);
     const lines = [
       `state     ${info.state}`,
-      `pose      ${n(info.fps)} fps  ${n(info.inferenceMs, 1)} ms`,
+      // the processed rate is not the camera's: frames the main thread was too busy for are lost in between
+      `pose      ${n(info.fps)} fps processed` + (info.stats?.cameraFps ? ` of ${info.stats.cameraFps.toFixed(0)} camera` : '') + `  ${n(info.inferenceMs, 1)} ms`,
+      ...trackingLines(info.stats, info.now),
+      `blackbox  ${info.blackBoxSeconds.toFixed(0)} s buffered (B saves)`,
+      info.arms ? armsLine(info.arms.filter, info.arms.noise) : '',
       '',
       fl ? `arm  angle   vel  power strk  Hz  primed` : '',
       fl ? `L   ${n(fl.left.angle)} ${n(fl.left.velocity)} ${n(fl.left.power)} ${String(fl.left.strokes).padStart(4)} ${fl.left.frequency.toFixed(1).padStart(4)}  ${fl.left.primed ? '▲' : '·'}` : '',
@@ -167,8 +179,14 @@ export class DebugPanel {
           (info.pointing.intent
             ? ` → ${info.pointing.intent.mode.toUpperCase()}` +
               (info.pointing.intent.mode === 'fly' || info.pointing.intent.mode === 'drift'
-                ? ` at ${n((Math.atan2(info.pointing.intent.dy, info.pointing.intent.dx) * 180) / Math.PI)}°`
-                : '')
+                ? ` at ${n((Math.atan2(info.pointing.intent.dy, info.pointing.intent.dx) * 180) / Math.PI)}°` +
+                  (info.pointing.intent.sink ? ` sink ${info.pointing.intent.sink.toFixed(2)}` : '') +
+                  // flying by one arm, or easing back from it: the fraction of the cruising speed
+                  (info.pointing.intent.oneArm ? ' one arm' : '') +
+                  (info.pointing.intent.speed !== undefined ? ` ×${info.pointing.intent.speed.toFixed(2)}` : '')
+                : '') +
+              // continuous steering: the speed asked for, px per step
+              (info.pointing.intent.vx !== undefined ? ` ${Math.hypot(info.pointing.intent.vx, info.pointing.intent.vy ?? 0).toFixed(1)} px` : '')
             : '') +
           (config.pointing.flapping ? '  (off)' : '')
         : '',
@@ -178,4 +196,55 @@ export class DebugPanel {
     ];
     this.textEl.textContent = lines.join('\n');
   }
+}
+
+/** The tracker's telemetry in a few compact lines (see `TrackingStats`). */
+function trackingLines(st: TrackingStats | null, now: number): string[] {
+  if (!st) return [];
+  const { p50, p95 } = st.inferenceMs();
+  const i = st.info;
+  const cur = st.currentNullMs(now);
+  const nulls = Array.from(st.nullRuns, (c, k) => (c ? `${NULL_RUN_LABELS[k]}:${c}` : '')).filter(Boolean).join(' ');
+  const oof = Object.entries(st.outOfFrame).map(([k, c]) => `${k}:${c}`).join(' ');
+  return [
+    `infer     p50 ${p50.toFixed(1)}  p95 ${p95.toFixed(1)} ms`,
+    i ? `model     ${i.model} ${i.delegate}${i.fellBack ? ` (${i.requested} failed)` : ''}` : '',
+    `null      ${st.nullFrames}/${st.frames} fr` + (cur ? `  now ${cur.toFixed(0)} ms` : '') + (st.longestNullMs ? `  max ${st.longestNullMs.toFixed(0)}` : ''),
+    nulls ? `  runs    ${nulls}` : '',
+    `hitches   ${st.hitches}` + (st.longestHitchMs ? `  max ${st.longestHitchMs.toFixed(0)} ms` : ''),
+    cameraLine(st),
+    renderLine(st),
+    st.errors.detect || st.errors.frame || st.watchdogRearms
+      ? `loop      errors ${st.errors.detect}+${st.errors.frame}  rearm ${st.watchdogRearms}` + (st.lastError ? `  ${st.lastError.slice(0, 40)}` : '')
+      : '',
+    `recal     ` + RECAL_CAUSES.map((c) => `${c}:${st.recalibrations[c]}`).join(' '),
+    oof ? `outframe  ${oof}` : '',
+  ];
+}
+
+/** Camera frames the game never saw, the frame-time source, the capture latency; or why they cannot be seen. */
+function cameraLine(st: TrackingStats): string {
+  if (st.frames === 0) return '';
+  // without metadata a 0 would read as "no drops"
+  if (!st.hasMeta) return `camera    no frame metadata (${st.source ?? 'callback'} time): drops not visible`;
+  const d = st.dropShare();
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  const lat = st.latencyMs();
+  return `camera    drop ${pct(d.recent)} ${RECENT_S}s  ${pct(d.total)} all (${st.droppedFrames} fr)  t:${st.source}` + (lat !== null ? `  lat ${lat.toFixed(0)} ms` : '');
+}
+
+/** Render frames longer than `telemetry.longRenderMs`: in total, over the last seconds, the longest. */
+function renderLine(st: TrackingStats): string {
+  if (st.renderFrames === 0) return '';
+  const r = st.recentLongRender();
+  return (
+    `render    >${config.telemetry.longRenderMs} ms: ${r.count} in ${RECENT_S}s (${(r.share * 100).toFixed(1)}%)  ${st.longRenderFrames} all` +
+    (st.longestRenderMs ? `  max ${st.longestRenderMs.toFixed(0)} ms` : '')
+  );
+}
+
+/** The arms' smoothing: the switch, the filter in force, the noise the calibration measured. */
+export function armsLine(filter: ArmFilter, noise: ArmNoise | null): string {
+  const measured = noise ? `noise ${noise.deg.toFixed(2)}° ${(noise.norm * 1000).toFixed(1)}e-3 @${noise.fps.toFixed(0)} fps` : 'noise not measured';
+  return `arms      ${config.smoothing.arms} → ${armFilterLabel(filter)}  ${measured}`;
 }

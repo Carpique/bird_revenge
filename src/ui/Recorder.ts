@@ -32,13 +32,18 @@ export class Recorder {
   private stop() {
     this.recording = false;
     const data = { version: 1, recordedAt: new Date().toISOString(), aspect: this.aspect, config, frames: this.frames };
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `pose-recording-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    downloadJson('pose-recording', data);
   }
+}
+
+/** Saves `data` as `<prefix>-<time>.json` in the downloads (a local file, nothing is sent anywhere). */
+export function downloadJson(prefix: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${prefix}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 const round = (x: number) => Math.round(x * 10000) / 10000;

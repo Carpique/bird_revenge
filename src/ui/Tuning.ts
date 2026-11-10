@@ -56,17 +56,33 @@ const RANGES: Record<string, [number, number, number]> = {
   'hover.maxArmSpeed': [0, 600, 10],
   'hover.enterMs': [0, 1000, 10],
   'hover.exitMs': [0, 1000, 10],
-  'pointing.smoothing': [0.05, 1, 0.05],
+  'pointing.smoothingMs': [0, 300, 5],
   'pointing.restCone': [5, 80, 1],
   'pointing.tMaxArm': [10, 90, 1],
   'pointing.tMaxRaise': [0, 80, 1],
   'pointing.tiltDeadZone': [0, 60, 1],
   'pointing.tiltHysteresis': [0, 20, 1],
   'pointing.parallelMax': [5, 90, 1],
+  'pointing.vMinArm': [0, 90, 1],
+  'pointing.vHysteresis': [0, 20, 1],
   'pointing.enterMs': [0, 1000, 10],
+  'pointing.oneArmSpeed': [0.1, 1, 0.05],
+  'pointing.oneArmMinOut': [35, 120, 1],
+  'pointing.oneArmHysteresis': [0, 20, 1],
+  'pointing.oneArmEnterMs': [0, 1000, 10],
+  'pointing.oneArmBlendMs': [0, 1000, 10],
   'pointing.ambiguousMs': [0, 2000, 50],
   'pointing.cruiseSpeed': [0, 20, 0.5],
   'pointing.driftSpeed': [0, 10, 0.1],
+  'pointing.descendEnter': [0, 60, 1],
+  'pointing.descendExit': [0, 60, 1],
+  'pointing.descendZero': [0, 60, 1],
+  'pointing.descendFull': [1, 90, 1],
+  'pointing.descendSpeed': [0, 10, 0.1],
+  'pointing.descendSmoothMs': [0, 500, 10],
+  'pointing.togetherZero': [0, 1, 0.01],
+  'pointing.togetherFull': [0, 1, 0.01],
+  'pointing.tiltFull': [0, 90, 1],
   'pointing.accel': [100, 6000, 100],
   'pointing.restDrag': [0, 0.5, 0.01],
   'pointing.airFriction': [0, 0.2, 0.005],
@@ -82,6 +98,12 @@ const RANGES: Record<string, [number, number, number]> = {
   'visibility.maxOffCentre': [0.05, 0.5, 0.01],
   'visibility.offCentreAfterMs': [0, 3000, 50],
   'visibility.redetectEveryMs': [500, 10000, 100],
+  'visibility.personGoneAfterMs': [500, 10000, 100],
+  'pose.holdLastMs': [0, 1000, 10],
+  'pose.minWristVisibility': [0, 1, 0.05],
+  'pose.wristVisibilityMargin': [0, 0.5, 0.05],
+  'pose.watchdogMs': [300, 5000, 100],
+  'pose.resetFiltersAfterMs': [0, 2000, 50],
   'physics.gravity': [0, 3, 0.05],
   'physics.birdAirFriction': [0, 0.2, 0.005],
   'physics.maxSpeed': [2, 40, 1],
@@ -129,6 +151,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'player.dieTurnMs': [0, 2000, 50],
   'smoothing.minCutoff': [0.1, 10, 0.1],
   'smoothing.beta': [0, 3, 0.01],
+  'smoothing.armBeta': [0, 30, 0.1],
   'audio.music': [0, 1, 0.05],
   'audio.musicDucked': [0, 1, 0.05],
   'audio.musicRestoreMs': [0, 5000, 100],
@@ -138,9 +161,17 @@ const RANGES: Record<string, [number, number, number]> = {
   'audio.fallFromHz': [100, 3000, 10],
   'audio.fallToHz': [50, 2000, 10],
   'audio.fallMs': [100, 5000, 50],
+  'telemetry.hitchMs': [40, 1000, 10],
+  'telemetry.longRenderMs': [10, 200, 1],
+  'telemetry.blackBoxSeconds': [10, 300, 10],
 };
 
-const SECTIONS = ['pointing', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'bat', 'friend', 'coin', 'player', 'audio'] as const;
+/** Dropdowns for the options that take one of a few names. */
+const CHOICES: Record<string, readonly string[]> = {
+  'smoothing.arms': ['fixed', 'off', 'auto'],
+};
+
+const SECTIONS = ['pointing', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'bat', 'friend', 'coin', 'player', 'audio', 'telemetry'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {
@@ -154,12 +185,15 @@ export class Tuning {
       if (DOCS[section]) folder.$title.title = DOCS[section];
       for (const key of Object.keys(obj)) {
         const r = RANGES[`${section}.${key}`];
+        const choices = CHOICES[`${section}.${key}`];
         const controller =
           section === 'pointing' && key === 'flapping'
             ? folder.add(obj, key).name('Flapping (off: pointing)')
-            : r
-              ? folder.add(obj, key, r[0], r[1], r[2])
-              : folder.add(obj, key);
+            : choices
+              ? folder.add(obj, key, choices)
+              : r
+                ? folder.add(obj, key, r[0], r[1], r[2])
+                : folder.add(obj, key);
         const doc = DOCS[`${section}.${key}`];
         if (doc) controller.domElement.title = doc;
       }

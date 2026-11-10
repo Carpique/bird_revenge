@@ -1,7 +1,8 @@
 import { Application, UPDATE_PRIORITY } from 'pixi.js';
 import { countLevelView } from './analytics';
 import { audio } from './audio/audio';
-import { config, loadSavedConfig } from './config';
+import { changedConfig, config, loadSavedConfig } from './config';
+import type { BirdSample } from './game/Bird';
 import { Game } from './game/Game';
 import { firstLevel, gameLevels, levels, nextLevel, onLevelEdited, testLevelName, TRAINING } from './levels';
 import { markCompleted, unlockedLevels } from './levels/progress';
@@ -12,12 +13,15 @@ import type { PointingOutput } from './gestures/PointingDetector';
 import type { TiltOutput } from './gestures/TiltDetector';
 import type { ShootOutput } from './gestures/ShootDetector';
 import type { VisibilityOutput } from './gestures/VisibilityMonitor';
-import { noControls, type Controls } from './input/controls';
 import { Keyboard } from './input/keyboard';
 import { TouchControls } from './input/touchControls';
-import { controlsFrom, POSE_STALE_MS, PoseDetectors } from './input/poseControls';
+import { PoseDetectors } from './input/poseControls';
+import { PoseSession, type PoseStep } from './input/poseSession';
+import { BlackBox } from './pose/blackBox';
 import { startCamera, stopCamera } from './pose/camera';
-import { PoseTracker } from './pose/PoseTracker';
+import { REQUIRED_PARTS } from './pose/landmarks';
+import { PoseTracker, type PoseTiming } from './pose/PoseTracker';
+import { outOfFrameCause, recalCause } from './pose/trackingStats';
 import type { PoseFrame } from './pose/types';
 import { loadAllAssets } from './render/assets';
 import { isPortrait } from './render/fitWorld';
@@ -30,7 +34,7 @@ import { MenuButton } from './ui/MenuButton';
 import { t, type Msg } from './ui/i18n';
 import { LanguageButton } from './ui/LanguageButton';
 import { PauseMenu } from './ui/PauseMenu';
-import { Recorder } from './ui/Recorder';
+import { downloadJson, Recorder } from './ui/Recorder';
 import { RotateHint } from './ui/RotateHint';
 import { loadRecording } from './tutorial';
 import { PoseReplay } from './tutorial/PoseReplay';
@@ -111,9 +115,6 @@ async function main() {
   let tiltOut: TiltOutput | null = null;
   let pointingOut: PointingOutput | null = null;
   let calibStatus: CalibrationStatus | null = null;
-  let poseControls: Controls = noControls();
-  let lastPoseT = 0;
-  let lastRedetectT = -Infinity;
   let tracker: PoseTracker | null = null;
 
   /** the window is unfocused / hidden, or the game is paused: nothing runs */
@@ -145,7 +146,11 @@ async function main() {
     else if (state === 'outOfFrame')
       Object.assign(gs, {
         mode: 'outOfFrame',
-        message: cameraError ? t('{error} – reconnecting…', { error: t(cameraError) }) : (vis?.hint ?? t('Get into view')),
+        message: cameraError
+          ? t('{error} – reconnecting…', { error: t(cameraError) })
+          : session.framesLost(now)
+            ? t('Tracking lost — stay in the frame')
+            : (vis?.hint ?? t('Get into view')),
       });
     else if (state === 'countdown') Object.assign(gs, { mode: 'countdown', countdown: (countdownEnd - now) / 1000 });
     else if (state === 'menu' && demoOn && replay?.recording)
@@ -221,6 +226,11 @@ async function main() {
   const debug = new DebugPanel(video);
   const tuning = new Tuning();
   const recorder = new Recorder();
+  // the last minute of the raw pose stream, saved with B (see `BlackBox`)
+  const blackBox = new BlackBox();
+  // the bird's state per pose frame for it (one object, filled in place) and the long render frames counted so far
+  const birdSample: BirdSample = { x: 0, y: 0, vx: 0, vy: 0, onGround: false, perched: false, dying: false };
+  let longRenderSeen = 0;
   const corner = document.getElementById('corner')!;
   const fullscreen = new FullscreenButton(corner);
   const menuButton = new MenuButton(corner);
@@ -231,6 +241,7 @@ async function main() {
   const touch = new TouchControls(gameBox);
   const detectors = new PoseDetectors();
   const calibration = new Calibration();
+  const session = new PoseSession();
 
   // the calibration dialog's "Back" (the only way out on a phone): to the level select, the level selected, or from
   // training (or a level tested from the URL) to the title screen
@@ -311,7 +322,7 @@ async function main() {
     stopCamera(video);
     cameraOn = false;
     frame = null;
-    lastPoseT = 0; // stale pose controls must not apply until a fresh frame arrives
+    session.clear(); // stale pose controls must not apply until a fresh frame arrives
   };
   const onCameraLost = () => {
     console.warn('camera stream ended');
@@ -432,11 +443,24 @@ async function main() {
     if (k === 'd') debug.toggle();
     else if (k === 'g') tuning.toggle();
     else if (k === 'r') recorder.toggle();
+    else if (k === 'b') {
+      const dump = blackBox.dump({
+        model: config.pose.model,
+        delegate: tracker?.stats.info?.delegate ?? config.pose.delegate,
+        config: changedConfig(),
+        flapping: config.pointing.flapping,
+        source: tracker?.stats.source ?? null,
+      });
+      if (dump) downloadJson('black-box', dump);
+    }
     else if (k === 'm') volume.toggleMute();
     if (state === 'loading' || state === 'menu' || menuOpen) return;
     if (k === 'p') keyboard.onPause();
     else if (state === 'gameOver') return;
-    else if (k === 'c' && tracker) recalibrate();
+    else if (k === 'c' && tracker) {
+      tracker.stats.recalibration('manual');
+      recalibrate();
+    }
     else if (k === 'escape' && !game.showingSign) {
       if (state === 'calibrating') playWithoutCamera();
       else openPauseMenu();
@@ -447,8 +471,20 @@ async function main() {
     if (inGame() && state !== 'gameOver' && !menuOpen && !game.showingSign) openPauseMenu();
   };
 
-  const onPose = (f: PoseFrame | null) => {
-    const now = performance.now();
+  // a step of the session (from a pose frame or a render tick) into the app state, with the telemetry on why
+  const applyStep = (step: PoseStep<AppState>, now: number) => {
+    if (!vis) return; // no frame yet: the session has nothing to decide
+    if (step.recalibrate) tracker?.stats.recalibration(session.framesLost(now) ? 'noPerson' : recalCause(vis));
+    else if (step.state === 'outOfFrame' && state !== 'outOfFrame')
+      tracker?.stats.outOfFrameEpisode(session.framesLost(now) ? 'noFrames' : outOfFrameCause(vis, REQUIRED_PARTS));
+    state = step.state;
+    if (step.recalibrate) recalibrate();
+  };
+
+  // one clock for the pose path: everything below runs on the frame's own time (`PoseTiming.t`, `FrameClock`), not on
+  // a second `performance.now()` after inference; the render ticker's `performance.now()` is the same timebase
+  const onPose = (f: PoseFrame | null, timing: PoseTiming) => {
+    const now = timing.t;
     frame = f;
     // always run the detectors so their state stays continuous; only *apply* them while playing
     const reading = detectors.update(f, now);
@@ -458,42 +494,46 @@ async function main() {
       ({ flap: flapOut, shoot: shootOut, tilt: tiltOut, pointing: pointingOut } = reading);
       debug.record(now, reading.flap, reading.shoot);
     }
-    // someone off to the side may be another person the tracker latched onto: make it look again for whoever
-    // is in front of the camera
-    if (vis.personDetected && !vis.centred && now - lastRedetectT >= config.visibility.redetectEveryMs) {
-      lastRedetectT = now;
-      tracker?.redetect();
-    }
-    // nobody in front of the camera any more: the big calibration dialog, as at the start
-    if ((state === 'countdown' || state === 'playing' || state === 'outOfFrame') && !vis.playerPresent) recalibrate();
-
-    switch (state) {
-      case 'calibrating':
-        calibStatus = calibration.update(f, vis);
-        if (calibStatus.done) {
-          detectors.shoot.calibrate(calibStatus.done);
-          startCountdown();
-        }
-        break;
-      case 'countdown':
-        if (!vis.inFrame) state = 'outOfFrame';
-        break;
-      case 'outOfFrame':
-        if (vis.inFrame) state = 'playing';
-        break;
-      case 'playing':
-        if (!vis.inFrame) {
-          state = 'outOfFrame';
-          break;
-        }
-        {
-          const controls = controlsFrom(reading);
-          if (!controls) break;
-          poseControls = controls;
-          lastPoseT = now;
-          if (reading.shoot?.triggered) game.requestPoo();
-        }
-        break;
+    // what the frame means for the game (the rules are in `PoseSession`)
+    const step = session.update(state, reading, now);
+    if (step.redetect) tracker?.redetect();
+    applyStep(step, now);
+    if (step.shoot) game.requestPoo();
+    if (f) blackBox.aspect = f.aspect;
+    const ctl = session.controls(state, now);
+    // the long render frames since the previous pose frame (the count starts again when the stats are reset)
+    const longRender = tracker ? tracker.stats.longRenderFrames : 0;
+    const longSince = longRender >= longRenderSeen ? longRender - longRenderSeen : longRender;
+    longRenderSeen = longRender;
+    blackBox.add(now, tracker?.raw ?? null, {
+      state,
+      personDetected: vis.personDetected,
+      centred: vis.centred,
+      playerPresent: vis.playerPresent,
+      inFrame: vis.inFrame,
+      lift: ctl.lift,
+      tilt: ctl.tilt,
+      hover: ctl.hover,
+      flapping: ctl.flapping,
+      inferenceMs: tracker?.inferenceMs ?? 0,
+      // the effect: what the bird is told and where it is when the frame arrives
+      intent: ctl.pointing,
+      bird: game.birdState(birdSample),
+      dropped: timing.dropped,
+      longRender: longSince,
+    });
+    // the calibration dialog, also on the frame that brought it up
+    if (state === 'calibrating') {
+      // MediaPipe's own landmarks too: the arms' noise during the hold (`smoothing.arms` = auto)
+      calibStatus = calibration.update(f, vis, tracker?.raw ?? null);
+      if (calibStatus.done) {
+        detectors.shoot.calibrate(calibStatus.done);
+        // the smoothing and the pointing detector's EMA follow it together (kept until the next calibration)
+        if (tracker) tracker.smoother.armNoise = calibStatus.armNoise;
+        detectors.pointing.armNoise = calibStatus.armNoise;
+        blackBox.calibrated(now, calibStatus.done, calibStatus.armNoise);
+        startCountdown();
+      }
     }
   };
 
@@ -509,6 +549,10 @@ async function main() {
   // per render frame: state timers, controls, HUD, debug
   app.ticker.add(() => {
     const now = performance.now();
+    // long render frames for the debug panel; the last tick before a suspension (the window hidden or unfocused,
+    // a pause) ends the timing, so the time suspended is no long frame
+    if (suspended) tracker?.stats.renderPaused();
+    else tracker?.stats.renderTick(now);
     audio.update();
     if (state === 'countdown' && now >= countdownEnd) state = 'playing';
     // no camera to be had: the game goes on without it
@@ -519,10 +563,11 @@ async function main() {
       else startCountdown();
     }
     updateCamera();
+    // a gap in the pose goes on without frames too (a hitch): soft pause, then the calibration dialog
+    applyStep(session.tick(state, now), now);
 
-    const poseFresh = state === 'playing' && now - lastPoseT < POSE_STALE_MS;
     touch.visible = state === 'keyboard' && !menuOpen && !manualPause && !game.showingSign;
-    game.controls = keyboard.apply(touch.apply(poseFresh ? poseControls : noControls()));
+    game.controls = keyboard.apply(touch.apply(session.controls(state, now)));
     // during gameOver the game runs only to slide the "Game Over" sign through
     game.paused = manualPause || menuOpen || !(state === 'playing' || state === 'keyboard' || state === 'gameOver');
     game.showPausedText = manualPause;
@@ -578,6 +623,9 @@ async function main() {
       pointing: pointingOut,
       fps: tracker?.fps ?? 0,
       inferenceMs: tracker?.inferenceMs ?? 0,
+      stats: tracker?.stats ?? null,
+      blackBoxSeconds: blackBox.seconds,
+      arms: tracker ? { filter: tracker.smoother.armFilter, noise: tracker.smoother.armNoise } : undefined,
       now,
     });
   });

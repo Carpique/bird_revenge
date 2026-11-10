@@ -1,42 +1,68 @@
 import { FilesetResolver, PoseLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { config } from '../config';
-import { ArmOcclusion } from './ArmOcclusion';
-import { OneEuroFilter } from './OneEuroFilter';
-import type { Landmark, PoseFrame } from './types';
+import { FrameClock, type FrameTiming } from './FrameClock';
+import { FrameLoop, type LoopEnv, type LoopFrame } from './FrameLoop';
+import { PoseSmoother } from './PoseSmoother';
+import { TrackingStats } from './trackingStats';
+import type { PoseFrame } from './types';
 
 const MODEL_URL = (variant: string) =>
   `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${variant}/float16/1/pose_landmarker_${variant}.task`;
 
 const N = 33;
 
+/** A frame's timing as the game gets it with every frame, a person in it or not (`PoseTracker.onFrame`). */
+export interface PoseTiming extends FrameTiming {
+  /** ms spent in the model's detect call */
+  inferenceMs: number;
+}
+
 /**
  * Runs MediaPipe Pose on every new video frame and emits smoothed landmarks.
  * Emits `null` when no person is detected.
  */
 export class PoseTracker {
-  onFrame: (frame: PoseFrame | null) => void = () => {};
+  /** every processed frame: the smoothed pose (null: nobody), and the frame's timing (`timing.t` is `frame.t`) */
+  onFrame: (frame: PoseFrame | null, timing: PoseTiming) => void = () => {};
   /** pose frames processed per second (for the debug panel) */
   fps = 0;
   /** ms spent in the last detect call */
   inferenceMs = 0;
   /** MediaPipe's own landmarks for the frame `onFrame` gets, before smoothing (with z and visibility); null: nobody */
   raw: NormalizedLandmark[] | null = null;
-  /** stands in for an arm hidden behind the other; `occlusion.standIn` says how much, for the last frame */
-  readonly occlusion = new ArmOcclusion();
+  /** the arm stand-in and the smoothing; `smoother.occlusion.standIn` says how much an arm is stood in for, for the last frame */
+  readonly smoother = new PoseSmoother();
+  /** local telemetry: null runs, hitches, inference times, dropped camera frames, delegate in use (debug panel) */
+  readonly stats = new TrackingStats();
 
-  private filters: OneEuroFilter[] = [];
-  private lastTs = 0;
-  private running = false;
-  /** bumped on every start, so a frame callback left over from before a stop/start ends its loop */
-  private generation = 0;
+  /** one time per frame for the whole pipeline, from the frame's metadata */
+  private readonly clock = new FrameClock();
+  private readonly loop: FrameLoop;
+  /** exceptions logged so far (the first few, then ever fewer: a failure on every frame must not flood the console) */
+  private logged = 0;
   private fpsCount = 0;
-  private fpsT0 = performance.now();
+  private fpsT0 = -1;
 
   private constructor(
     private landmarker: PoseLandmarker,
     private video: HTMLVideoElement,
+    fellBack: boolean,
+    /** the clock and timers of the frame loop (tests pass fakes) */
+    loopEnv?: LoopEnv,
   ) {
-    for (let i = 0; i < N * 2; i++) this.filters.push(new OneEuroFilter());
+    this.loop = new FrameLoop(
+      video,
+      (f) => this.process(f),
+      {
+        onError: (e) => this.report('frame', e),
+        onWatchdog: (ms) => {
+          this.stats.watchdog();
+          console.warn(`pose loop: no frame for ${ms.toFixed(0)} ms while the video plays, armed again`);
+        },
+      },
+      loopEnv,
+    );
+    this.stats.info = { model: config.pose.model, requested: config.pose.delegate, delegate: fellBack ? 'CPU' : config.pose.delegate, fellBack };
   }
 
   static async create(video: HTMLVideoElement): Promise<PoseTracker> {
@@ -48,33 +74,26 @@ export class PoseTracker {
         numPoses: 1,
       });
     let landmarker: PoseLandmarker;
+    let fellBack = false;
     try {
       landmarker = await make(config.pose.delegate);
     } catch (e) {
       console.warn('GPU delegate failed, falling back to CPU', e);
       landmarker = await make('CPU');
+      fellBack = config.pose.delegate !== 'CPU';
     }
-    return new PoseTracker(landmarker, video);
+    return new PoseTracker(landmarker, video, fellBack);
   }
 
   start() {
-    if (this.running) return;
-    this.running = true;
-    const gen = ++this.generation;
-    const v = this.video as HTMLVideoElement & {
-      requestVideoFrameCallback?: (cb: () => void) => number;
-    };
-    const loop = () => {
-      if (!this.running || gen !== this.generation) return;
-      this.process();
-      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(loop);
-      else requestAnimationFrame(loop);
-    };
-    loop();
+    this.loop.start();
   }
 
   stop() {
-    this.running = false;
+    this.loop.stop();
+    this.clock.reset(); // the stream may come back with another clock; frames missed meanwhile are no drops
+    this.stats.interrupt(); // the pause is no hitch
+    this.fpsT0 = -1;
   }
 
   /**
@@ -84,21 +103,37 @@ export class PoseTracker {
    */
   redetect() {
     this.landmarker.setOptions({}).catch((e) => console.warn('pose tracker reset failed', e));
-    this.filters.forEach((f) => f.reset());
-    this.occlusion.reset();
+    this.smoother.reset();
   }
 
-  private process() {
+  /** counts an exception and logs it (the first 5, then the 10th, 100th...) */
+  private report(kind: 'detect' | 'frame', e: unknown) {
+    this.stats.error(kind, e);
+    const n = ++this.logged;
+    if (n <= 5 || Number.isInteger(Math.log10(n))) console.warn(`pose ${kind} failed (${n} so far)`, e);
+  }
+
+  /**
+   * One video frame; false: there was none to take. An exception in the model or in `onFrame` is counted, the frame
+   * dropped. The frame clock's `t` is the one time the model, the smoothing, the telemetry and the game all get.
+   */
+  private process({ now, meta }: LoopFrame): boolean {
     const video = this.video;
-    if (video.readyState < 2 || video.videoWidth === 0) return;
-    let ts = performance.now();
-    if (ts <= this.lastTs) ts = this.lastTs + 1;
-    this.lastTs = ts;
+    if (video.readyState < 2 || video.videoWidth === 0) return false;
+    const timing = this.clock.next(now, meta);
+    const ts = timing.t;
 
     const t0 = performance.now();
-    const result = this.landmarker.detectForVideo(video, ts);
+    let result: ReturnType<PoseLandmarker['detectForVideo']>;
+    try {
+      result = this.landmarker.detectForVideo(video, ts);
+    } catch (e) {
+      this.report('detect', e);
+      return true;
+    }
     this.inferenceMs = performance.now() - t0;
 
+    if (this.fpsT0 < 0) this.fpsT0 = ts;
     this.fpsCount++;
     if (ts - this.fpsT0 >= 1000) {
       this.fps = (this.fpsCount * 1000) / (ts - this.fpsT0);
@@ -106,31 +141,17 @@ export class PoseTracker {
       this.fpsT0 = ts;
     }
 
-    const raw = result.landmarks?.[0];
-    this.raw = raw && raw.length >= N ? raw : null;
-    if (!raw || raw.length < N) {
-      this.filters.forEach((f) => f.reset());
-      this.occlusion.reset();
-      this.onFrame(null);
-      return;
+    try {
+      const raw = result.landmarks?.[0];
+      this.raw = raw && raw.length >= N ? raw : null;
+      this.stats.frame(ts, this.inferenceMs, this.raw !== null, timing);
+      // nobody: the smoothing is left as it is, a short gap does not interrupt it (`PoseSmoother`)
+      const aspect = video.videoWidth / video.videoHeight;
+      const lm = this.smoother.process(this.raw, aspect, ts);
+      this.onFrame(lm && { t: ts, lm, aspect }, { ...timing, inferenceMs: this.inferenceMs });
+    } catch (e) {
+      this.report('frame', e);
     }
-    const aspect = video.videoWidth / video.videoHeight;
-    const pts = this.occlusion.apply(raw, aspect);
-    const s = config.smoothing;
-    const tSec = ts / 1000;
-    const lm: Landmark[] = new Array(N);
-    for (let i = 0; i < N; i++) {
-      const fx = this.filters[i * 2];
-      const fy = this.filters[i * 2 + 1];
-      fx.minCutoff = fy.minCutoff = s.minCutoff;
-      fx.beta = fy.beta = s.beta;
-      fx.dCutoff = fy.dCutoff = s.dCutoff;
-      lm[i] = {
-        x: fx.filter(pts[i].x, tSec),
-        y: fy.filter(pts[i].y, tSec),
-        v: pts[i].visibility ?? 0,
-      };
-    }
-    this.onFrame({ t: ts, lm, aspect });
+    return true;
   }
 }

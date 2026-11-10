@@ -16,10 +16,67 @@ export const config = {
     /** MediaPipe model size: lite is fastest, heavy most accurate. Change requires reload. */
     model: 'lite' as 'lite' | 'full' | 'heavy',
     delegate: 'GPU' as 'GPU' | 'CPU',
+    /**
+     * no good pose for less than this (ms; nobody found, or the frames did not come): the last controls keep
+     * applying and nothing resets, so a dropped frame or a hitch of the camera goes unnoticed. Longer: the game
+     * pauses softly (`visibility.personGoneAfterMs`) and the gesture detectors forget what they were doing.
+     */
+    holdLastMs: 400,
+    /**
+     * a wrist less visible than this is not trusted (MediaPipe guesses it hanging): with the elbow confident, the arm
+     * points the way the shoulder → elbow line does instead (`WristGate`); with the elbow not confident either, the arm is out of view
+     */
+    minWristVisibility: 0.5,
+    /** a wrist taken as a stand-in is trusted again at `minWristVisibility` plus this, so one hovering around the threshold does not flip */
+    wristVisibilityMargin: 0.1,
+    /**
+     * the video is playing but no frame has been handled for this long (ms): the frame callbacks are taken to be dead
+     * (the browser dropped them) and the loop is armed again (`FrameLoop`; counted in the debug panel as "rearm")
+     */
+    watchdogMs: 1000,
+    /** a gap this long (ms) without a good pose resets the smoothing filters: the person may have moved a lot meanwhile */
+    resetFiltersAfterMs: 500,
   },
 
-  /** One-Euro filter applied to landmark coordinates (lower minCutoff = smoother but laggier). */
-  smoothing: { minCutoff: 2.0, beta: 0.3, dCutoff: 1.0 },
+  /** Local tracking telemetry (debug panel) and the black box (B): nothing of it leaves the device. */
+  telemetry: {
+    /** two pose frames with a person in both, further apart than this (ms), count as a hitch of the camera or the model */
+    hitchMs: 100,
+    /** a render frame (the interval between two ticks of the game's render loop) longer than this (ms) counts as a long one in the debug panel: 25 is one and a half 60 Hz frames; time paused, suspended or hidden does not count */
+    longRenderMs: 25,
+    /** the black box keeps this many seconds of the raw pose stream, to save with B (about 35 KB of memory per second: the landmarks, and per frame the game state, the pointing intent the bird was given, its position and velocity, dropped camera and long render frames). Change requires reload. */
+    blackBoxSeconds: 60,
+  },
+
+  /**
+   * One-Euro filter applied to landmark coordinates (lower minCutoff = smoother but laggier). `beta` opens the filter
+   * up for fast movements (cutoff = minCutoff + beta * speed, speed in image heights per second). `armBeta` is the
+   * one for the elbows, wrists and hands, which steer the bird: at 0.3 it barely opened (a wrist at 0.6 /s: 2.2 Hz
+   * instead of 2), so a quick turn of the arms lagged like a slow one; 10 takes ~45 ms off every change of
+   * direction on the recordings of play (tests/replay/recordings), mode flicker unchanged. The rest (hips, knees:
+   * the shoot gesture) keeps `beta` 0.3: opened up too, their noise fires spurious poos. `arms` switches the arms'
+   * smoothing (this filter on the arms plus `pointing.smoothingMs`) between that chain, none, and one stage matched
+   * to the noise measured at calibration.
+   */
+  smoothing: {
+    minCutoff: 2.0,
+    beta: 0.3,
+    armBeta: 10,
+    dCutoff: 1.0,
+    /**
+     * the arms' smoothing under pointing control (flapping keeps `fixed` whatever this says). `fixed`: the One-Euro
+     * above on the elbows, wrists and hands plus the EMA of the arm directions (`pointing.smoothingMs`). `off`: the
+     * arms as MediaPipe gives them, no EMA (the shoulders, hips and knees keep their filter). `auto`: the noise is
+     * measured during the calibration hold (`ArmNoiseMeter`); at or below 1 deg of arm angle no filter (as `off`),
+     * above it the arms' One-Euro alone, its minCutoff brought down until the noise is 1 deg (as `fixed` until a
+     * calibration measured it). On the recordings of play MediaPipe's arm angle has 0.3 deg of noise, which the
+     * chain does not lower while it lags 30-35 ms: `off` (there the same as `auto`) cuts the mean delay of a change
+     * from 160 / 95 / 122 to 130 / 63 / 89 ms, with flicker 5 / 1 / 5 -> 6 / 1 / 6, so `fixed` stays the default.
+     * With noise added (a worse camera) `auto` keeps continuous steering's flicker near `fixed`'s where `off`'s
+     * doubles (ARCHITECTURE.md, tests/replay/armSmoothing.test.ts)
+     */
+    arms: 'fixed' as 'fixed' | 'off' | 'auto',
+  },
 
   /**
    * One arm hidden behind the other (both pointing to one side turn the body sideways): MediaPipe loses the far
@@ -52,16 +109,34 @@ export const config = {
      * wrist position MediaPipe estimates even off-frame), so raised hands may leave the frame
      */
     forearmInFrame: 0.2,
-    /** arms get longer, since hands briefly leave the frame at the top of a big flap */
+    /**
+     * arms get longer, since hands briefly leave the frame at the top of a big flap. Kept at 800 on the replay evidence: with
+     * the elbow really lost, 600 would cut the wrong controls before the pause from about 380 to 230 ms and 400 to about 60,
+     * but a dip of the elbow's visibility with the position still right (v 0.5 for 600 ms) then costs a pause of 550 ms for
+     * nothing, and there is no recording of flapping to say how far the elbow's visibility dips in a big flap. To revisit with field data.
+     */
     armLostAfterMs: 800,
-    recoverAfterMs: 300,
+    /**
+     * a lost part (or the torso's centre) must be back this long (ms) before it counts as visible again; the score's
+     * smoothing (`emaAlpha`, `recoverAbove`) adds about 5 frames to it. 300 -> 150 shortens each soft pause by 130-280 ms
+     * (replay: elbow v 0.5 for 1 s 542 -> 404 ms, recovery 537 -> 391 ms) and adds none.
+     */
+    recoverAfterMs: 150,
     noPersonAfterMs: 500,
     /**
-     * the torso's centre (between shoulders and hips) further than this (fraction of frame width) from the middle is
-     * off centre: the player has wandered off, or the tracker has picked someone else in the room
+     * nobody in view (nobody found, or the frames missing) for this long (ms): nobody counts as in front of the
+     * camera and the calibration dialog comes up. Shorter gaps only pause the game softly ("Tracking lost", or the
+     * out-of-frame box), with the calibration kept. Someone in view but off centre only pauses softly, however long.
      */
-    maxOffCentre: 0.25,
-    /** off centre this long: nobody counts as in front of the camera (calibration dialog) */
+    personGoneAfterMs: 3000,
+    /**
+     * the torso's centre (between shoulders and hips) further than this (fraction of frame width) from the middle is
+     * off centre: the player has wandered off, or the tracker has picked someone else in the room. 0.3: a player
+     * leaning into a big sideways flight or stepping aside has the torso centre swing out; 0.25 made that count
+     * as off centre too often, and it only pauses the game softly now.
+     */
+    maxOffCentre: 0.3,
+    /** off centre this long: the game pauses softly (the "move to the middle" hint), for as long as it lasts */
     offCentreAfterMs: 600,
     /** while off centre, the pose tracker forgets who it follows and looks again, at most this often */
     redetectEveryMs: 1500,
@@ -212,15 +287,23 @@ export const config = {
    * shoulder → wrist, as seen on the screen:
    * - both arms hanging down → no force: the bird rests, or falls freely with its momentum fading
    * - both arms pointing the same way → the bird flies that way at `cruiseSpeed` (almost any direction)
+   * - both arms raised in a V (`vUp`) → the bird flies up at `cruiseSpeed` (a lopsided V: up and to the side)
+   * - one arm pointing while the other hangs (`oneArm`) → the bird flies where it points, a little slower
    * - a T (arms spread out, roughly level) → hover: the bird keeps its place in the air
    * - a tilted T → the bird moves slowly (`driftSpeed`) sideways towards the lower hand, keeping its altitude
+   * `continuous` replaces the poses with a velocity that follows the arms smoothly (off by default).
    * Pooping is the same as in flapping mode (`shoot`).
    */
   pointing: {
     /** off (default): pointing control. on: flapping + tilt + hover */
     flapping: false,
-    /** EMA factor for the arm directions per pose frame (lower = steadier, laggier) */
-    smoothing: 0.4,
+    /**
+     * time constant (ms) of the smoothing of the arm directions, on top of the One-Euro filter (higher = steadier,
+     * laggier). In ms, not per frame, so a slower camera doesn't make it laggier. 35: like an EMA factor of 0.7 at
+     * 23 fps; the old 0.4 per frame (~95 ms at 23 fps) added ~60 ms of delay to every change of direction. Part of
+     * the `fixed` arm smoothing only (`smoothing.arms`: off and auto skip it).
+     */
+    smoothingMs: 35,
     /** arms within this (deg) of straight down are hanging: rest */
     restCone: 35,
     /** T: each arm may be raised or lowered this much (deg) from level */
@@ -231,18 +314,134 @@ export const config = {
     tiltDeadZone: 15,
     /** once drifting, keeps drifting down to `tiltDeadZone` minus this (deg), so it doesn't flicker at the edge */
     tiltHysteresis: 5,
-    /** pointing: the two arms may differ in direction by up to this (deg) and still count as pointing together */
-    parallelMax: 40,
-    /** a new pose must hold this long (ms) before the bird follows it */
-    enterMs: 100,
+    /**
+     * pointing: the two arms may differ in direction by up to this (deg) and still count as pointing together.
+     * 40 -> 50: on the recordings of play 7-10% of the time the arms were 40-60 deg apart, matching no pose, and the
+     * bird dropped to rest after `ambiguousMs`; at 50 it rests ~11-15% less and flies ~22-30% more, with no more
+     * flicker, the flying direction a little less steady (the average of two arms further apart)
+     */
+    parallelMax: 50,
+    /**
+     * arms raised in a V (both above level, too high for a T, too far apart to point together) fly the bird up, or
+     * up and to the side for a lopsided V, at `cruiseSpeed`. Off: a V matches no pose, and after `ambiguousMs` the
+     * bird drops to rest. On the recordings of play a V was 9-17% of play, the commonest pose matching nothing; with
+     * it the time matching no pose fell from 22-36% to 14-19%, the drops for want of a pose from 11-15 to 8-10
+     */
+    vUp: true,
+    /**
+     * V: each arm at least this far (deg) above level. On the recordings an arm 10-20 deg above level in a V came
+     * between flights up; below 10 it was mostly on the way between a tilted T and a flight up. 15 against 0:
+     * unmatched 14 / 19 / 15% of play instead of 13 / 14 / 14%, but a steep tilted T stays a tilted T
+     */
+    vMinArm: 15,
+    /**
+     * once flying, a V this much lower (deg, both `vMinArm` and the arms' average against `tMaxRaise`) still flies.
+     * 0 -> 5: mode switches 50 -> 44 per minute on one recording, flicker 6 -> 5; 10 keeps flying up too long when
+     * the arms come down to a T (the bird follows it ~30 ms later at the 90th percentile)
+     */
+    vHysteresis: 5,
+    /** a new pose must hold this long (ms) before the bird follows it (100 -> 60: ~20 ms faster, no more flicker on the recordings) */
+    enterMs: 60,
+    /**
+     * one arm steering: one arm hanging (within `restCone` of straight down) and the other pointing flies the bird
+     * where that arm points, a little slower than both arms do. Off: it matches no pose, and after `ambiguousMs` the
+     * bird drops to rest. It only reads what matched nothing before (a hanging arm 25-35° out with the other within
+     * the T's range is still a tilted T, towards the lower hand). A second, smaller player held it for seconds
+     * (2026-11-10-drugi-gracz-2: one arm straight up, the other down, the bird left on the ground), and so did the
+     * first in practice: with it the time matching no pose fell from 15.4 to 10.6% and from 11.9 to 7.4% of play on
+     * those two recordings, the drops for want of a pose from 10 (5.3 s) to 9 (2.8 s) and from 5 (5.3 s) to 4 (2.7 s);
+     * nothing else reads differently. With continuous steering the same, blended in smoothly (`oneArmWeight`)
+     */
+    oneArm: true,
+    /**
+     * one arm: the flying speed as a fraction of `cruiseSpeed`. 0.7: 4.9 px per step against 7 with both arms and
+     * 1.8 drifting, so "a little slower" shows without the second arm feeling needed; the change between the two
+     * (2.1 px per step) is well under a jolt (5 within 100 ms)
+     */
+    oneArmSpeed: 0.7,
+    /**
+     * one arm: the pointing arm is at least this far (deg) from straight down (60: up to 30° below level). On the
+     * recordings an arm 35-55° from straight down beside a hanging one was arms on their way or a sloppy rest (up
+     * to 4.5% of play): at 45 three more flights, none of them meant (0.2 s twice with the arms on their way, 0.6 s
+     * out of a rest); 70 reads the same flights as 60
+     */
+    oneArmMinOut: 60,
+    /** one arm: once flying by one arm, both limits (`restCone`, `oneArmMinOut`) are this much (deg) more lenient */
+    oneArmHysteresis: 5,
+    /**
+     * one arm: the pose must hold this long (ms) before the bird flies by it; a flight by both arms carries on as it
+     * was meanwhile. Longer than `enterMs`: arms raised or lowered one after the other pass through the pose. On the
+     * recordings those passes lasted 34-305 ms, the poses held on purpose 340 ms to 1.3 s; at 60 the arms coming
+     * down from a tilted T flew the bird for ~0.3 s three times and an arm going up once, at 150-200 once, at 300
+     * never
+     */
+    oneArmEnterMs: 300,
+    /**
+     * one arm: time constant (ms) of the speed's change between both arms and one arm, so it eases rather than
+     * steps (150: at most 0.75 px per step from one camera frame to the next on the recordings, 2.1 at 0)
+     */
+    oneArmBlendMs: 150,
     /** arms matching no pose keep the current one for this long (ms), then the bird rests */
     ambiguousMs: 400,
     /** flying speed while pointing, px per physics step */
     cruiseSpeed: 7,
     /** tilted T: sideways speed, px per physics step */
     driftSpeed: 1.8,
-    /** how quickly the bird reaches its speed (or stops, in the hover), px/s² */
-    accel: 1800,
+    /**
+     * a tilted T with the arms lowered descends diagonally, towards the lower hand: the lower the arms (their
+     * average below level), the faster it sinks; level ones keep the altitude as before, and a lowered T that is
+     * not tilted still hovers. Off: a tilted T always keeps its altitude. On the recordings of play a lowered
+     * tilted T was held for seconds (2026-11-09-gra-po-strojeniu) and next to never elsewhere
+     */
+    descend: true,
+    /** the arms' average this far below level (deg) starts the descent, held `enterMs`... */
+    descendEnter: 20,
+    /** ...and it goes on until they are back above this (deg), so it doesn't flicker at the edge */
+    descendExit: 15,
+    /** sinking speed: none at `descendZero` deg below level, rising to `descendSpeed` (px per physics step) at `descendFull` */
+    descendZero: 15,
+    descendFull: 35,
+    descendSpeed: 1.8,
+    /** time constant (ms) of the sinking speed's changes, so starting or stopping the descent doesn't jolt */
+    descendSmoothMs: 80,
+    /**
+     * continuous steering, for an A/B in play (off: the poses above). The arms ask for a velocity every frame, with
+     * no poses to match and nothing to wait for but the rest: the mean of the two arms' directions flies the bird
+     * that way, faster the more they point together (`togetherZero` .. `togetherFull`; parallel arms at
+     * `cruiseSpeed`, as now); what is left of it is a T: a tilted one drifts towards the lower hand (`tiltDeadZone`
+     * .. `tiltFull`), a lowered tilted one also descends (`descend*`). With the arms spread, every sideways move goes
+     * towards the lower hand (a lopsided V climbs that way, a lowered tilted T descends that way: 97% of the descent
+     * on a recording, 74% before; lowered until the lower arm hangs it is one arm pointing, `oneArm`). So a V climbs, faster the higher the arms, and arms low and apart descend. Only
+     * the arms hanging (`restCone`) let the bird fall; `ambiguousMs`, `tMaxArm`, `tMaxRaise`, `parallelMax`, `vUp`
+     * and the hystereses don't apply. On the recordings of play (open loop: the player steered the poses' bird) no
+     * time at all without a command (14-19% with the poses), no drops for want of one (9-10 a minute), no jolts, and
+     * the velocity asked for lags the arms 48-83 ms instead of 105-159
+     */
+    continuous: false,
+    /**
+     * continuous steering: how much the arms point together is the length of the mean of their two unit directions
+     * (1: parallel, 0: a T, tilted or not; a V or an A with each arm 45° from level 0.71). At or below this, none of
+     * the flight: the T's hover, drift or descent, so a V climbs from ~33° above level. Where the poses read a level
+     * T on the recordings of play, the bird's speed p90 was 1.9-3.0 px per step at 0.35 (the review's prototype),
+     * 0.6-1.6 at 0.45, 0.1-0.8 at 0.5 and 0-0.1 at 0.55 (median 0 from 0.45); a V's speed (p50, of cruise) 0.96 at
+     * 0.35, 0.90 at 0.55
+     */
+    togetherZero: 0.55,
+    /** continuous steering: at or above this (the arms within ~60° of each other), all flight, at `cruiseSpeed` */
+    togetherFull: 0.85,
+    /**
+     * continuous steering: the tilted T's drift (and descent) rises from none at `tiltDeadZone` to full at this tilt
+     * (deg). Where the poses read a drift on the recordings, the speed p50 1.80 at 25 (1.47-1.80 at 30), p10 0-0.5
+     * (1.3 at 20, a near step)
+     */
+    tiltFull: 25,
+    /**
+     * how quickly the bird reaches its speed (or stops, in the hover), px/s². 2400: half the cruising speed in a new
+     * direction after ~90 ms, a turn round in ~350 ms. 3600 felt abrupt in play: with Matter.js, 8-13 jolts per
+     * minute (the speed changing more than 5 px per step within 100 ms) on the recordings of play, none at 2400;
+     * 1800 lagged (a turn round ~470 ms)
+     */
+    accel: 2400,
     /** rest: fraction of the sideways and upward speed lost per physics step */
     restDrag: 0.08,
     /** Matter.js frictionAir while flying, hovering or drifting (rest: physics.birdAirFriction) */

@@ -19,7 +19,7 @@ import { Apple } from './Apple';
 import { Background } from './Background';
 import { Bat } from './Bat';
 import { HomingField, inSight } from './homing';
-import { Bird } from './Bird';
+import { Bird, type BirdSample } from './Bird';
 import { Button } from './Button';
 import { Coin } from './Coin';
 import { Friend } from './Friend';
@@ -66,6 +66,10 @@ export class Game {
   /** "Game Over" or "Hooray" is on screen; the game can't be paused meanwhile */
   get showingSign() {
     return this.over || this.complete;
+  }
+  /** The bird's state now (world px, px per physics step), written into `out`: read-only, allocates nothing. */
+  birdState(out: BirdSample): BirdSample {
+    return this.bird.sample(out);
   }
   /** latest controls; set by main from pose + keyboard */
   controls: Controls = noControls();

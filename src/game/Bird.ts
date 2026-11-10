@@ -6,10 +6,34 @@ import type { Branch } from '../level/types';
 import { landingBranch } from './branches';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { climbPitch, flightStep, leanFor, liftShare, sideAmount, smoothLift } from './flight';
-import { pointingLean, pointingStep } from './pointing';
+import { pointingFlapRate, pointingLean, pointingStep } from './pointing';
 import { BIRD_GROUP, Bodies, Body, forceFor, Query, type MBody } from './physics';
 
 type BirdAnim = keyof typeof birdDef.animations;
+
+/**
+ * continuous steering: on the ground, no lift-off within this long (ms) of the command asking to descend. A slow
+ * descent's sink comes and goes from one camera frame to the next (on the recordings of play it starts or stops
+ * within 200 ms of its last change 8-16 times each), and each gap would kick the bird up only for the descent to
+ * bring it back. 150 ms is about 4 camera frames.
+ */
+const LIFT_AFTER_DESCENT_MS = 150;
+
+/** The bird's state at a moment, for the black box (`Bird.sample`, `Game.birdState`). */
+export interface BirdSample {
+  /** centre, world px */
+  x: number;
+  y: number;
+  /** velocity, world px per physics step (`STEP_MS`), y down */
+  vx: number;
+  vy: number;
+  /** standing on the ground or on something, or sitting on a branch (`Bird.onGround`) */
+  onGround: boolean;
+  /** sitting on a branch */
+  perched: boolean;
+  /** knocked off by the villain, falling off the screen (outside the physics world) */
+  dying: boolean;
+}
 
 /** Knocked off by the villain: falls off the screen on its side (animated by hand, outside the physics world). */
 interface Death {
@@ -45,6 +69,12 @@ export class Bird {
   private pointing = false;
   /** pointing control is flying it (not resting): it skims along whatever it touches, with no grip */
   private propelled = false;
+  /**
+   * continuous steering on the ground or a branch (`pointing.continuous`): the command asks it to move off (not a
+   * hover), debounced; and how long (ms, unbroken) the command has asked to move or to stay, and since it last asked
+   * to descend. Null: not under continuous steering last step
+   */
+  private ground: { go: boolean; goMs: number; stayMs: number; sinceDescendMs: number } | null = null;
   /** current lean, radians (eased towards the direction of sideways flight) */
   private bankAngle = 0;
   /** sitting on a branch (set by `perchOn` after each physics step) */
@@ -89,6 +119,20 @@ export class Bird {
   /** ms since dying, or null when alive */
   get deathMs(): number | null {
     return this.death?.t ?? null;
+  }
+
+  /** The state now, written into `out` (allocates nothing): the body, or the death fall while dying. */
+  sample(out: BirdSample): BirdSample {
+    const d = this.death;
+    const b = this.body;
+    out.x = d ? d.x : b.position.x;
+    out.y = d ? d.y : b.position.y;
+    out.vx = d ? d.vx : b.velocity.x;
+    out.vy = d ? d.vy : b.velocity.y;
+    out.onGround = !d && this.onGround;
+    out.perched = !d && this.perched;
+    out.dying = !!d;
+    return out;
   }
 
   /** the death fall has left the bottom of the screen */
@@ -176,6 +220,26 @@ export class Bird {
     return true;
   }
 
+  /**
+   * Continuous steering (the intent carries a velocity, not the rest): what it asks of the bird on the ground or a
+   * branch, updated every step; null otherwise. Moving off (anything but a hover) and staying put take over from each
+   * other only once held `enterMs` unbroken, so a command around the hover's threshold neither makes the bird
+   * shuffle between gripping the floor and skimming it nor hop; the first command after the rest counts at once (the
+   * detector already debounced leaving the rest).
+   */
+  private continuousOnGround(c: Controls, stepMs: number) {
+    const p = c.pointing;
+    if (!p || p.mode === 'rest' || p.vx === undefined) return (this.ground = null);
+    const go = p.mode !== 'hover';
+    const g = (this.ground ??= { go, goMs: 0, stayMs: 0, sinceDescendMs: Infinity });
+    g.goMs = go ? g.goMs + stepMs : 0;
+    g.stayMs = go ? 0 : g.stayMs + stepMs;
+    if (g.goMs >= config.pointing.enterMs) g.go = true;
+    else if (g.stayMs >= config.pointing.enterMs) g.go = false;
+    g.sinceDescendMs = (p.vy ?? 0) > 0 ? 0 : g.sinceDescendMs + stepMs;
+    return g;
+  }
+
   /** Physics step: flap lift, sideways flight and the hover; clamp speed, advance squash. */
   step(c: Controls, stepMs: number, drop: () => void) {
     const d = this.death;
@@ -189,8 +253,11 @@ export class Bird {
     const b = this.body;
     this.invulnT = Math.max(0, this.invulnT - stepMs);
     const p = c.pointing;
-    // pointing: flying (and drifting) can take off from the ground or a branch; the rest only acts in the air
-    this.pointing = p !== null && (p.mode === 'fly' || p.mode === 'drift' || !this.onGround);
+    const ground = this.continuousOnGround(c, stepMs);
+    // pointing: flying (and drifting) can take off from the ground or a branch; the rest only acts in the air.
+    // Continuous steering: once the command has asked to move off for `enterMs` (its label is only a label, and
+    // changes far more often than the poses did)
+    this.pointing = p !== null && ((ground ? ground.go : p.mode === 'fly' || p.mode === 'drift') || !this.onGround);
     this.propelled = this.pointing && p!.mode !== 'rest';
     b.frictionAir = this.propelled ? config.pointing.airFriction : config.physics.birdAirFriction;
     // the floor under it grips, a wall beside it doesn't. Flown by pointing control, it doesn't either: skimming
@@ -213,10 +280,15 @@ export class Bird {
     }
     // pointing control, a tilted T on the floor: the same lift-off, rising `liftOffHeight` to drift just above it.
     // Gravity is cancelled there, so the kick is from the pointing accel, which then tops it out at that height
-    if (this.pointing && p!.mode === 'drift' && this.onGround) {
-      const aStep = config.pointing.accel * (stepMs / 1000) ** 2;
-      Body.setVelocity(b, { x: b.velocity.x, y: -Math.sqrt(2 * aStep * config.tilt.liftOffHeight) });
-    }
+    // (not while descending: the lowered arms ask for the floor). Continuous steering, from the velocity asked for
+    // rather than the label: whatever moves it off, unless it asked to descend lately (a slow descent
+    // whose sink comes and goes from frame to frame would land, kick and land again) or climbs faster than the kick
+    const aStep = config.pointing.accel * (stepMs / 1000) ** 2;
+    const kick = Math.sqrt(2 * aStep * config.tilt.liftOffHeight);
+    const liftOff = ground
+      ? ground.sinceDescendMs >= LIFT_AFTER_DESCENT_MS && -(p!.vy ?? 0) < kick
+      : p?.mode === 'drift' && !p.sink;
+    if (this.pointing && liftOff && this.onGround) Body.setVelocity(b, { x: b.velocity.x, y: -kick });
     // the wingbeats' lift, smoothed (so climbs are straight lines, level or tilted), less of it going up when tilted;
     // flying just above the floor, the weak lift that doesn't climb out of it is ignored (gravity is cancelled there)
     const flapLift = this.liftingOff ? 0 : c.lift;
@@ -277,8 +349,8 @@ export class Bird {
 
     const p = this.pointing ? c.pointing : null;
     // pointing control: flap while flying; hovering or drifting, the wings beat fast as in the flapping mode's hover
-    if (p?.mode === 'fly') this.sprite.play('flap', config.pointing.flapRate);
-    else if (p && p.mode !== 'rest') this.sprite.play('flap', config.tilt.holdFlapRate);
+    const pointingRate = p ? pointingFlapRate(p) : null;
+    if (pointingRate !== null) this.sprite.play('flap', pointingRate);
     else if (this.onGround && c.lift < 50 && !c.flapping) this.sprite.play('idle');
     // flapping mode, the player flapping (the smoothed lift at least a quarter of gravity): the wings beat fast, as
     // in sideways flight, level or tilted

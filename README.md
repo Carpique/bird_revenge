@@ -21,9 +21,14 @@ By default the arms steer the bird by **pointing** (directions as seen on screen
 |---|---|
 | both hanging down | no force: rests, or falls freely with its momentum fading |
 | both straight, pointing the same way | flies that way at a fixed cruising speed (almost any direction, up, sideways, diagonally, down) |
+| both raised in a V (each at least ~15° above level, too high for a T) | flies up at the cruising speed; a lopsided V flies up and towards the lower arm (switch off: tuning panel **G**, *pointing* → vUp) |
+| one hanging down, the other pointing (up, sideways, across the body; at least ~30° below level), held for a moment (~0.3 s) | flies where that arm points, a little slower (0.7 of the cruising speed); raising the other arm to point along brings the full speed back smoothly (switch off: tuning panel **G**, *pointing* → oneArm) |
 | spread out in a T (a sloppy T, slightly raised or drooping, counts) | hovers in place |
 | a tilted T (one hand clearly lower) | moves slowly sideways towards the lower hand, keeping its altitude: for precise positioning |
+| a tilted T with both arms lowered (on average ~20° or more below level) | descends diagonally towards the lower hand, steeper the lower the arms (switch off: tuning panel **G**, *pointing* → descend) |
 | a leg raised sideways (the shoot pose) | poos (the poo drops straight down) |
+
+**Continuous steering** is an alternative way of pointing, off by default, for trying out in play: tuning panel **G**, *pointing* → continuous. There are no poses to match: the arms always ask for a velocity, and only both hanging down lets the bird fall. The more the two arms point the same way, the more the bird flies where they point together (parallel arms at the cruising speed, as above); a T hovers, a tilted T drifts towards the lower hand and descends when lowered, as above. With the arms spread out to their sides the bird always moves sideways towards the lower hand: a lopsided V climbs that way, a lowered tilted T descends diagonally that way, however low. In between the speed follows the arms: a V climbs, faster the higher the arms; arms low and apart descend; one arm hanging and the other pointing flies where it points at 0.7 of the cruising speed, as above (it comes in once the pose has lasted ~0.3 s: until then the bird hovers, or flies on as it was; with *oneArm* off, the other arm held level flies diagonally down and raised it hovers).
 
 **Flapping mode** is the alternative: tick "Flapping (off: pointing)" in the tuning panel (**G**, section *pointing*). It replaces pointing with flapping, tilt and hover (pooping stays the same). The keyboard works the same in both modes:
 
@@ -36,11 +41,13 @@ By default the arms steer the bird by **pointing** (directions as seen on screen
 
 Hotkeys: **D** debug panel · **G** tuning panel · **Esc** keyboard-only mode · **C** recalibrate ·
 **Space** / **P** pause in game (also automatic when the window loses focus; camera and pose tracking are switched off while paused or unfocused) · **R** start/stop recording landmarks to a JSON file.
+**B** save the black box: the last 60 s (by time, whatever the frame rate) of MediaPipe's raw landmarks (before smoothing, with visibility, depth z and empty frames) plus the game state per frame, what the pose made of it (the pointing intent the bird was given, the bird's position and velocity, camera frames dropped and long render frames before the frame) and the calibrations (the shoot baseline and the arms' noise measured during the hold), so a replay smooths, stands in for hidden arms and shoots as the game did, as `black-box-<time>.json` in the downloads. It stays on the device and is a pose recording the replay tests load directly (`parseBlackBox` in `src/pose/blackBox.ts`, `tests/replay/`; `blackBoxEffect` reads the intent and the bird back, see `tests/replay/recordings/README.md`). The debug panel (**D**) also shows local tracking telemetry: the processed frame rate next to the camera's own (they differ: frames arriving while the main thread runs inference are never seen), camera frames dropped (share over the last 10 s and over the session; without frame metadata the panel says drops cannot be seen), where the frame time comes from (`capture` / `media` / `callback`) and the median capture latency, render frames longer than `telemetry.longRenderMs` (25 ms), inference time (p50 / p95), runs of frames without a person, hitches, recalibrations and out-of-frame episodes by cause, the model and delegate (and whether the GPU one fell back to CPU), and the arms' smoothing (`smoothing.arms`: the filter in force and the noise the calibration measured).
 
 ## Tuning
 
 Press **G** for live sliders over everything in `src/config.ts` (flap gains, tilt and hover feel, shoot thresholds,
-visibility timing, physics). "save" stores your values in this browser; "copy changes as JSON" copies only the values that differ from the defaults, to
+visibility timing, physics; `smoothing.arms` switches the arms' smoothing between today's chain, none and one stage
+matched to the noise measured at calibration, see `ARCHITECTURE.md`). "save" stores your values in this browser; "copy changes as JSON" copies only the values that differ from the defaults, to
 paste into `src/config.ts` to make them the defaults.
 
 Press **D** to see the camera skeleton, a 5-second plot of arm angles / lift / shoot hip angle, and
@@ -83,4 +90,8 @@ skips the start screen and plays only that level, again each time it's completed
 npm test
 ```
 
-Gesture detectors are tested on synthetic poses (`tests/synthetic.ts`), no camera needed.
+Gesture detectors are tested on synthetic poses (`tests/synthetic.ts`), no camera needed. `tests/replay/` replays recorded pose
+sessions (the tutorial's, and any put in `tests/replay/recordings/`) through the real tracking pipeline and the game's rules on the
+pose stream (`src/input/poseSession.ts`), with perturbations (lost frames, hitches, low visibility, jitter, ...), and pins what the
+game does: `npx vitest run tests/replay/metrics.test.ts` prints the numbers for comparing before / after a change in tracking.
+Deploys run the tests and the type check first (`.github/workflows/deploy.yml`).
