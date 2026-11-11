@@ -1,4 +1,4 @@
-import { Rectangle, type Container } from 'pixi.js';
+import { Container, Rectangle } from 'pixi.js';
 import rough from 'roughjs';
 import type { VisibilityOutput } from '../gestures/VisibilityMonitor';
 import { L, PART_NAMES, REQUIRED_PARTS, type PartName } from '../pose/landmarks';
@@ -7,11 +7,12 @@ import { worldFit } from '../render/fitWorld';
 import { scenery } from '../scenery/scenery';
 import { WORLD } from '../config';
 import { audio } from '../audio/audio';
-import { BIG_FILL, BIG_OUTLINE, bigTextStyle, GLOW, INK, TEXT_FONT as FONT } from './fonts';
+import { BIG_FILL, BIG_OUTLINE, BIG_SHADOW, bigTextStyle, GLOW, INK, TEXT_FONT as FONT } from './fonts';
 import { GlowText } from './GlowText';
 import { t } from './i18n';
+import { ITEM_STYLE, SELECTED_GLOW, SELECTED_SCALE } from './Menu';
 
-export type GuideMode = 'hidden' | 'loading' | 'calibrate' | 'outOfFrame' | 'countdown' | 'demo';
+export type GuideMode = 'hidden' | 'loading' | 'calibrate' | 'outOfFrame' | 'countdown' | 'demo' | 'cameraAsk';
 
 export interface GuideState {
   mode: GuideMode;
@@ -21,6 +22,10 @@ export interface GuideState {
   hint?: string;
   /** show `message` as an error (red) */
   error?: boolean;
+  /** the camera panel's buttons hidden (the browser's prompt is open) */
+  busy?: boolean;
+  /** the camera panel's figure plays `frame` (a recording's, `aspect` wide): its usual hip height and torso length, to place it steadily */
+  clip?: { hipY: number; torso: number };
   /** 0..1 calibration hold progress */
   progress?: number;
   /** seconds left in countdown */
@@ -72,11 +77,16 @@ const DIALOG_ASPECT = 0.75;
 /** world px: the title's size (the level select's) and the space under it */
 const DIALOG_TITLE = 110;
 const TITLE_GAP = 24;
-/** world px: the dialog's "Back" under the panel (like the instructions page's), and the space above it */
-const DIALOG_BACK = 38;
-const BACK_GAP = 14;
-/** world px: the space between "Back" and "No camera", side by side under the panel, centred on it */
-const BUTTONS_GAP = 50;
+/** world px: the dialog's "Ignore" under the panel, a menu item never selected, and the space above it */
+const DIALOG_BUTTON = 38;
+const BUTTON_GAP = 14;
+
+/**
+ * The panel asking to share the camera, in world px: its width, its padding (roomier than the pose panels') and its
+ * scene's width / height (`SCENE`); at its bottom, inside, the two buttons, menu items `buttonScale` times as big,
+ * `buttonGap` below the message and `between` apart.
+ */
+const ASK = { width: 760, padding: 40, sceneAspect: 2, buttonScale: 0.8, buttonGap: 44, between: 90 };
 /** world px: the countdown's digits, as big as the game's big signs ("Game Over") */
 const COUNTDOWN_SIZE = 180;
 
@@ -100,6 +110,32 @@ const OUTLINE: Figure = {
   leftLeg: { kind: 'path', pts: [[0.47, 0.56], [0.455, 0.73], [0.44, 0.9]] },
   rightLeg: { kind: 'path', pts: [[0.53, 0.56], [0.545, 0.73], [0.56, 0.9]] },
 };
+
+/**
+ * The camera panel's scene, in its height's units (x: 0..`ASK.sceneAspect`, y: 0..1 down): a laptop on a table on the
+ * left, seen from the side, its camera's view reaching the player on the right, who faces us like a cartoon (the
+ * tutorial's recorded moves, looped; `OUTLINE` until they're loaded).
+ */
+const SCENE = {
+  floor: 0.93,
+  table: { left: 0.16, right: 0.62, top: 0.62, legsIn: 0.04, color: '#8a5a33' },
+  /** the laptop's base and its lid, open towards the player; the camera at the lid's top */
+  laptop: {
+    base: [[0.29, 0.62], [0.53, 0.62], [0.53, 0.603], [0.29, 0.603]] as P[],
+    lid: [[0.29, 0.612], [0.307, 0.612], [0.282, 0.37], [0.265, 0.37]] as P[],
+    camera: [0.288, 0.385] as P,
+    color: '#5d6d74',
+  },
+  /** the player: the hip centre here, the torso this long (as `OUTLINE`'s is in its camera image) */
+  player: { hipX: 1.42, hipY: 0.58, torso: 0.26 },
+  /**
+   * the camera's view: spreading towards the player through `top` and `bottom` at the right edge of the player's box
+   * (`OUTLINE`'s, steady while the figure moves), its edges blurred `blur` wide (kept inside the scene, which clips it)
+   */
+  view: { top: 0.1, bottom: 0.95, blur: 0.05, alpha: 0.7 },
+};
+/** `OUTLINE`'s hip centre, torso length and camera image's width / height, to place it like a recorded figure */
+const OUTLINE_PLACE = { hipX: 0.5, hipY: 0.56, torso: 0.26, aspect: 16 / 9 };
 
 /** the head's radius in `OUTLINE`, relative to its torso's length (shoulders to hips) */
 const HEAD_PER_TORSO = 0.055 / 0.26;
@@ -147,15 +183,18 @@ export class FrameGuide {
   private title = new GlowText('', bigTextStyle(DIALOG_TITLE));
   /** the countdown's digit, styled like the titles */
   private countdown = new GlowText('', bigTextStyle(COUNTDOWN_SIZE));
-  /** the dialog's "Back", under the panel: tapped, `onBack` */
-  private back = new GlowText('', bigTextStyle(DIALOG_BACK, FONT));
-  /** the calibration dialog's "Back" was chosen */
-  onBack: () => void = () => {};
-  /** beside "Back": play without the camera; tapped, `onNoCamera` */
-  private noCamera = new GlowText('', bigTextStyle(DIALOG_BACK, FONT));
-  onNoCamera: () => void = () => {};
-  /** offer "No camera" (a touch screen; with a keyboard, Esc does it) */
-  showNoCamera = false;
+  /** the calibration dialog's "Ignore", under the panel: play without the camera; tapped, `onIgnore` */
+  private ignore = new GlowText('', ITEM_STYLE);
+  onIgnore: () => void = () => {};
+  /**
+   * the camera panel's buttons, "Share" (`onShare`) and "Ignore" (`onAskIgnore`), `askSelected` of them highlighted:
+   * drawn on this canvas, inside the panel (PixiJS text would be under it); these are only where they're tapped
+   */
+  private share = new Container();
+  private askIgnore = new Container();
+  onShare: () => void = () => {};
+  onAskIgnore: () => void = () => {};
+  askSelected = 0;
 
   /** `stage`: the game's (unscaled), for the dialog's title, on top of everything else there */
   constructor(
@@ -167,7 +206,7 @@ export class FrameGuide {
     this.rc = rough.canvas(canvas);
     this.title.visible = false;
     this.countdown.visible = false;
-    const button = (b: GlowText, tapped: () => void) => {
+    const button = (b: Container, tapped: () => void) => {
       b.visible = false;
       b.eventMode = 'static';
       b.cursor = 'pointer';
@@ -176,8 +215,24 @@ export class FrameGuide {
         tapped();
       });
     };
-    button(this.back, () => this.onBack());
-    button(this.noCamera, () => this.onNoCamera());
+    button(this.ignore, () => this.onIgnore());
+    button(this.share, () => this.onShare());
+    button(this.askIgnore, () => this.onAskIgnore());
+    // like the menus: hovering selects
+    this.share.on('pointerover', () => (this.askSelected = 0));
+    this.askIgnore.on('pointerover', () => (this.askSelected = 1));
+  }
+
+  /** The camera panel's keys: ← → (A D, ↑ ↓ too) move between its buttons, Enter or Space chooses. Returns whether the key was used. */
+  askKey(k: string): boolean {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'a', 'd', 'w', 's'].includes(k)) {
+      this.askSelected = 1 - this.askSelected;
+      audio.play('button');
+    } else if (k === 'Enter' || k === ' ') {
+      audio.play('button');
+      (this.askSelected === 0 ? this.onShare : this.onAskIgnore)();
+    } else return false;
+    return true;
   }
 
   /** `item` on top of the game's stage */
@@ -203,8 +258,9 @@ export class FrameGuide {
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.title.visible = false;
     this.countdown.visible = false;
-    this.back.visible = false;
-    this.noCamera.visible = false;
+    this.ignore.visible = false;
+    this.share.visible = false;
+    this.askIgnore.visible = false;
     if (s.mode === 'hidden') return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -226,6 +282,9 @@ export class FrameGuide {
         break;
       case 'demo':
         this.drawDemoPanel(s, W, H, now);
+        break;
+      case 'cameraAsk':
+        this.drawCameraAsk(s, W, H, now);
         break;
     }
   }
@@ -256,38 +315,172 @@ export class FrameGuide {
     title.scale.set(k * Math.min(1, (W * 0.95) / (k * title.width)));
     const titleH = title.textHeight * title.scale.y;
     const gap = TITLE_GAP * k;
-    const back = this.back;
-    back.text = t('Back');
-    back.scale.set(k);
-    const backH = back.textHeight * k, backGap = BACK_GAP * k;
+    const ignore = this.ignore;
+    ignore.text = t('Ignore');
+    const bk = (k * DIALOG_BUTTON) / Number(ITEM_STYLE.fontSize);
+    ignore.scale.set(bk);
+    const buttonH = ignore.textHeight * bk, buttonGap = BUTTON_GAP * k;
     const total = H * DIALOG_HEIGHT;
-    const h = total - titleH - gap - backGap - backH, w = Math.min(W * 0.9, h * DIALOG_ASPECT);
+    const h = total - titleH - gap - buttonGap - buttonH, w = Math.min(W * 0.9, h * DIALOG_ASPECT);
     const top = (H - total) / 2;
     title.position.set(W / 2, top + titleH / 2);
     this.onTop(title);
-    const y = top + total - backH / 2;
-    const hitTop = -(backGap + backH / 2) / k, hitH = (backGap + backH / 2 + (H - top - total) + backH / 2) / k;
+    ignore.position.set(W / 2, top + total - buttonH / 2);
     // easy to tap: from the panel's bottom to the screen's, the whole width of the panel (in its own scale)
-    const hit = (b: GlowText, x0: number, x1: number) => (b.hitArea = new Rectangle((x0 - b.x) / k, hitTop, (x1 - x0) / k, hitH));
-    if (this.showNoCamera) {
-      // "Back" and "No camera" side by side, the gap between them in the middle of the panel; each tappable on its half
-      const noCamera = this.noCamera;
-      noCamera.text = t('No camera');
-      noCamera.scale.set(k);
-      const between = BUTTONS_GAP * k;
-      back.position.set(W / 2 - between / 2 - (back.textWidth * k) / 2, y);
-      noCamera.position.set(W / 2 + between / 2 + (noCamera.textWidth * k) / 2, y);
-      hit(back, Math.min(back.x - (back.textWidth * k) / 2, (W - w) / 2), W / 2);
-      hit(noCamera, W / 2, Math.max(noCamera.x + (noCamera.textWidth * k) / 2, (W + w) / 2));
-      this.onTop(noCamera);
-    } else {
-      back.position.set(W / 2, y);
-      hit(back, (W - w) / 2, (W + w) / 2);
-    }
-    this.onTop(back);
+    const hitTop = -(buttonGap + buttonH / 2), hitH = buttonGap + buttonH / 2 + (H - top - total) + buttonH / 2;
+    ignore.hitArea = new Rectangle(-w / 2 / bk, hitTop / bk, w / bk, hitH / bk);
+    this.onTop(ignore);
 
     const box: Rect = { x: (W - w) / 2, y: top + titleH + gap, w, h };
     this.drawPanel(box, 1, s, now, { message: s.message ?? '', hint: s.hint, error: s.error, progress: s.progress ?? 0 });
+  }
+
+  /**
+   * The panel asking to share the camera, centred over the dimmed game (or title screen): the scene (`SCENE`, the
+   * player playing the tutorial's moves), the message and at the bottom "Share" and "Ignore", styled like a menu's items, `askSelected` highlighted;
+   * no buttons while `busy`. Scaled like the game, smaller if it wouldn't fit.
+   */
+  private drawCameraAsk(s: GuideState, W: number, H: number, now: number) {
+    const fit = worldFit(W, H);
+    const { text } = PANEL;
+    const pad = ASK.padding;
+    // its height in world px, the message wrapped as it will be drawn (the same lines at any scale)
+    const inner = ASK.width - 2 * pad;
+    this.ctx.font = `${text.size}px ${FONT}`;
+    const lines = this.wrap(s.message ?? '', inner).length;
+    const sceneH = inner / ASK.sceneAspect;
+    const buttons = [this.share, this.askIgnore];
+    const labels = [t('Share'), t('Ignore')];
+    const itemSize = Number(ITEM_STYLE.fontSize);
+    const buttonH = itemSize * ASK.buttonScale;
+    const below = ASK.buttonGap + buttonH;
+    const panelH = pad + sceneH + lines * text.lineHeight + pad * 1.3 + below;
+    const k = Math.min(fit.scale, (H * 0.94) / panelH, (W * 0.94) / ASK.width);
+
+    const box: Rect = { x: (W - ASK.width * k) / 2, y: (H - panelH * k) / 2, w: ASK.width * k, h: panelH * k };
+    this.drawPanel(box, k / fit.scale, s, now, {
+      message: s.message ?? '',
+      error: s.error,
+      padding: pad,
+      below,
+      scene: (area) => this.drawAskScene(area, k, s),
+    });
+    const bottom = box.y + box.h - pad * k;
+    const y = bottom - (buttonH / 2) * k;
+    if (s.busy) {
+      // the browser's prompt is open: where to answer it, in place of the buttons
+      if (s.hint) this.text(s.hint, W / 2, y, text.size * k, INK, W * 0.94, text.size, false);
+      return;
+    }
+
+    // side by side, the gap between them in the middle; each tappable on its half of the panel, from under the message to the panel's bottom
+    const between = ASK.between * k;
+    const size = itemSize * ASK.buttonScale * k;
+    this.ctx.font = `${size}px ${FONT}`;
+    const y0 = y - (ASK.buttonGap + buttonH / 2) * k;
+    buttons.forEach((b, i) => {
+      const w = this.ctx.measureText(labels[i]).width;
+      const side = i === 0 ? -1 : 1;
+      const x = W / 2 + side * (between / 2 + w / 2);
+      const on = i === this.askSelected;
+      this.menuItem(labels[i], x, y, on ? size * SELECTED_SCALE : size, itemSize, on);
+      const x0 = i === 0 ? box.x : W / 2;
+      b.hitArea = new Rectangle(x0, y0, box.w / 2, box.y + box.h - y0);
+      this.onTop(b);
+    });
+  }
+
+  /**
+   * A menu item's text, as `Menu` draws it, centred on `x`, `y`: plain ink with a halo, or `selected` in the big text's
+   * colours swapped (red, yellow outline, black shadow) with a fainter halo. `glowSize`: as for `text`.
+   */
+  private menuItem(label: string, x: number, y: number, size: number, glowSize: number, selected: boolean) {
+    if (!selected) return this.text(label, x, y, size, INK, undefined, glowSize, false);
+    const ctx = this.ctx;
+    ctx.font = `${size}px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    this.halo(label, x, y, size, glowSize, undefined, SELECTED_GLOW);
+    // `bigTextStyle`'s outline and its shadow, down and right
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = size / 15;
+    const d = size / 18.75 / Math.SQRT2;
+    ctx.fillStyle = ctx.strokeStyle = BIG_SHADOW;
+    ctx.strokeText(label, x + d, y + d);
+    ctx.fillText(label, x + d, y + d);
+    ctx.strokeStyle = BIG_FILL;
+    ctx.strokeText(label, x, y);
+    ctx.fillStyle = BIG_OUTLINE;
+    ctx.fillText(label, x, y);
+  }
+
+  /**
+   * The camera panel's scene in `area` (`ASK.sceneAspect` wide for 1 high), drawn like the calibration's outline: the
+   * player is `s.frame` (placed by `s.clip`), else `OUTLINE`. `k`: world px -> screen px.
+   */
+  private drawAskScene(area: Rect, k: number, s: GuideState) {
+    const ctx = this.ctx;
+    const toScreen = ([x, y]: P): P => [area.x + x * area.h, area.y + y * area.h];
+    const width = Math.max(1.5, PANEL.pose.outlineWidth * k * 0.8);
+    const rough = (seed: number, more: object = {}) => ({ roughness: 1.6, bowing: 1.5, seed, strokeWidth: width, ...more });
+    const { floor, table, laptop, view, player } = SCENE;
+
+    // the camera image the player's figure is drawn in: its hip centre at `player`'s, its torso as long; a recorded
+    // figure keeps its usual hip height (steps sideways are left out, it stays in the camera's view)
+    const placeCam = (hipX: number, hipY: number, torso: number, aspect: number): Rect => {
+      const h = (area.h * player.torso) / torso, w = h * aspect;
+      return { x: area.x + player.hipX * area.h - hipX * w, y: area.y + player.hipY * area.h - hipY * h, w, h };
+    };
+    const outlineCam = placeCam(OUTLINE_PLACE.hipX, OUTLINE_PLACE.hipY, OUTLINE_PLACE.torso, OUTLINE_PLACE.aspect);
+
+    // the camera's view, see-through and blurred, under everything: to the right edge of the outline's box
+    const cam = toScreen(laptop.camera);
+    const right = outlineCam.x + Math.max(...Object.values(OUTLINE).flatMap((p) => (p.kind === 'circle' ? [p.c[0] + p.r] : p.pts.map(([x]) => x)))) * outlineCam.w;
+    // drawn sharp on the layer, then blurred as a whole: a blurred path stays inside the path's own bounds
+    const lc = this.layer.getContext('2d')!;
+    lc.setTransform(1, 0, 0, 1, 0, 0);
+    lc.clearRect(0, 0, this.layer.width, this.layer.height);
+    lc.setTransform(ctx.getTransform());
+    lc.beginPath();
+    lc.moveTo(...cam);
+    lc.lineTo(right, area.y + view.top * area.h);
+    lc.lineTo(right, area.y + view.bottom * area.h);
+    lc.closePath();
+    lc.fillStyle = GLOW;
+    lc.fill();
+    // the layer is in device px
+    const dpr = ctx.getTransform().a;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = view.alpha;
+    ctx.filter = `blur(${view.blur * area.h * dpr}px)`;
+    ctx.drawImage(this.layer, 0, 0);
+    ctx.restore();
+
+    this.rc.line(...toScreen([0.06, floor]), ...toScreen([1.94, floor]), rough(71, { stroke: MUTED }));
+    for (const [i, x] of [table.left + table.legsIn, table.right - table.legsIn].entries())
+      this.rc.line(...toScreen([x, table.top]), ...toScreen([x, floor]), rough(72 + i, { stroke: table.color }));
+    this.rc.line(...toScreen([table.left, table.top]), ...toScreen([table.right, table.top]), rough(74, { stroke: table.color, strokeWidth: width * 1.4 }));
+    const solid = { stroke: INK, fill: laptop.color, fillStyle: 'solid', strokeWidth: width * 0.5 };
+    this.rc.polygon(laptop.base.map(toScreen), rough(75, solid));
+    this.rc.polygon(laptop.lid.map(toScreen), rough(76, solid));
+    ctx.beginPath();
+    ctx.arc(cam[0], cam[1], Math.max(2, 0.012 * area.h), 0, Math.PI * 2);
+    ctx.fillStyle = INK;
+    ctx.fill();
+
+    // the player: the calibration's outline, all green, its belly yellow
+    const f = s.frame, clip = s.clip;
+    let figCam = outlineCam, figure = OUTLINE;
+    if (f && clip) {
+      const hipX = 1 - (f.lm[L.leftHip].x + f.lm[L.rightHip].x) / 2;
+      figCam = placeCam(hipX, clip.hipY, clip.torso, f.aspect);
+      figure = posedFigure(f, figCam);
+    }
+    const toCam = ([x, y]: P): P => [figCam.x + x * figCam.w, figCam.y + y * figCam.h];
+    const torso = figure.torso;
+    if (torso.kind === 'polygon') this.rc.polygon(torso.pts.map(toCam), rough(77, { stroke: 'none', fill: PANEL.pose.belly, fillStyle: 'solid' }));
+    this.drawFigure(this.rc, figure, toCam, figCam, width, () => GREEN);
   }
 
   /** The countdown's digit in the middle of the screen, a big title scaled like the game. */
@@ -330,13 +523,15 @@ export class FrameGuide {
    * A pose panel (`PANEL`) filling `box`, its sizes scaled like the game and then by `scale`: the schematic, the messages (wrapped)
    * and, with `progress` (0..1), the hold-still bar. Portrait: the schematic shows only the middle
    * strip of the (landscape) camera view, where the player stands. Without any text or bar, the pose fills it all.
+   * `scene`: drawn in the schematic's place (clipped to its area); `padding`: instead of `PANEL.padding`; `below`: room
+   * kept under the message (world px, for the caller to fill).
    */
   private drawPanel(
     box: Rect,
     scale: number,
     s: GuideState,
     now: number,
-    c: { message: string; hint?: string; error?: boolean; progress?: number },
+    c: { message: string; hint?: string; error?: boolean; progress?: number; scene?: (area: Rect) => void; padding?: number; below?: number },
     posed = false,
   ) {
     const ctx = this.ctx;
@@ -354,7 +549,7 @@ export class FrameGuide {
     ctx.strokeStyle = border.color;
     ctx.stroke();
 
-    const pad = PANEL.padding * k;
+    const pad = (c.padding ?? PANEL.padding) * k;
     const inner = box.w - 2 * pad;
     const cx = box.x + box.w / 2;
     // the sizes before the game's scaling set the glow, which isn't scaled (see `halo`)
@@ -368,14 +563,15 @@ export class FrameGuide {
     const barH = c.progress !== undefined ? bar.height * k : 0;
 
     const footer = lines.length || hintLines.length || barH
-      ? lines.length * lineH + hintLines.length * hintH + (barH ? barH + pad * 0.6 : 0) + pad * 1.3
+      ? lines.length * lineH + hintLines.length * hintH + (barH ? barH + pad * 0.6 : 0) + pad * 1.3 + (c.below ?? 0) * k
       : pad;
     const poseArea: Rect = { x: box.x + pad, y: box.y + pad, w: inner, h: box.h - footer - pad };
     ctx.save();
     ctx.beginPath();
     ctx.rect(poseArea.x, poseArea.y, poseArea.w, poseArea.h);
     ctx.clip();
-    this.drawPose(s, this.fitCamera(poseArea, true, s.aspect), now, k, posed);
+    if (c.scene) c.scene(poseArea);
+    else this.drawPose(s, this.fitCamera(poseArea, true, s.aspect), now, k, posed);
     ctx.restore();
 
     let y = poseArea.y + poseArea.h + pad * 0.3 + lineH / 2;
@@ -530,11 +726,11 @@ export class FrameGuide {
    * font size `GlowText` would be given (before the world's scaling), which sets its blur: PixiJS's
    * `BlurFilter` blurs by about 1.29 x its strength in device px, unscaled, as does a canvas filter.
    */
-  private halo(t: string, x: number, y: number, size: number, glowSize: number, maxWidth?: number) {
+  private halo(t: string, x: number, y: number, size: number, glowSize: number, maxWidth?: number, strength = 1) {
     const ctx = this.ctx;
     ctx.save();
     ctx.filter = `blur(${(1.29 * glowSize) / 9}px)`;
-    ctx.globalAlpha = 0.8;
+    ctx.globalAlpha = 0.8 * strength;
     ctx.fillStyle = ctx.strokeStyle = GLOW;
     ctx.lineJoin = 'round';
     ctx.lineWidth = size / 5;

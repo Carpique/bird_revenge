@@ -8,10 +8,14 @@ import { GlowText } from './GlowText';
 import { t, type Msg } from './i18n';
 
 /** Plain black items; the selected one in the big-text colours swapped (red, yellow outline, black shadow). */
-const ITEM_STYLE: TextStyleOptions = { fontFamily: TEXT_FONT, fontSize: 54, fill: INK };
+export const ITEM_STYLE: TextStyleOptions = { fontFamily: TEXT_FONT, fontSize: 54, fill: INK };
 /** Like the title: yellow, red outline, black shadow (for `titleColours`). */
 const TITLE_STYLE = bigTextStyle(54, TEXT_FONT);
 const SELECTED_STYLE = bigTextStyle(54, TEXT_FONT, BIG_OUTLINE, BIG_FILL);
+/** how much bigger the selected item is */
+export const SELECTED_SCALE = 1.08;
+/** the selected item's halo strength (its outline already makes it stand out) */
+export const SELECTED_GLOW = 0.75;
 
 export interface MenuItem {
   label: Msg;
@@ -79,10 +83,9 @@ export class Menu extends Container {
       const on = this.highlight && j === this.selected;
       if (text instanceof GlowText) {
         text.setStyle(on ? SELECTED_STYLE : this.plainStyle);
-        // the selected item's outline already makes it stand out
-        text.glow = on ? 0.75 : 1; // halo opacity 0.6 instead of 0.8
+        text.glow = on ? SELECTED_GLOW : 1;
       } else text.style = on ? SELECTED_STYLE : this.plainStyle;
-      text.scale.set((on ? 1.08 : 1) * this.itemScale);
+      text.scale.set((on ? SELECTED_SCALE : 1) * this.itemScale);
     });
   }
 

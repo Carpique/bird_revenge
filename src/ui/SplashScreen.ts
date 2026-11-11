@@ -33,8 +33,9 @@ const INSTRUCTIONS_BACK = { x: WORLD.width / 2, y: 685, scale: 0.7 };
  * middle of the sky.
  */
 const PORTRAIT = { groundAt: 0.9, titleY: 0.3, menuY: 0.5, titleScale: 1.2, menuScale: 1.4, rainScale: 2 };
-/** where the main menu's first item is on a landscape screen (world px) */
+/** where the main menu's first item is on a landscape screen (world px); each item past three lifts it this much, off the ground */
 const MENU_TOP = 370;
+const MENU_LIFT = 40;
 
 /**
  * The instructions page's start, ms one after another: "Watch" over the dimmed, frozen demonstration without its pose
@@ -70,6 +71,8 @@ export class SplashScreen extends Container {
   onWorldStart: () => void = () => {};
   /** the instructions page's pose panel has faded in: play the demonstration */
   onDemoStart: () => void = () => {};
+  /** "Camera on" (offered while `cameraOff()`): ask to share the camera */
+  onCamera: () => void = () => {};
 
   private page: Page = 'main';
   private items: PageItem[] = [];
@@ -85,10 +88,13 @@ export class SplashScreen extends Container {
   private watchMs: number | null = null;
   /** laid out for a screen held upright (`PORTRAIT`) */
   private portrait = false;
+  /** the camera panel is over it: the title and the menu hidden, the keys left alone */
+  private covered = false;
 
   /**
    * `levels`: the level select's list, asked for each time it opens; `overlay`: the canvas drawn over the game (the pose
-   * panel), hidden under "Watch" and then faded in; `hasTraining`: show "Training" as the last item (the training level loaded)
+   * panel), hidden under "Watch" and then faded in; `hasTraining`: show "Training" (the training level loaded);
+   * `cameraOff`: the player turned the camera down, so the main menu ends with "Camera on"
    */
   constructor(
     app: Application,
@@ -96,6 +102,7 @@ export class SplashScreen extends Container {
     private levels: () => LevelChoice,
     private overlay: HTMLCanvasElement,
     private hasTraining = false,
+    private cameraOff: () => boolean = () => false,
   ) {
     super();
     const root = new Container();
@@ -190,6 +197,17 @@ export class SplashScreen extends Container {
     this.levelSelect.y = view.top + sky / 2 - WORLD.height / 2;
   }
 
+  /** The main menu again, for "Camera on" coming or going (the selection kept where it can be). */
+  refresh() {
+    if (this.page === 'main') this.showPage('main');
+  }
+
+  /** The camera panel over the title screen (true) or gone: the title and the menu make way for it. */
+  cover(on: boolean) {
+    this.covered = on;
+    this.showWatch();
+  }
+
   /** Open straight on the level select, with `current` selected (if it's in the list; otherwise as from "Start"). */
   showLevels(current?: string) {
     this.showPage('main');
@@ -225,17 +243,18 @@ export class SplashScreen extends Container {
       ];
       if (this.hasTraining) this.items.push({ label: 'Training', action: () => this.onTraining() });
       this.items.push({ page: 'instructions', label: 'Instructions', action: () => this.showPage('instructions') });
+      if (this.cameraOff()) this.items.push({ label: 'Camera on', action: () => this.onCamera() });
     } else {
       this.items = [{ label: 'Back', action: () => this.showPage('main') }];
     }
     // coming back to the main menu, keep the item we came from selected (also when re-labelled)
-    const keep = from === page ? this.menu.selected : this.items.findIndex((it) => it.page === from);
+    const keep = from === page ? Math.min(this.menu.selected, this.items.length - 1) : this.items.findIndex((it) => it.page === from);
     // the instructions' one item: smaller, in the title's colours, never highlighted, without the flying birds
     this.menu.cursorsShown = this.menu.highlight = !instructions;
     this.menu.titleColours = instructions;
     this.menu.itemScale = instructions ? INSTRUCTIONS_BACK.scale : this.portrait ? PORTRAIT.menuScale : 1;
     if (instructions) this.menu.setItems(this.items, INSTRUCTIONS_BACK.y, 0, INSTRUCTIONS_BACK.x);
-    else this.menu.setItems(this.items, MENU_TOP, Math.max(0, keep));
+    else this.menu.setItems(this.items, MENU_TOP - Math.max(0, this.items.length - 3) * MENU_LIFT, Math.max(0, keep));
     this.place();
   }
 
@@ -247,7 +266,8 @@ export class SplashScreen extends Container {
     const ms = this.watchMs;
     if (ms === null) {
       this.menu.alpha = 1;
-      this.menu.visible = this.page !== 'levels';
+      this.menu.visible = this.page !== 'levels' && !this.covered;
+      this.title.visible = this.page === 'main' && !this.covered;
       this.watch.visible = false;
       this.dim.visible = this.backdrop.visible;
       this.dim.alpha = config.signDim;
@@ -265,7 +285,7 @@ export class SplashScreen extends Container {
   }
 
   private onKey(e: KeyboardEvent) {
-    if (!this.visible || e.repeat) return;
+    if (!this.visible || this.covered || e.repeat) return;
     if ((this.page === 'levels' ? this.levelSelect : this.menu).key(e.key)) e.preventDefault();
     else if (e.key === 'Escape' && this.page !== 'main') {
       audio.play('button');

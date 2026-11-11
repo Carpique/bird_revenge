@@ -202,6 +202,7 @@ export class Tuning {
     this.gui.add({ save: () => saveConfig() }, 'save').name('💾 save to this browser');
     this.gui.add({ copy: () => navigator.clipboard?.writeText(JSON.stringify(changedConfig(), null, 2)) }, 'copy').name('📋 copy changes as JSON');
     this.gui.add({ reset: () => (clearSavedConfig(), location.reload()) }, 'reset').name('↺ reset to defaults');
+    this.gui.add({ clear: () => clearGameStorage() }, 'clear').name('🗑 clear game data');
     this.gui.hide();
   }
 
@@ -210,4 +211,19 @@ export class Tuning {
     if (this.shown) this.gui.show();
     else this.gui.hide();
   }
+}
+
+/**
+ * Forget everything the game saved in this browser (tuning, finished levels, language, volume, the camera answer) and
+ * start afresh: only the game's own keys (`bird-revenge…`), as GitHub Pages shares the origin with other sites. The
+ * browser's own camera permission stays: that's reset in the site settings.
+ */
+function clearGameStorage() {
+  if (!confirm('Clear all game data saved in this browser (tuning, finished levels, language, volume, camera answer) and reload?')) return;
+  try {
+    for (const key of Object.keys(localStorage)) if (key.startsWith('bird-revenge')) localStorage.removeItem(key);
+  } catch {
+    /* no storage */
+  }
+  location.reload();
 }

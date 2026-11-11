@@ -19,6 +19,7 @@ import { PoseDetectors } from './input/poseControls';
 import { PoseSession, type PoseStep } from './input/poseSession';
 import { BlackBox } from './pose/blackBox';
 import { startCamera, stopCamera } from './pose/camera';
+import { cameraConsent, isPermissionError, requestCamera } from './pose/cameraConsent';
 import { REQUIRED_PARTS } from './pose/landmarks';
 import { PoseTracker, type PoseTiming } from './pose/PoseTracker';
 import { outOfFrameCause, recalCause } from './pose/trackingStats';
@@ -37,6 +38,7 @@ import { PauseMenu } from './ui/PauseMenu';
 import { downloadJson, Recorder } from './ui/Recorder';
 import { RotateHint } from './ui/RotateHint';
 import { loadRecording } from './tutorial';
+import { ClipLoop } from './tutorial/ClipLoop';
 import { PoseReplay } from './tutorial/PoseReplay';
 import { TUTORIAL_LEVEL, type PoseRecording } from './tutorial/recording';
 import { SplashScreen } from './ui/SplashScreen';
@@ -54,7 +56,10 @@ import { wakeLock } from './ui/wakeLock';
  *   outOfFrame pauses the game (no "Pause" sign, just the small pose box) until the player is back
  *   nobody in front of the camera (no person, or one off to the side) in countdown / playing / outOfFrame:
  *   calibrating again, with the big dialog
- *   calibrating → keyboard (Esc or "No camera"; pose is ignored): on a touch screen with on-screen controls. No camera
+ *   a game starting before the player has answered whether to share the camera (`cameraConsent`): cameraAsk first, the
+ *   panel explaining what the camera is for; "Share" asks the browser, then calibrating, "Ignore" (or Esc) → keyboard.
+ *   Declined (here or in the browser): straight on to keyboard, the title screen offering "Camera on" (cameraAsk over it)
+ *   calibrating → keyboard (Esc or "Ignore"; pose is ignored): on a touch screen with on-screen controls. No camera
  *   to be had (blocked, none, no camera API, the pose model failed): straight on to keyboard instead of calibrating
  *   Esc in a game (countdown, playing, outOfFrame, keyboard) opens the pause menu over the frozen game:
  *   keep playing, start over from the level select, or quit to the menu
@@ -64,7 +69,7 @@ import { wakeLock } from './ui/wakeLock';
  * While paused or while the window is unfocused / hidden, everything is suspended — render loop, guide
  * overlay, pose tracker and the camera itself — so an idle game uses almost no CPU.
  */
-type AppState = 'loading' | 'menu' | 'calibrating' | 'countdown' | 'playing' | 'outOfFrame' | 'keyboard' | 'gameOver';
+type AppState = 'loading' | 'menu' | 'cameraAsk' | 'calibrating' | 'countdown' | 'playing' | 'outOfFrame' | 'keyboard' | 'gameOver';
 
 async function main() {
   loadSavedConfig();
@@ -98,6 +103,16 @@ async function main() {
   let cameraError: Msg | null = null;
   /** the camera has started at least once (so a missing camera may just be waking up) */
   let cameraStarted = false;
+  /** `poseError` is the browser blocking the camera (cleared if the player allows it later, from the title screen) */
+  let poseBlocked = false;
+  /** the camera panel (cameraAsk): opened for a game or from the title screen ("Camera on"); the browser's prompt is
+   * open; what went wrong asking */
+  let askFrom: 'game' | 'menu' = 'game';
+  let askBusy = false;
+  let askError: Msg | null = null;
+  /** the tutorial's moves, played round and round by the panel's figure (loaded the first time it opens), from `askShownAt` */
+  let askClip: ClipLoop | null = null;
+  let askShownAt = 0;
   let manualPause = false;
   /** the pause menu (Esc in a game) is open */
   let menuOpen = false;
@@ -137,6 +152,16 @@ async function main() {
     // the pause menu hides the countdown and the out-of-frame box
     if (menuOpen) gs.mode = 'hidden';
     else if (state === 'loading') Object.assign(gs, { mode: 'loading', message: t('Loading…') });
+    else if (state === 'cameraAsk')
+      Object.assign(gs, {
+        mode: 'cameraAsk',
+        message: t(askError ?? 'To steer with your body, share the camera. The game runs only on your device and sends no data anywhere.'),
+        error: !!askError,
+        busy: askBusy,
+        hint: t('Click “Allow” in the browser’s window'),
+        frame: askClip?.frameAt(now - askShownAt) ?? null,
+        clip: askClip ?? undefined,
+      });
     else if (state === 'calibrating' && cameraError)
       Object.assign(gs, { mode: 'calibrate', title: t(cameraError), message: t('Reconnecting…'), hint: escHint });
     else if (state === 'calibrating' && (!cameraOn || !tracker))
@@ -193,7 +218,16 @@ async function main() {
     const unlocked = unlockedLevels(list.map((l) => l.name));
     return { levels: list, unlocked, current: list.filter((l) => unlocked.has(l.name)).at(-1)?.name };
   };
-  const splash = new SplashScreen(app, new Thumbnails(app), levelChoice, document.getElementById('guide') as HTMLCanvasElement, levels.has(TRAINING));
+  const splash = new SplashScreen(
+    app,
+    new Thumbnails(app),
+    levelChoice,
+    document.getElementById('guide') as HTMLCanvasElement,
+    levels.has(TRAINING),
+    () => cameraConsent.value === 'declined',
+  );
+  cameraConsent.onChange(() => splash.refresh());
+  void cameraConsent.watchBrowser();
   app.stage.addChild(splash);
   // under "Watch", the clip's first moment, frozen; then the world runs on, the bird uncontrolled, while the panel
   // fades in; then the clip plays
@@ -243,21 +277,12 @@ async function main() {
   const calibration = new Calibration();
   const session = new PoseSession();
 
-  // the calibration dialog's "Back" (the only way out on a phone): to the level select, the level selected, or from
-  // training (or a level tested from the URL) to the title screen
-  guide.onBack = () => {
-    if (state !== 'calibrating') return;
-    if (game.level.name === TRAINING || testLevelName) pauseMenu.onQuit();
-    else pauseMenu.onRestart();
-  };
-
   // without the camera: the keyboard, or on a touch screen the on-screen controls; no calibration or countdown
   const playWithoutCamera = () => {
     state = 'keyboard';
     audio.startMusic();
   };
-  guide.showNoCamera = TouchControls.available;
-  guide.onNoCamera = () => {
+  guide.onIgnore = () => {
     if (state === 'calibrating') playWithoutCamera();
   };
 
@@ -273,17 +298,89 @@ async function main() {
     state = 'calibrating';
   };
 
+  // the camera panel (cameraAsk), "Share" selected
+  const askCamera = (from: typeof askFrom) => {
+    askFrom = from;
+    askBusy = false;
+    askError = null;
+    guide.askSelected = 0;
+    state = 'cameraAsk';
+    askShownAt = performance.now();
+    if (!askClip)
+      void loadRecording(TUTORIAL_LEVEL).then((rec) => {
+        if (rec && !askClip) {
+          askClip = new ClipLoop(rec);
+          askShownAt = performance.now();
+        }
+      });
+    if (from === 'menu') splash.cover(true);
+  };
+  const closeAsk = () => {
+    splash.cover(false);
+    state = 'menu';
+  };
+  // a game with the camera if the player shared it, without it if they didn't; not answered yet: the panel first.
+  // No camera API at all: calibrating, which goes on without the camera straight away
+  const startGame = () => {
+    if (cameraConsent.value === 'granted' || !navigator.mediaDevices?.getUserMedia) recalibrate();
+    else if (cameraConsent.value === 'declined') playWithoutCamera();
+    else askCamera('game');
+  };
+  // "Share": the browser's prompt (if it still has to ask), then on with the game, or back to the title screen;
+  // refused or no camera: said in the panel, which stays for "Ignore"
+  guide.onShare = async () => {
+    if (state !== 'cameraAsk' || askBusy) return;
+    askBusy = true;
+    const answer = await requestCamera();
+    askBusy = false;
+    if (state !== 'cameraAsk') return;
+    if (answer === 'granted') {
+      cameraConsent.set('granted');
+      if (poseBlocked) poseError = null;
+      poseBlocked = false;
+      if (askFrom === 'game') recalibrate();
+      else closeAsk();
+      return;
+    }
+    if (answer === 'blocked') cameraConsent.set('declined');
+    askError = answer === 'blocked'
+      ? 'The browser blocks the camera. Allow it in the site settings (the icon beside the address), then try again.'
+      : 'Camera unavailable';
+  };
+  // "Ignore": remembered, so the panel doesn't come again (the title screen offers "Camera on" instead)
+  guide.onAskIgnore = () => {
+    if (state !== 'cameraAsk' || askBusy) return;
+    if (cameraConsent.value === null) cameraConsent.set('declined');
+    if (askFrom === 'game') playWithoutCamera();
+    else closeAsk();
+  };
+  splash.onCamera = () => askCamera('menu');
+  // the panel's keys before anyone else's (the title screen's menu under it, the game's hotkeys); Esc = "Ignore"
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (state !== 'cameraAsk' || askBusy || e.repeat || e.target instanceof HTMLInputElement) return;
+      if (e.key === 'Escape') {
+        audio.play('button');
+        guide.onAskIgnore();
+      } else if (!guide.askKey(e.key)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    },
+    true,
+  );
+
   // a game from the level select starts on the level picked (none to pick: the first level)
   splash.onStart = (level) => {
     if (level) game.reset(level);
     if (!testLevelName) countLevelView(game.level.name);
-    recalibrate();
+    startGame();
   };
   // the training letters, A to Z and round, until quit from the pause menu (which goes back to the first level)
   splash.onTraining = () => {
     game.reset(allLevels.get(TRAINING) ?? levels.get(TRAINING));
     countLevelView(game.level.name);
-    recalibrate();
+    startGame();
   };
   game.onGameOver = () => {
     keyboardAfterGameOver = state === 'keyboard';
@@ -341,7 +438,11 @@ async function main() {
           await startCamera(video, onCameraLost);
         } catch (e) {
           console.error(e);
-          if (isPermissionError(e)) poseError = t('Camera access was blocked');
+          if (isPermissionError(e)) {
+            poseError = t('Camera access was blocked');
+            poseBlocked = true;
+            cameraConsent.set('declined');
+          }
           else if (!cameraStarted && isNoCameraError(e)) poseError = t('Camera unavailable');
           else if (!navigator.mediaDevices?.getUserMedia) poseError = t('Camera API not available (the page must be served from localhost or https).');
           else {
@@ -454,7 +555,7 @@ async function main() {
       if (dump) downloadJson('black-box', dump);
     }
     else if (k === 'm') volume.toggleMute();
-    if (state === 'loading' || state === 'menu' || menuOpen) return;
+    if (state === 'loading' || state === 'menu' || state === 'cameraAsk' || menuOpen) return;
     if (k === 'p') keyboard.onPause();
     else if (state === 'gameOver') return;
     else if (k === 'c' && tracker) {
@@ -572,14 +673,15 @@ async function main() {
     game.paused = manualPause || menuOpen || !(state === 'playing' || state === 'keyboard' || state === 'gameOver');
     game.showPausedText = manualPause;
     // the countdown keeps the calibration dialog's dimming, so it doesn't flicker in between
-    game.dimmed = menuOpen || state === 'calibrating' || state === 'countdown';
-    splash.visible = state === 'menu';
+    game.dimmed = menuOpen || state === 'cameraAsk' || state === 'calibrating' || state === 'countdown';
+    // the camera panel from "Camera on" stays over the title screen
+    splash.visible = state === 'menu' || (state === 'cameraAsk' && askFrom === 'menu');
     // the title screen showing up plays its theme from the start; leaving it fades the theme out
     if (splash.visible && !menuShown) audio.playTheme();
     if (!splash.visible && menuShown) audio.stopTheme(config.audio.themeFadeMs);
     menuShown = splash.visible;
     // not over the instructions' demonstration
-    language.visible = splash.visible && !demoOn;
+    language.visible = state === 'menu' && !demoOn;
     // only the title screen lets Esc leave full screen; in the game it opens the pause menu
     fullscreen.lockEscape = !splash.visible;
     game.root.visible = !splash.visible;
@@ -632,7 +734,7 @@ async function main() {
 
   // splash screen first (testing a level from the URL: straight to calibration); the pose model loads in the background,
   // the camera starts with the game
-  if (testLevelName) recalibrate();
+  if (testLevelName) startGame();
   else state = 'menu';
   try {
     const t = await PoseTracker.create(video);
@@ -652,11 +754,6 @@ async function main() {
 function isNoCameraError(e: unknown) {
   const name = e instanceof Error ? e.name : '';
   return /NotFound|DevicesNotFound|Overconstrained/i.test(name);
-}
-
-function isPermissionError(e: unknown) {
-  const s = e instanceof Error ? `${e.name} ${e.message}` : String(e);
-  return /Permission|NotAllowed/i.test(s);
 }
 
 main();

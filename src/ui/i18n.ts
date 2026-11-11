@@ -30,8 +30,17 @@ const PL = {
   'Get in position': 'Ustaw Się',
   'Get back in frame!': 'Wróć do kadru!',
   'Get into view': 'Wejdź w kadr',
-  // the calibration dialog's button beside "Back": play with the on-screen controls (or the keyboard)
-  'No camera': 'Bez Kamery',
+  // the calibration dialog's button: play with the on-screen controls (or the keyboard)
+  Ignore: 'Ignoruj',
+
+  // the panel asking to share the camera (first game, or "Camera on" on the title screen)
+  'To steer with your body, share the camera. The game runs only on your device and sends no data anywhere.':
+    'Aby sterować ruchem ciała udostępnij kamerę. Gra działa wyłącznie na twoim urządzeniu i nie wysyła nigdzie żadnych danych.',
+  Share: 'Udostępnij',
+  'Click “Allow” in the browser’s window': 'Kliknij „Zezwól” w okienku przeglądarki',
+  'The browser blocks the camera. Allow it in the site settings (the icon beside the address), then try again.':
+    'Przeglądarka blokuje kamerę. Zezwól na nią w ustawieniach strony (ikona obok adresu) i spróbuj ponownie.',
+  'Camera on': 'Włącz Kamerę',
   'Press Esc to play with the keyboard': 'Naciśnij Esc, żeby grać na klawiaturze',
   'Reconnecting…': 'Ponowne łączenie…',
   '{error} – reconnecting…': '{error} – ponowne łączenie…',
