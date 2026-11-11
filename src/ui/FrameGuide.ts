@@ -24,8 +24,11 @@ export interface GuideState {
   error?: boolean;
   /** the camera panel's buttons hidden (the browser's prompt is open) */
   busy?: boolean;
-  /** the camera panel's figure plays `frame` (a recording's, `aspect` wide): its usual hip height and torso length, to place it steadily */
-  clip?: { hipY: number; torso: number };
+  /**
+   * the camera panel's figure plays `frame` (a recording's, `aspect` wide): its usual hip height and torso length, to
+   * place it steadily, and its feet's lowest, to keep them above the floor
+   */
+  clip?: { hipY: number; torso: number; feetY: number };
   /** 0..1 calibration hold progress */
   progress?: number;
   /** seconds left in countdown */
@@ -126,13 +129,16 @@ const SCENE = {
     camera: [0.288, 0.385] as P,
     color: '#5d6d74',
   },
-  /** the player: the hip centre here, the torso this long (as `OUTLINE`'s is in its camera image) */
-  player: { hipX: 1.42, hipY: 0.58, torso: 0.26 },
+  /**
+   * the player: the hip centre here, the torso this long (as `OUTLINE`'s is in its camera image); a recorded figure
+   * raised so its feet stay `feetGap` above the floor
+   */
+  player: { hipX: 1.42, hipY: 0.58, torso: 0.26, feetGap: 0.015 },
   /**
    * the camera's view: spreading towards the player through `top` and `bottom` at the right edge of the player's box
    * (`OUTLINE`'s, steady while the figure moves), its edges blurred `blur` wide (kept inside the scene, which clips it)
    */
-  view: { top: 0.1, bottom: 0.95, blur: 0.05, alpha: 0.7 },
+  view: { top: 0.1, bottom: 0.95, blur: 0.02, alpha: 0.85 },
 };
 /** `OUTLINE`'s hip centre, torso length and camera image's width / height, to place it like a recorded figure */
 const OUTLINE_PLACE = { hipX: 0.5, hipY: 0.56, torso: 0.26, aspect: 16 / 9 };
@@ -347,31 +353,29 @@ export class FrameGuide {
     // its height in world px, the message wrapped as it will be drawn (the same lines at any scale)
     const inner = ASK.width - 2 * pad;
     this.ctx.font = `${text.size}px ${FONT}`;
-    const lines = this.wrap(s.message ?? '', inner).length;
+    const lines = this.wrap((s.busy ? s.hint : s.message) ?? '', inner).length;
     const sceneH = inner / ASK.sceneAspect;
     const buttons = [this.share, this.askIgnore];
     const labels = [t('Share'), t('Ignore')];
     const itemSize = Number(ITEM_STYLE.fontSize);
     const buttonH = itemSize * ASK.buttonScale;
-    const below = ASK.buttonGap + buttonH;
+    // the browser's prompt is open: only where to answer it, as the message, no buttons
+    const message = (s.busy ? s.hint : s.message) ?? '';
+    const below = s.busy ? 0 : ASK.buttonGap + buttonH;
     const panelH = pad + sceneH + lines * text.lineHeight + pad * 1.3 + below;
     const k = Math.min(fit.scale, (H * 0.94) / panelH, (W * 0.94) / ASK.width);
 
     const box: Rect = { x: (W - ASK.width * k) / 2, y: (H - panelH * k) / 2, w: ASK.width * k, h: panelH * k };
     this.drawPanel(box, k / fit.scale, s, now, {
-      message: s.message ?? '',
-      error: s.error,
+      message,
+      error: s.error && !s.busy,
       padding: pad,
       below,
       scene: (area) => this.drawAskScene(area, k, s),
     });
+    if (s.busy) return;
     const bottom = box.y + box.h - pad * k;
     const y = bottom - (buttonH / 2) * k;
-    if (s.busy) {
-      // the browser's prompt is open: where to answer it, in place of the buttons
-      if (s.hint) this.text(s.hint, W / 2, y, text.size * k, INK, W * 0.94, text.size, false);
-      return;
-    }
 
     // side by side, the gap between them in the middle; each tappable on its half of the panel, from under the message to the panel's bottom
     const between = ASK.between * k;
@@ -427,9 +431,9 @@ export class FrameGuide {
 
     // the camera image the player's figure is drawn in: its hip centre at `player`'s, its torso as long; a recorded
     // figure keeps its usual hip height (steps sideways are left out, it stays in the camera's view)
-    const placeCam = (hipX: number, hipY: number, torso: number, aspect: number): Rect => {
+    const placeCam = (hipX: number, hipY: number, torso: number, aspect: number, at = player.hipY): Rect => {
       const h = (area.h * player.torso) / torso, w = h * aspect;
-      return { x: area.x + player.hipX * area.h - hipX * w, y: area.y + player.hipY * area.h - hipY * h, w, h };
+      return { x: area.x + player.hipX * area.h - hipX * w, y: area.y + at * area.h - hipY * h, w, h };
     };
     const outlineCam = placeCam(OUTLINE_PLACE.hipX, OUTLINE_PLACE.hipY, OUTLINE_PLACE.torso, OUTLINE_PLACE.aspect);
 
@@ -474,7 +478,9 @@ export class FrameGuide {
     let figCam = outlineCam, figure = OUTLINE;
     if (f && clip) {
       const hipX = 1 - (f.lm[L.leftHip].x + f.lm[L.rightHip].x) / 2;
-      figCam = placeCam(hipX, clip.hipY, clip.torso, f.aspect);
+      // its lowest feet, below the hips in scene heights, kept above the floor
+      const legs = ((clip.feetY - clip.hipY) / clip.torso) * player.torso;
+      figCam = placeCam(hipX, clip.hipY, clip.torso, f.aspect, Math.min(player.hipY, floor - player.feetGap - legs));
       figure = posedFigure(f, figCam);
     }
     const toCam = ([x, y]: P): P => [figCam.x + x * figCam.w, figCam.y + y * figCam.h];

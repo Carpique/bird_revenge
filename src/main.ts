@@ -30,6 +30,7 @@ import { scenery } from './scenery/scenery';
 import { DebugPanel } from './ui/DebugPanel';
 import { loadFonts } from './ui/fonts';
 import { FrameGuide, type GuideState } from './ui/FrameGuide';
+import { CameraButton } from './ui/CameraButton';
 import { FullscreenButton } from './ui/FullscreenButton';
 import { MenuButton } from './ui/MenuButton';
 import { t, type Msg } from './ui/i18n';
@@ -224,9 +225,7 @@ async function main() {
     levelChoice,
     document.getElementById('guide') as HTMLCanvasElement,
     levels.has(TRAINING),
-    () => cameraConsent.value === 'declined',
   );
-  cameraConsent.onChange(() => splash.refresh());
   void cameraConsent.watchBrowser();
   app.stage.addChild(splash);
   // under "Watch", the clip's first moment, frozen; then the world runs on, the bird uncontrolled, while the panel
@@ -269,6 +268,8 @@ async function main() {
   const fullscreen = new FullscreenButton(corner);
   const menuButton = new MenuButton(corner);
   const volume = new VolumeButton(corner);
+  // after the volume button, so first in the corner
+  const cameraButton = new CameraButton(corner);
   const language = new LanguageButton();
   new RotateHint(document.getElementById('rotate')!);
   const keyboard = new Keyboard();
@@ -354,7 +355,7 @@ async function main() {
     if (askFrom === 'game') playWithoutCamera();
     else closeAsk();
   };
-  splash.onCamera = () => askCamera('menu');
+  cameraButton.onClick = () => askCamera('menu');
   // the panel's keys before anyone else's (the title screen's menu under it, the game's hotkeys); Esc = "Ignore"
   window.addEventListener(
     'keydown',
@@ -682,6 +683,8 @@ async function main() {
     menuShown = splash.visible;
     // not over the instructions' demonstration
     language.visible = state === 'menu' && !demoOn;
+    // "Camera on" in the corner while the player has turned the camera down
+    cameraButton.visible = state === 'menu' && !demoOn && cameraConsent.value === 'declined';
     // only the title screen lets Esc leave full screen; in the game it opens the pause menu
     fullscreen.lockEscape = !splash.visible;
     game.root.visible = !splash.visible;

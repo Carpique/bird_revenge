@@ -11,6 +11,8 @@ export class ClipLoop {
   /** the median hip centre's height (0..1 down the image) and torso length (shoulders to hips, in image heights) */
   readonly hipY: number;
   readonly torso: number;
+  /** the lowest the ankles get (0..1 down the image; a high percentile, past the odd stray landmark) */
+  readonly feetY: number;
   private frames: { t: number; f: PoseFrame }[];
   private start: number;
   private length: number;
@@ -28,6 +30,8 @@ export class ClipLoop {
     const torsos = this.frames.map(({ f }) => torsoLength(f));
     this.hipY = median(hips);
     this.torso = median(torsos);
+    const ankles = this.frames.map(({ f }) => Math.max(f.lm[L.leftAnkle].y, f.lm[L.rightAnkle].y));
+    this.feetY = quantile(ankles, 0.98);
   }
 
   /** The pose `ms` into the loop; null if the clip has none. */
@@ -55,7 +59,11 @@ export function torsoLength(f: PoseFrame) {
 }
 
 function median(xs: number[]) {
+  return quantile(xs, 0.5);
+}
+
+function quantile(xs: number[], q: number) {
   if (!xs.length) return 0;
   const s = [...xs].sort((a, b) => a - b);
-  return s[s.length >> 1];
+  return s[Math.min(s.length - 1, Math.floor(s.length * q))];
 }

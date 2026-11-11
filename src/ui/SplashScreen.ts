@@ -71,8 +71,6 @@ export class SplashScreen extends Container {
   onWorldStart: () => void = () => {};
   /** the instructions page's pose panel has faded in: play the demonstration */
   onDemoStart: () => void = () => {};
-  /** "Camera on" (offered while `cameraOff()`): ask to share the camera */
-  onCamera: () => void = () => {};
 
   private page: Page = 'main';
   private items: PageItem[] = [];
@@ -93,8 +91,7 @@ export class SplashScreen extends Container {
 
   /**
    * `levels`: the level select's list, asked for each time it opens; `overlay`: the canvas drawn over the game (the pose
-   * panel), hidden under "Watch" and then faded in; `hasTraining`: show "Training" (the training level loaded);
-   * `cameraOff`: the player turned the camera down, so the main menu ends with "Camera on"
+   * panel), hidden under "Watch" and then faded in; `hasTraining`: show "Training" (the training level loaded)
    */
   constructor(
     app: Application,
@@ -102,7 +99,6 @@ export class SplashScreen extends Container {
     private levels: () => LevelChoice,
     private overlay: HTMLCanvasElement,
     private hasTraining = false,
-    private cameraOff: () => boolean = () => false,
   ) {
     super();
     const root = new Container();
@@ -197,11 +193,6 @@ export class SplashScreen extends Container {
     this.levelSelect.y = view.top + sky / 2 - WORLD.height / 2;
   }
 
-  /** The main menu again, for "Camera on" coming or going (the selection kept where it can be). */
-  refresh() {
-    if (this.page === 'main') this.showPage('main');
-  }
-
   /** The camera panel over the title screen (true) or gone: the title and the menu make way for it. */
   cover(on: boolean) {
     this.covered = on;
@@ -243,7 +234,6 @@ export class SplashScreen extends Container {
       ];
       if (this.hasTraining) this.items.push({ label: 'Training', action: () => this.onTraining() });
       this.items.push({ page: 'instructions', label: 'Instructions', action: () => this.showPage('instructions') });
-      if (this.cameraOff()) this.items.push({ label: 'Camera on', action: () => this.onCamera() });
     } else {
       this.items = [{ label: 'Back', action: () => this.showPage('main') }];
     }
