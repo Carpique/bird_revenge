@@ -151,6 +151,38 @@ const HEAD_PER_TORSO = 0.055 / 0.26;
  * the head round the face, as big for the body as the outline's. `cam`: the camera rectangle it's drawn in, for the
  * head's size (its radius is in camera heights, the points in mirrored display coordinates).
  */
+/** the camera view's blur, in the small canvas it is blurred in: big enough to look smooth when scaled up */
+const SOFT_BLUR = 4;
+
+/**
+ * Gaussian-like blur of `img`'s alpha, `sigma` px: three box blurs each way (the colour is filled in after).
+ * By hand, as Safari's canvas ignores `ctx.filter`.
+ */
+function blurAlpha(img: ImageData, sigma: number) {
+  const { width: w, height: h, data } = img;
+  const r = Math.max(1, Math.round(Math.sqrt((12 * sigma * sigma) / 3 + 1) / 2));
+  const a = new Float32Array(w * h), b = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) a[i] = data[i * 4 + 3];
+  // one box pass along a line of `n` values, `step` apart, from `start`; edges count as transparent
+  const pass = (src: Float32Array, dst: Float32Array, start: number, n: number, step: number) => {
+    let sum = 0;
+    for (let i = 0; i < r; i++) if (i < n) sum += src[start + i * step];
+    for (let i = 0; i < n; i++) {
+      if (i + r < n) sum += src[start + (i + r) * step];
+      if (i - r - 1 >= 0) sum -= src[start + (i - r - 1) * step];
+      dst[start + i * step] = sum / (2 * r + 1);
+    }
+  };
+  for (let k = 0; k < 3; k++) {
+    for (let y = 0; y < h; y++) pass(a, b, y * w, w, 1);
+    for (let x = 0; x < w; x++) pass(b, a, x, h, w);
+  }
+  for (let i = 0; i < w * h; i++) {
+    data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = 0;
+    data[i * 4 + 3] = a[i];
+  }
+}
+
 function posedFigure(f: PoseFrame, cam: Rect): Figure {
   const p = (i: number): P => [1 - f.lm[i].x, f.lm[i].y];
   const mid = (a: P, b: P): P => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
@@ -185,6 +217,8 @@ export class FrameGuide {
   /** offscreen, the player's figure drawn opaque, then laid over the panel see-through (rough.js's strokes overlap) */
   private layer = document.createElement('canvas');
   private layerRc = rough.canvas(this.layer);
+  /** offscreen, small: the ask scene's camera view, blurred by hand (`blurAlpha`) */
+  private soft = document.createElement('canvas');
   /** the dialog's title: one of the game's big titles, drawn by PixiJS (under this canvas, beside the panel) */
   private title = new GlowText('', bigTextStyle(DIALOG_TITLE));
   /** the countdown's digit, styled like the titles */
@@ -440,25 +474,38 @@ export class FrameGuide {
     // the camera's view, see-through and blurred, under everything: to the right edge of the outline's box
     const cam = toScreen(laptop.camera);
     const right = outlineCam.x + Math.max(...Object.values(OUTLINE).flatMap((p) => (p.kind === 'circle' ? [p.c[0] + p.r] : p.pts.map(([x]) => x)))) * outlineCam.w;
-    // drawn sharp on the layer, then blurred as a whole: a blurred path stays inside the path's own bounds
-    const lc = this.layer.getContext('2d')!;
-    lc.setTransform(1, 0, 0, 1, 0, 0);
-    lc.clearRect(0, 0, this.layer.width, this.layer.height);
-    lc.setTransform(ctx.getTransform());
-    lc.beginPath();
-    lc.moveTo(...cam);
-    lc.lineTo(right, area.y + view.top * area.h);
-    lc.lineTo(right, area.y + view.bottom * area.h);
-    lc.closePath();
-    lc.fillStyle = GLOW;
-    lc.fill();
-    // the layer is in device px
+    // drawn sharp, small, then blurred by hand and scaled up: Safari's canvas has no `filter`
     const dpr = ctx.getTransform().a;
+    const blur = view.blur * area.h * dpr;
+    const sc = Math.min(1, SOFT_BLUR / blur);
+    const soft = this.soft, sw = Math.ceil(this.canvas.width * sc), sh = Math.ceil(this.canvas.height * sc);
+    if (soft.width !== sw || soft.height !== sh) {
+      soft.width = sw;
+      soft.height = sh;
+    }
+    const sx = soft.getContext('2d', { willReadFrequently: true })!;
+    sx.setTransform(1, 0, 0, 1, 0, 0);
+    sx.clearRect(0, 0, sw, sh);
+    sx.setTransform(ctx.getTransform().scale(sc));
+    sx.beginPath();
+    sx.moveTo(...cam);
+    sx.lineTo(right, area.y + view.top * area.h);
+    sx.lineTo(right, area.y + view.bottom * area.h);
+    sx.closePath();
+    sx.fill();
+    sx.setTransform(1, 0, 0, 1, 0, 0);
+    const img = sx.getImageData(0, 0, sw, sh);
+    blurAlpha(img, blur * sc);
+    sx.putImageData(img, 0, 0);
+    sx.globalCompositeOperation = 'source-in';
+    sx.fillStyle = GLOW;
+    sx.fillRect(0, 0, sw, sh);
+    sx.globalCompositeOperation = 'source-over';
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = view.alpha;
-    ctx.filter = `blur(${view.blur * area.h * dpr}px)`;
-    ctx.drawImage(this.layer, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(soft, 0, 0, sw / sc, sh / sc);
     ctx.restore();
 
     this.rc.line(...toScreen([0.06, floor]), ...toScreen([1.94, floor]), rough(71, { stroke: MUTED }));
