@@ -38,10 +38,12 @@ class GameAudio {
   private musicDucked = false;
   /** faded out under a `playOverMusic` sound until it ends */
   private musicHushed = false;
-  /** the music's level (0–1, times the mix), gliding between `duckMusic` / `restoreMusic` / `stopMusic` */
-  private musicRamp = { from: 1, to: 1, start: 0, ms: 1 };
+  /** the music's level (0–1, times the mix), gliding between `startMusic` / `duckMusic` / `restoreMusic` / `stopMusic`; silent until `startMusic` */
+  private musicRamp = { from: 0, to: 0, start: 0, ms: 1 };
   /** the music element has played once inside a click / key press, so it may play later */
   private musicUnlocked = false;
+  /** `unlockMusic` is playing the music silently */
+  private musicUnlocking = false;
   private themes: string[] = [];
   private theme = new Audio();
   /** the title screen wants its theme played (it's waiting for a click / key press, or playing) */
@@ -89,8 +91,7 @@ class GameAudio {
     // the lock screen / Control Center player (iOS) can start the elements on its own, e.g. the music
     // on the title screen, where it then plays over the theme: only the game decides what plays
     this.music.addEventListener('play', () => {
-      // muted: `unlockMusic` playing it silently
-      if (this.suspended || (!this.musicWanted && !this.music.muted)) this.music.pause();
+      if (this.suspended || (!this.musicWanted && !this.musicUnlocking)) this.music.pause();
     });
     this.theme.addEventListener('play', () => {
       if (this.suspended || !this.themeWanted) this.theme.pause();
@@ -230,7 +231,7 @@ class GameAudio {
     const r = this.musicRamp;
     const k = Math.min(1, (performance.now() - r.start) / r.ms);
     const level = r.from + (r.to - r.from) * k;
-    if (k >= 1 && r.to === 0 && !this.musicWanted && !this.music.paused) this.music.pause();
+    if (k >= 1 && r.to === 0 && !this.musicWanted && !this.musicUnlocking && !this.music.paused) this.music.pause();
     return level;
   }
 
@@ -342,19 +343,25 @@ class GameAudio {
       .catch(() => {}); // not allowed yet: the next click / key press tries again
   }
 
-  /** Inside a click / key press: play the music muted for a moment so it's allowed to play later. */
+  /**
+   * Inside a click / key press: play the music muted for a moment so it's allowed to play later.
+   * Until `startMusic` its level is 0 too, and `musicFade` pauses it should it keep playing anyway
+   * (Safari has been heard to).
+   */
   private unlockMusic() {
-    if (this.musicUnlocked || !this.tracks.length) return;
+    if (this.musicUnlocked || this.musicUnlocking || !this.tracks.length) return;
     if (!this.track) this.setTrack(this.tracks[0]);
+    this.musicUnlocking = true;
     this.music.muted = true;
     this.music
       .play()
-      .then(() => {
-        this.musicUnlocked = true;
-        if (!this.musicWanted || this.suspended) this.music.pause();
-      })
+      .then(() => (this.musicUnlocked = true))
       .catch(() => {})
-      .finally(() => (this.music.muted = false));
+      .finally(() => {
+        this.musicUnlocking = false;
+        if (!this.musicWanted || this.suspended) this.music.pause();
+        this.music.muted = false;
+      });
   }
 
   private setTrack(file: string) {
