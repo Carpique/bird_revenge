@@ -52,10 +52,12 @@ const MUTED = '#9aa5a8';
  * scaled with the panel (the dialog: like the game; the small box: `MINI_SCALE` of that).
  */
 const PANEL = {
-  /** a brighter take on the bird's blue */
-  background: '#a9d6f2',
-  /** like the selected level thumbnail: the big text's colours, yellow inside red */
-  border: { width: 5, color: BIG_FILL, outerWidth: 12, outerColor: BIG_OUTLINE, radius: 18 },
+  /** a vertical gradient: very light grey at the top to light grey at the bottom */
+  background: { top: '#f5f5f5', bottom: '#b4b4b4' },
+  /** like the selected menu item (`Menu`'s `SELECTED_STYLE`): red, outlined thin in yellow on its outer edge */
+  border: { width: 5, color: BIG_OUTLINE, outline: 2.5, outlineColor: BIG_FILL, radius: 18 },
+  /** soft, cast down and right (the light from the upper left) */
+  shadow: { color: 'rgba(0, 0, 0, 0.4)', offset: 8, blur: 14 },
   padding: 22,
   /** the messages under the pose: the instructions page's font, size, line height and glow */
   text: { size: 28, lineHeight: 32, color: INK, errorColor: RED },
@@ -591,13 +593,26 @@ export class FrameGuide {
     const { border, text, bar } = PANEL;
     // world px -> screen px
     const k = worldFit(this.W, this.H).scale * scale;
+    // the yellow outline: the whole panel out to the border's outer edge, casting the shadow (in device px: shadows
+    // ignore the transform)
+    const out = (border.width / 2 + border.outline) * k;
+    const dpr = ctx.getTransform().a;
+    ctx.save();
+    ctx.shadowColor = PANEL.shadow.color;
+    ctx.shadowOffsetX = ctx.shadowOffsetY = PANEL.shadow.offset * k * dpr;
+    ctx.shadowBlur = PANEL.shadow.blur * k * dpr;
+    ctx.beginPath();
+    ctx.roundRect(box.x - out, box.y - out, box.w + 2 * out, box.h + 2 * out, border.radius * k + out);
+    ctx.fillStyle = border.outlineColor;
+    ctx.fill();
+    ctx.restore();
     ctx.beginPath();
     ctx.roundRect(box.x, box.y, box.w, box.h, border.radius * k);
-    ctx.fillStyle = PANEL.background;
+    const fill = ctx.createLinearGradient(0, box.y, 0, box.y + box.h);
+    fill.addColorStop(0, PANEL.background.top);
+    fill.addColorStop(1, PANEL.background.bottom);
+    ctx.fillStyle = fill;
     ctx.fill();
-    ctx.lineWidth = border.outerWidth * k;
-    ctx.strokeStyle = border.outerColor;
-    ctx.stroke();
     ctx.lineWidth = border.width * k;
     ctx.strokeStyle = border.color;
     ctx.stroke();
