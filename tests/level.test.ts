@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Constraint, Engine, Composite } from '../src/game/physics';
 import { buildLevel } from '../src/level/build';
-import { nextLevel } from '../src/levels';
+import { DEMO, gameLevels, levels, listedLevels, nextLevel } from '../src/levels';
 import { LETTERS, letterCoins, letterLevels } from '../src/level/letters';
 import { WORLD } from '../src/config';
 import { CLASS_DEFAULTS, LevelError, MAP_DEFAULTS, parseTiledMap, type TiledMap, type TiledObject, type TiledTileset } from '../src/level/tiled';
@@ -432,6 +432,18 @@ describe('level order', () => {
 
   it('plays a level that is not numbered over and over', () => {
     expect(nextLevel(all, 'training')).toBe(training);
+  });
+
+  it('lists the demo first, but plays only the numbered levels', () => {
+    const demo = parseTiledMap(DEMO, mapOf([]));
+    const withDemo = new Map([['1', a], ['2', b], ['training', training], [DEMO, demo]]);
+    expect(listedLevels(withDemo)).toEqual([demo, a, b]);
+    expect(gameLevels(withDemo)).toEqual([a, b]);
+    expect(nextLevel(withDemo, '2')).toBe(a);
+  });
+
+  it('lists the instructions\' map as the demo', () => {
+    expect(listedLevels(levels)[0]).toBe(levels.get('control-tutorial'));
   });
 });
 

@@ -4,6 +4,7 @@ import { config, WORLD } from '../config';
 import { Ground } from '../game/Ground';
 import type { Thumbnails } from '../level/thumbnails';
 import type { LevelDef } from '../level/types';
+import { DEMO } from '../levels';
 import { fitWorld, isPortrait, view } from '../render/fitWorld';
 import { bigTextStyle } from './fonts';
 import { GlowText } from './GlowText';
@@ -59,7 +60,9 @@ export interface LevelChoice {
  * Title screen drawn in the game world (1280x720): sky, the game's ground with characters crossing it now and then
  * (`Passersby`), the title and the main menu; "Start" opens the level select. Arrow keys / W S to move, Enter or Space to choose, Esc to go back;
  * mouse works too. "Instructions" shows no text: the title screen makes way for a demonstration (`onInstructions`),
- * leaving only "Back"; first "Watch" over it dimmed and frozen (`WATCH`), then it plays (`onDemoStart`).
+ * leaving only "Back"; first "Watch" over it dimmed and frozen (`WATCH`), then it plays (`onDemoStart`). The level
+ * select's "Demo" card opens it too, with "Next" instead of "Back": level 1, which also starts once the demonstration
+ * has played to its end (`demoEnded`); Esc goes back to the level select.
  */
 export class SplashScreen extends Container {
   /** a level was picked to play (`levels` is empty: straight from "Start", without a level) */
@@ -73,6 +76,8 @@ export class SplashScreen extends Container {
   onDemoStart: () => void = () => {};
 
   private page: Page = 'main';
+  /** the page the instructions were opened from, which their "Back" goes back to */
+  private instructionsFrom: Page = 'main';
   private items: PageItem[] = [];
   private menu = new Menu(true);
   private title: GlowText;
@@ -123,8 +128,10 @@ export class SplashScreen extends Container {
 
 
     this.levelSelect = new LevelSelect(thumbnails);
-    // back on the main page (with "Start" selected) for when the game is quit; the list is made afresh next time
+    // back on the main page (with "Start" selected) for when the game is quit; the list is made afresh next time.
+    // The demo isn't played: it's the instructions page
     this.levelSelect.onPick = (level) => {
+      if (level.name === DEMO) return this.showInstructions('levels');
       this.showPage('main');
       this.onStart(level);
     };
@@ -205,6 +212,29 @@ export class SplashScreen extends Container {
     this.showPage('levels', current);
   }
 
+  private showInstructions(from: Page) {
+    this.instructionsFrom = from;
+    this.showPage('instructions');
+  }
+
+  /** The demonstration has played to its end: opened from "Demo", on to level 1; from the main menu it plays again. */
+  demoEnded() {
+    if (this.page === 'instructions' && this.instructionsFrom === 'levels') this.startFirstLevel();
+  }
+
+  /** From "Demo": the game's level 1 (not the demo, listed before it). */
+  private startFirstLevel() {
+    const first = this.levels().levels.find((l) => l.name !== DEMO);
+    this.showPage('main');
+    this.onStart(first);
+  }
+
+  /** Back from the instructions: where they were opened from (the level select with "Demo" selected), else the main page. */
+  private leaveInstructions() {
+    if (this.instructionsFrom === 'levels') this.showLevels(DEMO);
+    else this.showPage('main');
+  }
+
   private showPage(page: Page, current?: string) {
     const from = this.page;
     this.page = page;
@@ -233,9 +263,13 @@ export class SplashScreen extends Container {
         { page: 'levels', label: 'Start', action: () => (this.levels().levels.length ? this.showPage('levels') : this.onStart()) },
       ];
       if (this.hasTraining) this.items.push({ label: 'Training', action: () => this.onTraining() });
-      this.items.push({ page: 'instructions', label: 'Instructions', action: () => this.showPage('instructions') });
+      this.items.push({ page: 'instructions', label: 'Instructions', action: () => this.showInstructions('main') });
     } else {
-      this.items = [{ label: 'Back', action: () => this.showPage('main') }];
+      this.items = [
+        this.instructionsFrom === 'levels'
+          ? { label: 'Next', action: () => this.startFirstLevel() }
+          : { label: 'Back', action: () => this.leaveInstructions() },
+      ];
     }
     // coming back to the main menu, keep the item we came from selected (also when re-labelled)
     const keep = from === page ? Math.min(this.menu.selected, this.items.length - 1) : this.items.findIndex((it) => it.page === from);
@@ -279,7 +313,8 @@ export class SplashScreen extends Container {
     if ((this.page === 'levels' ? this.levelSelect : this.menu).key(e.key)) e.preventDefault();
     else if (e.key === 'Escape' && this.page !== 'main') {
       audio.play('button');
-      this.showPage('main');
+      if (this.page === 'instructions') this.leaveInstructions();
+      else this.showPage('main');
       e.preventDefault();
     }
   }

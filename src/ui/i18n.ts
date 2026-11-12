@@ -11,8 +11,12 @@ const PL = {
   Instructions: 'Instrukcje',
   Training: 'Trening',
   Back: 'Wróć',
+  // the instructions page opened from the level select's "Demo": on to level 1
+  Next: 'Dalej',
   Watch: 'Obserwuj',
   'Select level': 'Wybierz Poziom',
+  // the level select's first level, before 1
+  Demo: 'Demo',
 
   // game
   Pause: 'Zaraz\nWracam',

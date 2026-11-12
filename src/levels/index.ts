@@ -1,15 +1,20 @@
 import { LevelError, parseTiledMap, type TiledMap, type TiledTileset } from '../level/tiled';
 import type { LevelDef } from '../level/types';
 import { LETTERS, letterLevels } from '../level/letters';
+import { TUTORIAL_LEVEL } from '../tutorial/recording';
 
 /**
  * Tiled maps in this folder; a level's name is its file name without `.tmj`.
  * The numbered ones (`001.tmj`, `002.tmj`, …) are the game, played in number order (2 comes before 10 even unpadded),
  * back to the first after the last. The others are played on their own, over and over, except `training.tmj`: it is the base
  * of the training levels, `training-A` to `training-Z`, each spelling its letter in coins (see `letters.ts`), played A to Z and round.
+ * The level select also lists the instructions' map (`control-tutorial.tmj`) first, as "Demo" (so the numbers stay as
+ * they are): not a level to play, picking it opens the instructions page.
  */
 /** the map the training levels are made from */
 const TRAINING_BASE = 'training';
+/** the level select's first card, before 1: the instructions page */
+export const DEMO = TUTORIAL_LEVEL;
 
 const files = import.meta.glob<string>('./*.tmj', { query: '?raw', import: 'default', eager: true });
 /** the tilesets the maps use (`icons.tsj`), by file name; editing one reloads the levels too */
@@ -49,8 +54,14 @@ export const TRAINING = `${TRAINING_BASE}-${LETTERS[0]}`;
 /** Whether `name` is one of the game's numbered levels, rather than one played on its own like training. */
 const isNumbered = (name: string) => /^\d+$/.test(name);
 
-/** The game's numbered levels in `all` (`levels`, or a newer version from `onLevelEdited`), in play order: the level select's list. */
+/** The game's numbered levels in `all` (`levels`, or a newer version from `onLevelEdited`), in play order. */
 export const gameLevels = (all: Map<string, LevelDef>): LevelDef[] => [...all.values()].filter((l) => isNumbered(l.name));
+
+/** The level select's list (and the levels pictured for it): the demo, then the game's levels. */
+export const listedLevels = (all: Map<string, LevelDef>): LevelDef[] => {
+  const demo = all.get(DEMO);
+  return [...(demo ? [demo] : []), ...gameLevels(all)];
+};
 
 /** An empty screen, played when no level loads. */
 const EMPTY: LevelDef = { name: 'empty', width: 1280, height: 720, birdStart: null, villains: [], bats: [], dragons: [], friends: [], coins: [], bodies: [], branches: [], joints: [], buttons: [] };
@@ -63,7 +74,7 @@ export function firstLevel(): LevelDef {
   const name = testLevelName;
   const level = name ? levels.get(name) : undefined;
   if (name && !level && !(`./${name}.tmj` in files)) console.error(`No level "${name}"; there are: ${[...levels.keys()].join(', ')}`);
-  return level ?? [...levels.values()].find((l) => isNumbered(l.name)) ?? EMPTY;
+  return level ?? gameLevels(levels)[0] ?? EMPTY;
 }
 
 /**

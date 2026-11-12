@@ -2,6 +2,7 @@ import { ColorMatrixFilter, Container, FederatedPointerEvent, Graphics, Sprite, 
 import { audio } from '../audio/audio';
 import { WORLD } from '../config';
 import type { LevelDef } from '../level/types';
+import { DEMO } from '../levels';
 import type { Thumbnails } from '../level/thumbnails';
 import { scenery } from '../scenery/scenery';
 import { BIG_FILL, BIG_OUTLINE, bigTextStyle, INK, TEXT_FONT } from './fonts';
@@ -28,7 +29,7 @@ const DRAG_SLOP = 10;
 /** ms a locked card shakes when chosen */
 const SHAKE_MS = 350;
 
-/** A level's thumbnail with a rounded border and its number; grey with a padlock while locked. */
+/** A level's thumbnail with a rounded border and its number ("Demo" for the demo); grey with a padlock while locked. */
 class Card extends Container {
   private picture = new Sprite();
   private border = new Graphics();
@@ -40,7 +41,7 @@ class Card extends Container {
   constructor(
     readonly level: LevelDef,
     readonly locked: boolean,
-    number: number,
+    name: string,
   ) {
     super();
     const shape = () => new Graphics().roundRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, RADIUS);
@@ -50,7 +51,7 @@ class Card extends Container {
     this.picture.mask = mask;
     this.grey.desaturate();
     this.grey.brightness(0.75, true);
-    const label = new Text({ text: String(number), style: bigTextStyle(40, TEXT_FONT) });
+    const label = new Text({ text: name, style: bigTextStyle(40, TEXT_FONT) });
     label.position.set(-CARD_W / 2 + 12, -CARD_H / 2 + 4);
     this.lock.visible = locked;
     this.addChild(sky, this.picture, mask, this.lock, label, this.border);
@@ -142,8 +143,10 @@ export class LevelSelect extends Container {
   /** Show `levels` (in play order), the `unlocked` ones pickable, with `current` selected. */
   open(levels: LevelDef[], unlocked: ReadonlySet<string>, current: string | undefined) {
     for (const c of this.content.removeChildren()) c.destroy({ children: true });
+    // numbered from 1 after the demo
+    let number = 0;
     this.cards = levels.map((level, i) => {
-      const card = new Card(level, !unlocked.has(level.name), i + 1);
+      const card = new Card(level, !unlocked.has(level.name), level.name === DEMO ? t('Demo') : String(++number));
       card.position.set(
         GRID_LEFT + (i % COLUMNS) * (CARD_W + GAP_X) + CARD_W / 2,
         VIEW.top + PAD + Math.floor(i / COLUMNS) * (CARD_H + GAP_Y) + CARD_H / 2,

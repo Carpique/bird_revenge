@@ -4,7 +4,7 @@ import { audio } from './audio/audio';
 import { changedConfig, config, loadSavedConfig } from './config';
 import type { BirdSample } from './game/Bird';
 import { Game } from './game/Game';
-import { firstLevel, gameLevels, levels, nextLevel, onLevelEdited, testLevelName, TRAINING } from './levels';
+import { DEMO, firstLevel, levels, listedLevels, nextLevel, onLevelEdited, testLevelName, TRAINING } from './levels';
 import { markCompleted, unlockedLevels } from './levels/progress';
 import { Thumbnails } from './level/thumbnails';
 import { Calibration, type CalibrationStatus } from './gestures/Calibration';
@@ -213,11 +213,14 @@ async function main() {
     if (level && JSON.stringify(level) !== JSON.stringify(game.level)) game.loadLevel(level);
   });
   // the level select: the latest version of the levels, the finished ones and the first one not finished pickable,
-  // that one selected (the last level once all are finished)
+  // that one selected (the last level once all are finished). The demo (the instructions page) is always open and
+  // opens nothing: level 1 is open from the start
   const levelChoice = () => {
-    const list = gameLevels(allLevels);
-    const unlocked = unlockedLevels(list.map((l) => l.name));
-    return { levels: list, unlocked, current: list.filter((l) => unlocked.has(l.name)).at(-1)?.name };
+    const list = listedLevels(allLevels);
+    const unlocked = unlockedLevels(list.map((l) => l.name).filter((n) => n !== DEMO));
+    const current = list.filter((l) => unlocked.has(l.name)).at(-1)?.name;
+    if (allLevels.has(DEMO)) unlocked.add(DEMO);
+    return { levels: list, unlocked, current };
   };
   const splash = new SplashScreen(
     app,
@@ -249,6 +252,8 @@ async function main() {
     demoStage = 'world';
     demoReplay.runWorld();
   };
+  // opened from the level select's "Demo": on to level 1 once the clip has played
+  demoReplay.onLoopEnd = () => splash.demoEnded();
   splash.onDemoStart = () => {
     demoStage = 'playing';
     demoReplay.resume();

@@ -23,6 +23,8 @@ export class PoseReplay {
   vis: VisibilityOutput | null = null;
   /** where the replay is, ms in the recording's time */
   time = 0;
+  /** the clip has played to its end and its last moment has stayed for `LOOP_PAUSE_MS`; then the next loop, unless it stopped the replay */
+  onLoopEnd: (() => void) | null = null;
 
   private rec: PoseRecording | null = null;
   private frames: (PoseFrame | null)[] = [];
@@ -80,7 +82,9 @@ export class PoseReplay {
   update(dtMs: number) {
     if (!this.rec || this.held || this.holdMs <= 0) return;
     this.holdMs -= dtMs;
-    if (this.holdMs <= 0) this.restart();
+    if (this.holdMs > 0) return;
+    this.onLoopEnd?.();
+    if (this.rec) this.restart();
   }
 
   private restart() {

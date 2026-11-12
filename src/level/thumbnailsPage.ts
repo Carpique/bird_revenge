@@ -1,12 +1,12 @@
 import { Application } from 'pixi.js';
-import { gameLevels, levels } from '../levels';
+import { levels, listedLevels } from '../levels';
 import { loadAllAssets } from '../render/assets';
 import { loadFonts } from '../ui/fonts';
 import { ThumbnailRenderer } from './thumbnails';
 
 declare global {
   interface Window {
-    /** every numbered level's thumbnail as a WebP data URL, by level name; an error message if drawing failed */
+    /** every listed level's thumbnail (the demo's too) as a WebP data URL, by level name; an error message if drawing failed */
     thumbnails?: Record<string, string> | string;
   }
 }
@@ -19,7 +19,7 @@ async function run() {
   await app.init({ width: 16, height: 9, antialias: true, preference: 'webgl' });
   const renderer = new ThumbnailRenderer(app);
   const out: Record<string, string> = {};
-  for (const level of gameLevels(levels)) {
+  for (const level of listedLevels(levels)) {
     const texture = renderer.render(level);
     out[level.name] = await app.renderer.extract.base64({ target: texture, format: 'webp', quality: 0.9 });
     texture.destroy(true);
