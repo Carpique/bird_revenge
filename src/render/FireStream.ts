@@ -11,6 +11,8 @@ import { tex } from './assets';
 export class FireStream extends Container {
   /** how far along the path the fire is out (px); 0: none */
   reach = 0;
+  /** something of the level stops it at `reach` */
+  blocked = false;
   private t = 0;
   private readonly layers: Container[];
   private readonly textures: Record<FireLayer, Texture[]>;
@@ -53,7 +55,7 @@ export class FireStream extends Container {
       for (const s of parts) s.visible = shown;
       if (!shown) continue;
       const grow = f.startScale + (1 - f.startScale) * smoothstep(d / f.growOver);
-      const taper = f.endScale + (1 - f.endScale) * smoothstep((this.reach - d) / f.taperOver);
+      const taper = f.endScale + (1 - f.endScale) * smoothstep((this.reach - d) / (this.blocked ? f.blockedTaperOver : f.taperOver));
       const scale = this.baseScale * grow * taper * (1 + (f.spread * d) / len);
       const at = this.path.pointAt(d);
       // a wobble across the path, growing away from the mouth

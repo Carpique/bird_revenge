@@ -420,7 +420,9 @@ export class Game {
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
     for (const f of this.friends) f.step(STEP_MS);
-    for (const d of this.dragons) d.step(STEP_MS);
+    // a dragon's fire stops at the level's walls, terrain and crates (as apples do), not at characters
+    const blocksFire = (x: number, y: number) => Query.point(this.levelBodies, { x, y }).length > 0;
+    for (const d of this.dragons) d.step(STEP_MS, blocksFire);
     for (const c of this.coins) c.step(STEP_MS);
     const birdY = this.bird.body.position.y;
     const pooYs = new Map(this.poos.map((p) => [p, p.body.position.y]));

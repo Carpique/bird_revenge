@@ -30,6 +30,16 @@ export class FirePath {
     return { x: ax + (bx - ax) * t, y: ay + (by - ay) * t, angle: Math.atan2(by - ay, bx - ax) };
   }
 
+  /** How far along the path it gets (px) before its first point that's `blocked`, checked every `step` px; its length if none. */
+  clearLength(blocked: (x: number, y: number) => boolean, step = 4): number {
+    for (let d = 0; d < this.length; d += step) {
+      const p = this.pointAt(d);
+      if (blocked(p.x, p.y)) return Math.max(0, d - step);
+    }
+    const end = this.points[this.points.length - 1];
+    return blocked(end[0], end[1]) ? Math.max(0, this.length - step) : this.length;
+  }
+
   /** How far (x, y) is from the path's first `reach` px. */
   distanceTo(x: number, y: number, reach: number): number {
     let best = Infinity;

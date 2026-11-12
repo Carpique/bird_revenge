@@ -70,6 +70,9 @@ export const fireLayers: FireLayer[] = ['outline', 'outer', 'mid', 'core'];
  * `startScale` / `endScale`: a puff's size coming out of the mouth and at the far end, as a share of full size; it
  * reaches full size `growOver` px from the mouth and shrinks away over the last `taperOver` px.
  * `halfThickness`: how far from the route the fire burns (px): the bird touching that costs it a life.
+ * `tailShare`: the thin tail of the stream: that share of its taper, at its tip.
+ * `hitTrim` 0..1: how much shorter than the fire its burning part is: 0, it burns to its tip (and `halfThickness` past
+ * it); 1, the burning part, its rounded end included, stops where the tail starts.
  */
 export const dragonConfig = {
   /** the time between spits is random within ± this share of the dragon's `throwDelay` */
@@ -87,10 +90,14 @@ export const dragonConfig = {
     endScale: 0.05,
     growOver: 45,
     taperOver: 40,
+    /** the same where something blocks it: shorter, so the fire looks like it hits the wall instead of dying out before it */
+    blockedTaperOver: 10,
     /** puffs grow by this share along the whole stream, so it fans out a little */
     spread: 0.5,
     /** the stream's wobble up and down (px) at its far end */
     wobble: 2.5,
     halfThickness: 12,
+    tailShare: 0.5,
+    hitTrim: 0.5,
   },
 };

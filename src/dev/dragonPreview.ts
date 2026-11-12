@@ -45,6 +45,10 @@ async function main() {
     new Dragon({ ...defaults, x: 640, y: 380, facing: 'right', path: [[720, 340], [800, 260], [900, 260], [980, 420]] }),
   ];
   for (const d of dragons) world.addChild(d.view);
+  // a wall in the path dragon's way, to show the fire stopping at it (the game uses the level's bodies)
+  const wallRect = { x: 860, y: 200, width: 24, height: 130 };
+  const wall = world.addChild(new Graphics().rect(wallRect.x, wallRect.y, wallRect.width, wallRect.height).fill('#9a8f7d').stroke({ width: 3, color: '#2b2b2b' }));
+  const inWall = (x: number, y: number) => wall.visible && x >= wallRect.x && x <= wallRect.x + wallRect.width && y >= wallRect.y && y <= wallRect.y + wallRect.height;
   const boxes = world.addChild(new Graphics());
 
   const ui = { showHitbox: false, night: false, paused: false, spit: () => dragons.forEach((d) => d.spitNow()) };
@@ -52,6 +56,7 @@ async function main() {
   gui.add(ui, 'spit').name('spit now');
   gui.add(ui, 'paused');
   gui.add(ui, 'showHitbox').name('show fire hitbox');
+  gui.add(wall, 'visible').name('wall');
   gui.add(ui, 'night').onChange((v: boolean) => {
     app.renderer.background.color = v ? '#19276b' : scenery.skyColor;
     showBackingsFor(v ? 'night' : 'afternoon');
@@ -72,19 +77,20 @@ async function main() {
   fire.add(dragonConfig.fire, 'spread', 0, 1, 0.01);
   fire.add(dragonConfig.fire, 'wobble', 0, 10, 0.1);
   fire.add(dragonConfig.fire, 'halfThickness', 2, 30, 1);
+  fire.add(dragonConfig.fire, 'hitTrim', 0, 1, 0.05);
   const shake = gui.addFolder('shake (all)');
   shake.add(dragonConfig.shake, 'px', 0, 5, 0.1);
   shake.add(dragonConfig.shake, 'ms', 10, 200, 5);
 
   app.ticker.add(() => {
     fitWorld(app, world);
-    if (!ui.paused) for (const d of dragons) d.step(Math.min(50, app.ticker.deltaMS));
+    if (!ui.paused) for (const d of dragons) d.step(Math.min(50, app.ticker.deltaMS), inWall);
     for (const d of dragons) d.sync();
     boxes.clear();
     if (!ui.showHitbox) return;
     // the burning part of each route, as thick as it burns
     for (const d of dragons) {
-      const reach = d.reach;
+      const reach = d.burnReach;
       if (!reach) continue;
       const pts = [d.route.pointAt(0)];
       for (let s = 8; s < reach; s += 8) pts.push(d.route.pointAt(s));
