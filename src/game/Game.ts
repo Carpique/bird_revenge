@@ -335,7 +335,10 @@ export class Game {
     for (const f of this.friends) this.friendLayer.addChild(f.view);
     for (const d of this.dragons) d.view.destroy({ children: true });
     this.dragons = this.level.dragons.map((def) => new Dragon(def));
-    for (const d of this.dragons) this.dragonLayer.addChild(d.view);
+    for (const d of this.dragons) {
+      d.onSpit = () => audio.play('dragon-roar');
+      this.dragonLayer.addChild(d.view);
+    }
     for (const c of this.coins) c.view.destroy();
     this.coins = this.level.coins.map((def) => new Coin(def));
     for (const c of this.coins) this.coinLayer.addChild(c.view);

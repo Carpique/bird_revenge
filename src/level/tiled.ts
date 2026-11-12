@@ -19,7 +19,7 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  * | Bat       | tile, `path` a polyline or polygon | a bat flying along `path`: there and back (polyline), round and round (polygon), from its point nearest the tile's centre |
  * |           | or a polyline, polygon         | the same, from its first point            |
  * |           | tile or point, no `path`       | a homing bat: no route, it goes for the bird, from the tile's centre / the point |
- * | Dragon    | tile, `path` a polyline or none | a dragon sitting where the tile's feet are, spitting fire `initialDelay` s into the level, then `throwDelay` s or so after each spit, for `flameDuration` s: from its mouth along `path`, or without one straight ahead `fireLength` px; the tile flipped horizontally: it faces left |
+ * | Dragon    | tile, `path` a polyline or none | a dragon sitting where the tile's feet are, spitting fire `initialDelay` s into the level, then exactly `throwDelay` s after each spit, for `flameDuration` s: from its mouth along `path`, or without one straight ahead `fireLength` px; the tile flipped horizontally: it faces left |
  * | Friend    | point, or a tile               | a friend to save, standing on the point / where the tile's feet are |
  * | Coin      | point, or a tile               | a coin to collect, centred on the point / the tile's image |
  * | BirdStart | point, or a tile               | where the bird starts: its centre / where the tile shows it |

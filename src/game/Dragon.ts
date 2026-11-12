@@ -14,19 +14,22 @@ export type DragonPhase = 'resting' | 'opening' | 'spitting' | 'closing';
 
 /**
  * A dragon: it never moves and can't be hurt (it's outside the physics world, and poos pass it by); `initialDelay` s
- * into the level, then every `throwDelay` s or so after its fire is back in, it spits fire along its route (`fireRoute`), up to the first wall, terrain or crate in the way. The bird touching the fire loses a life (`touches`).
+ * into the level, then exactly `throwDelay` s after its fire is back in, it spits fire along its route (`fireRoute`), up to the first wall, terrain or crate in the way. The bird touching the fire loses a life (`touches`).
+ * Its timing is fixed, not random, and nothing else in the game changes it, so a player can learn its pattern.
  * Its view holds the dragon and, in world coordinates, its fire.
  */
 export class Dragon {
   readonly view = new Container();
   readonly route: FirePath;
   phase: DragonPhase = 'resting';
+  /** called as the fire starts rolling out */
+  onSpit: () => void = () => {};
   private readonly sprite: CharacterSprite<DragonAnim>;
   private readonly fire: FireStream;
   /** ms left in the current phase (opening, spitting, closing) */
   private phaseMs = 0;
   /**
-   * ms until the next spit starts (the jaw opening): `initialDelay` at the start, then `throwDelay` or so from when the
+   * ms until the next spit starts (the jaw opening): `initialDelay` at the start, then exactly `throwDelay` from when the
    * fire is fully back in (counting on while the jaw closes); never (Infinity) with a `throwDelay` of 0
    */
   private spitIn: number;
@@ -115,6 +118,7 @@ export class Dragon {
       case 'opening':
         this.enter('spitting', this.spitMs);
         this.spitT = 0;
+        this.onSpit();
         break;
       case 'spitting':
         // the fire is fully back in: the wait for the next spit starts now
@@ -143,11 +147,9 @@ export class Dragon {
     this.phaseMs = ms;
   }
 
-  /** ms from the fire being back in to the next spit: around `throwDelay`, never (Infinity) when it's 0 */
+  /** ms from the fire being back in to the next spit: exactly `throwDelay`, never (Infinity) when it's 0 */
   private nextSpitDelay() {
-    if (this.def.throwDelay <= 0) return Infinity;
-    const ms = this.def.throwDelay * 1000, spread = dragonConfig.intervalSpread;
-    return ms * (1 - spread + Math.random() * 2 * spread);
+    return this.def.throwDelay > 0 ? this.def.throwDelay * 1000 : Infinity;
   }
 
   private stepFidget(stepMs: number) {

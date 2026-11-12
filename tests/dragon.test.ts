@@ -92,17 +92,25 @@ describe('a dragon', () => {
     expect(first).toBeLessThan(1500 + STEP_MS + 1);
   });
 
-  it('spits again throwDelay or so after its fire is fully back in, and never with a throwDelay of 0', () => {
-    const spread = dragonConfig.intervalSpread;
-    for (let i = 0; i < 20; i++) {
-      const d = new Dragon(def({ throwDelay: 2 }));
+  it('spits again exactly throwDelay after its fire is fully back in, and never with a throwDelay of 0', () => {
+    const d = new Dragon(def({ throwDelay: 2 }));
+    const waits: number[] = [], cycles: number[] = [];
+    stepUntil(d, () => d.phase === 'opening');
+    for (let i = 0; i < 5; i++) {
       stepUntil(d, () => d.reach > 0);
       // the fire fully back in: the wait starts here, while the jaw is still closing
-      stepUntil(d, () => d.reach === 0);
+      const out = stepUntil(d, () => d.reach === 0);
       const wait = stepUntil(d, () => d.phase === 'opening');
-      expect(wait).toBeGreaterThanOrEqual(2000 * (1 - spread) - STEP_MS);
-      expect(wait).toBeLessThanOrEqual(2000 * (1 + spread) + STEP_MS);
+      waits.push(wait);
+      cycles.push(out + wait);
     }
+    for (const wait of waits) {
+      expect(wait).toBeGreaterThanOrEqual(2000 - STEP_MS);
+      expect(wait).toBeLessThanOrEqual(2000 + STEP_MS);
+    }
+    // the same pattern every time
+    expect(new Set(waits).size).toBe(1);
+    expect(new Set(cycles).size).toBe(1);
 
     const never = new Dragon(def({ throwDelay: 0 }));
     expect(stepUntil(never, () => never.phase !== 'resting')).toBeGreaterThanOrEqual(60_000);
