@@ -95,5 +95,7 @@ export const dragonConfig = {
     halfThickness: 12,
     tailShare: 0.5,
     hitTrim: 0.5,
+    /** how opaque the stream is drawn */
+    alpha: 0.7,
   },
 };

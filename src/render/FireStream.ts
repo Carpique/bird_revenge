@@ -1,4 +1,4 @@
-import { Container, Sprite, type Texture } from 'pixi.js';
+import { AlphaFilter, Container, Sprite, type Texture } from 'pixi.js';
 import { dragonConfig, fireDef, fireLayers, type FireLayer } from '../characters/dragon';
 import type { FirePath } from '../game/firePath';
 import { tex } from './assets';
@@ -24,6 +24,8 @@ export class FireStream extends Container {
     this.textures = Object.fromEntries(fireLayers.map((l) => [l, fireDef.animations[l].frames.map(tex)])) as Record<FireLayer, Texture[]>;
     this.baseScale = fireDef.displayHeight / this.textures.outer[0].height;
     this.layers = fireLayers.map(() => this.addChild(new Container()));
+    // see-through as one shape: a filter, so the overlapping puffs don't show through each other
+    this.filters = [new AlphaFilter({ alpha: dragonConfig.fire.alpha })];
     // enough puffs to cover the path; they wrap round past its end, so one comes out of the mouth every `puffSpacing`
     const n = Math.ceil(path.length / dragonConfig.fire.puffSpacing) + 2;
     for (let i = 0; i < n; i++) {

@@ -327,7 +327,7 @@ export class Game {
     for (const p of this.poos) {
       p.stopSound();
       Composite.remove(this.engine.world, p.body);
-      p.view.destroy();
+      p.destroy();
     }
     this.poos = [];
     for (const a of this.apples) a.view.destroy();
@@ -487,11 +487,20 @@ export class Game {
       a.hit();
       audio.play('splat');
     }
+    // a falling poo, anyone's, that flies into a dragon's fire hisses away
+    for (const p of this.poos) {
+      if (p.state !== 'falling') continue;
+      const pp = p.body.position;
+      if (!this.dragons.some((d) => d.touches(pp.x, pp.y, p.radius))) continue;
+      Composite.remove(this.engine.world, p.body);
+      p.evaporate();
+      audio.playHiss();
+    }
     if (this.bird.fallen) this.afterDeath();
     // remove finished poos
     this.poos = this.poos.filter((p) => {
       if (p.state !== 'done') return true;
-      p.view.destroy();
+      p.destroy();
       return false;
     });
     this.apples = this.apples.filter((a) => {

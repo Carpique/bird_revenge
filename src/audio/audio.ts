@@ -16,7 +16,7 @@ const url = (file: string) => import.meta.env.BASE_URL + DIR + file;
  * All game audio. Effects are decoded into memory by @pixi/sound so they play instantly; music is
  * streamed through an <audio> element (a whole song decoded would take ~60 MB), and so is the title
  * screen's looped theme (`playTheme`), on an element of its own. The falling-poo
- * tone and the dragons' fire are synthesised on @pixi/sound's AudioContext.
+ * tone, the dragons' fire and a poo hissing away in it are synthesised on @pixi/sound's AudioContext.
  *
  * Browsers only allow sound after a click or key press. Music starts with the first countdown
  * (`startMusic`), which comes from the pose, not a click, so the first click / key press unlocks the
@@ -262,6 +262,29 @@ class GameAudio {
     };
     hiss.addEventListener('ended', () => env.disconnect());
     return flame;
+  }
+
+  /** A short "shhh": a poo evaporating in a fire (noise, its pitch and level falling away). */
+  playHiss() {
+    const ctx = sound.context.audioContext;
+    const level = (this.muted ? 0 : this.volume) * config.audio.hiss;
+    if (ctx.state !== 'running' || this.suspended || level <= 0) return;
+    const t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise(ctx).hiss;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 0.9;
+    band.frequency.setValueAtTime(6000 + Math.random() * 1500, t);
+    band.frequency.exponentialRampToValueAtTime(2500, t + 0.35);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(level, t + 0.02);
+    env.gain.setTargetAtTime(0, t + 0.08, 0.09);
+    src.connect(band).connect(env).connect((sound.context as webaudio.WebAudioContext).destination);
+    src.start(t, Math.random() * (src.buffer.duration - 0.6));
+    src.stop(t + 0.6);
+    src.addEventListener('ended', () => env.disconnect());
   }
 
   setVolume(volume: number, muted: boolean) {

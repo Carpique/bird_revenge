@@ -591,6 +591,8 @@ export const config = {
     fallMs: 1200,
     /** a dragon's fire, synthesised; keep it low, it's on for as long as the fire is out */
     flame: 0.12,
+    /** a poo hissing away in a dragon's fire, synthesised */
+    hiss: 0.5,
   },
 
   score: { villain: 1, bat: 1, pedestrian: -1 },
@@ -611,6 +613,13 @@ export const config = {
 
   /** a door blinks this long (ms) before its button wears off and it switches back, this many times a second; a button lasting less than `blinkMs` blinks for half its time, as many blinks, faster */
   button: { blinkMs: 2000, blinkHz: 4 },
+
+  /**
+   * A poo flying into a dragon's fire hisses away: it shrinks to nothing in `shrinkMs` while `clouds` little smoke clouds
+   * go up from it, the first as it hits the fire, the rest `staggerMs` apart, each for `cloudMs`: growing from
+   * `startScale` of its size to `size` px across and rising `rise` px, see-through (`alpha`) and fading out.
+   */
+  evaporate: { shrinkMs: 300, clouds: 3, staggerMs: 40, cloudMs: 460, size: 16, startScale: 0.1, rise: 30, alpha: 0.6 },
 
   countdownMs: 2000,
   /** how much the game darkens (0–1) behind the "Pause", "Game Over" and "Hooray" signs, the calibration dialog and the countdown */

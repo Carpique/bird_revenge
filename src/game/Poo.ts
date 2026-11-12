@@ -1,6 +1,7 @@
 import { batPooDef, pooDef, splatLifetimeMs } from '../characters/poo';
 import { config, WORLD } from '../config';
 import { CharacterSprite } from '../render/CharacterSprite';
+import { Smoke } from '../render/Smoke';
 import { Knockout } from './Knockout';
 import { BIRD_GROUP, Bodies, Body, type MBody } from './physics';
 
@@ -14,11 +15,15 @@ export class Poo {
   readonly view: CharacterSprite<PooAnim>;
   /** collision radius (px) */
   readonly radius: number;
-  state: 'falling' | 'splat' | 'hit' | 'done' = 'falling';
+  state: 'falling' | 'splat' | 'hit' | 'evaporating' | 'done' = 'falling';
   /** stops the falling sound; called when the poo lands or is removed */
   stopSound: () => void = () => {};
   private splatT = 0;
   private knockout: Knockout | null = null;
+  /** ms since it hit a dragon's fire */
+  private evaporateT = 0;
+  /** the smoke going up from it while it evaporates, beside it in its layer */
+  private smoke: Smoke | null = null;
 
   constructor(x: number, y: number, vx: number, vy: number, readonly owner: PooOwner = 'bird') {
     this.view = new CharacterSprite<PooAnim>(owner === 'bat' ? batPooDef : pooDef);
@@ -58,7 +63,29 @@ export class Poo {
     this.view.position.set(this.body.position.x, this.body.position.y);
   }
 
+  /** Flew into a dragon's fire: stops where it is, shrinks away and smokes (caller removes the physics body). */
+  evaporate() {
+    this.stopSound();
+    this.state = 'evaporating';
+    this.evaporateT = 0;
+    this.view.position.set(this.body.position.x, this.body.position.y);
+    this.smoke = new Smoke(this.radius);
+    this.smoke.position.copyFrom(this.view.position);
+    this.view.parent?.addChild(this.smoke);
+  }
+
+  destroy() {
+    this.view.destroy();
+    this.smoke?.destroy({ children: true });
+  }
+
   step(stepMs: number) {
+    if (this.state === 'evaporating') {
+      this.evaporateT += stepMs;
+      if (this.smoke) this.smoke.t = this.evaporateT;
+      if (this.evaporateT >= Math.max(config.evaporate.shrinkMs, Smoke.ms)) this.state = 'done';
+      return;
+    }
     if (this.knockout) {
       this.view.y += this.knockout.step(stepMs);
       if (this.knockout.done) this.state = 'done';
@@ -74,6 +101,10 @@ export class Poo {
       this.view.position.set(this.body.position.x, this.body.position.y);
     } else if (this.state === 'splat') {
       this.view.alpha = Math.min(1, 3 * (1 - this.splatT / splatLifetimeMs));
+    } else if (this.state === 'evaporating') {
+      const e = config.evaporate;
+      this.view.scale.set(Math.max(0, 1 - this.evaporateT / e.shrinkMs));
+      this.smoke?.sync();
     } else if (this.knockout) {
       this.view.alpha = this.knockout.alpha;
     }
