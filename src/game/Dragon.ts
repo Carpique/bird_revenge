@@ -57,12 +57,17 @@ export class Dragon {
     return 2 * dragonConfig.fire.rollMs + this.def.flameDuration * 1000;
   }
 
-  /** How far along its route the fire is out (px), stopping where the level blocks it; 0: none. */
-  get reach(): number {
+  /** How far the fire has rolled out, 0–1 (1: all the way, though the level may block it short of that); 0: none. */
+  get out(): number {
     if (this.phase !== 'spitting') return 0;
     const roll = dragonConfig.fire.rollMs, t = this.spitT;
     const out = t < roll ? t / roll : t < this.spitMs - roll ? 1 : (this.spitMs - t) / roll;
-    return Math.min(this.clear, Math.max(0, Math.min(1, out)) * this.route.length);
+    return Math.max(0, Math.min(1, out));
+  }
+
+  /** How far along its route the fire is out (px), stopping where the level blocks it; 0: none. */
+  get reach(): number {
+    return Math.min(this.clear, this.out * this.route.length);
   }
 
   /** whether the level stops the fire where it is now */

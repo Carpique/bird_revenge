@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Rectangle, Sprite, Text, type Texture } from 'pixi.js';
-import { audio } from '../audio/audio';
+import { audio, type FlameSound } from '../audio/audio';
 import { coinDef } from '../characters/coin';
 import { splatHalfWidth } from '../characters/poo';
 import { villainDef } from '../characters/villain';
@@ -123,6 +123,8 @@ export class Game {
   private apples: Apple[] = [];
   private friends: Friend[] = [];
   private dragons: Dragon[] = [];
+  /** the sound of each dragon's fire while it's out */
+  private flameSounds = new Map<Dragon, FlameSound>();
   private coins: Coin[] = [];
   private popups: Popup[] = [];
   private pending: (() => void)[] = [];
@@ -334,6 +336,8 @@ export class Game {
     this.friends = this.level.friends.map((def) => new Friend(def));
     for (const f of this.friends) this.friendLayer.addChild(f.view);
     for (const d of this.dragons) d.view.destroy({ children: true });
+    for (const f of this.flameSounds.values()) f.stop();
+    this.flameSounds.clear();
     this.dragons = this.level.dragons.map((def) => new Dragon(def));
     for (const d of this.dragons) {
       d.onSpit = () => audio.play('dragon-roar');
@@ -426,6 +430,7 @@ export class Game {
     // a dragon's fire stops at the level's walls, terrain and crates (as apples do), not at characters
     const blocksFire = (x: number, y: number) => Query.point(this.levelBodies, { x, y }).length > 0;
     for (const d of this.dragons) d.step(STEP_MS, blocksFire);
+    this.stepFlameSounds();
     for (const c of this.coins) c.step(STEP_MS);
     const birdY = this.bird.body.position.y;
     const pooYs = new Map(this.poos.map((p) => [p, p.body.position.y]));
@@ -594,12 +599,29 @@ export class Game {
     }
   }
 
+  /** Each dragon's fire roars, as loud as it's far out, from rolling out until it's back in. */
+  private stepFlameSounds() {
+    if (!this.live) return;
+    for (const d of this.dragons) {
+      const out = d.out;
+      let f = this.flameSounds.get(d);
+      if (out > 0) {
+        if (!f || f.ended) this.flameSounds.set(d, (f = audio.startFlame()));
+        f.set(out);
+      } else if (f) {
+        f.stop();
+        this.flameSounds.delete(d);
+      }
+    }
+  }
+
   /** The grace time after saving all friends is over: everything stops, "Hooray" slides in with a fanfare, and a while later the next level starts (`onLevelComplete`). */
   private completeLevel() {
     this.complete = true;
     this.completeT = 0;
     this.pooQueued = false;
     for (const p of this.poos) p.stopSound();
+    for (const f of this.flameSounds.values()) f.stop();
     audio.playOverMusic('fanfare');
   }
 

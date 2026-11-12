@@ -589,6 +589,8 @@ export const config = {
     /** ...down to here, over `fallMs` */
     fallToHz: 220,
     fallMs: 1200,
+    /** a dragon's fire, synthesised; keep it low, it's on for as long as the fire is out */
+    flame: 0.12,
   },
 
   score: { villain: 1, bat: 1, pedestrian: -1 },

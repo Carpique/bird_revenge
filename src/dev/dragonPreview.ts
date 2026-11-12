@@ -1,8 +1,9 @@
 import GUI from 'lil-gui';
 import { Application, Container, Graphics } from 'pixi.js';
+import { audio, type FlameSound } from '../audio/audio';
 import { dragonConfig } from '../characters/dragon';
 import { ghostDef, villainDef } from '../characters/villain';
-import { WORLD } from '../config';
+import { config, WORLD } from '../config';
 import { Dragon } from '../game/Dragon';
 import { CLASS_DEFAULTS } from '../level/tiled';
 import { showBackingsFor } from '../render/backing';
@@ -44,7 +45,11 @@ async function main() {
     // fire along a path: up and over, then down
     new Dragon({ ...defaults, x: 640, y: 380, facing: 'right', initialDelay: 2, path: [[720, 340], [800, 260], [900, 260], [980, 420]] }),
   ];
-  for (const d of dragons) world.addChild(d.view);
+  for (const d of dragons) {
+    world.addChild(d.view);
+    d.onSpit = () => audio.play('dragon-roar');
+  }
+  const flames: (FlameSound | undefined)[] = [];
   // a wall in the path dragon's way, to show the fire stopping at it (the game uses the level's bodies)
   const wallRect = { x: 860, y: 200, width: 24, height: 130 };
   const wall = world.addChild(new Graphics().rect(wallRect.x, wallRect.y, wallRect.width, wallRect.height).fill('#9a8f7d').stroke({ width: 3, color: '#2b2b2b' }));
@@ -78,6 +83,7 @@ async function main() {
   fire.add(dragonConfig.fire, 'wobble', 0, 10, 0.1);
   fire.add(dragonConfig.fire, 'halfThickness', 2, 30, 1);
   fire.add(dragonConfig.fire, 'hitTrim', 0, 1, 0.05);
+  gui.add(config.audio, 'flame', 0, 1, 0.01).name('fire volume');
   const shake = gui.addFolder('shake (all)');
   shake.add(dragonConfig.shake, 'px', 0, 5, 0.1);
   shake.add(dragonConfig.shake, 'ms', 10, 200, 5);
@@ -86,6 +92,17 @@ async function main() {
     fitWorld(app, world);
     if (!ui.paused) for (const d of dragons) d.step(Math.min(50, app.ticker.deltaMS), inWall);
     for (const d of dragons) d.sync();
+    // the game's sounds (click the page once to allow them)
+    audio.update();
+    if (!ui.paused) {
+      dragons.forEach((d, i) => {
+        let f = flames[i];
+        if (d.out > 0) {
+          if (!f || f.ended) f = flames[i] = audio.startFlame();
+          f.set(d.out);
+        } else f?.stop();
+      });
+    }
     boxes.clear();
     if (!ui.showHitbox) return;
     // the burning part of each route, as thick as it burns

@@ -16,7 +16,7 @@ const url = (file: string) => import.meta.env.BASE_URL + DIR + file;
  * All game audio. Effects are decoded into memory by @pixi/sound so they play instantly; music is
  * streamed through an <audio> element (a whole song decoded would take ~60 MB), and so is the title
  * screen's looped theme (`playTheme`), on an element of its own. The falling-poo
- * tone is synthesised on @pixi/sound's AudioContext.
+ * tone and the dragons' fire are synthesised on @pixi/sound's AudioContext.
  *
  * Browsers only allow sound after a click or key press. Music starts with the first countdown
  * (`startMusic`), which comes from the pose, not a click, so the first click / key press unlocks the
@@ -55,8 +55,14 @@ class GameAudio {
   private warned = new Set<string>();
   /** the falling-poo tones go through this, so volume changes reach tones already playing */
   private fallBus: GainNode | null = null;
+  /** the fire sounds go through this, likewise */
+  private flameBus: GainNode | null = null;
+  /** looped noise for the fire sounds: plain, and sparse pops (crackle); made on first use */
+  private flameNoise: { hiss: AudioBuffer; crackle: AudioBuffer } | null = null;
+  /** fire sounds playing, with when they were last `set`; one not set for a while (the game stopped stepping) stops */
+  private flames = new Map<FlameSound, number>();
   /** last levels applied (only push changes) */
-  private applied = { effects: -1, music: -1, theme: -1, fall: -1 };
+  private applied = { effects: -1, music: -1, theme: -1, fall: -1, flame: -1 };
 
   constructor() {
     try {
@@ -186,6 +192,78 @@ class GameAudio {
     return stop;
   }
 
+  /**
+   * Starts a fire's roar (filtered noise, flickering, crackling), silent until `set`. `set` it every game step to how far
+   * the fire is out (0–1); not set for a while (the game paused or stopped), it fades out and `ended` turns true.
+   */
+  startFlame(): FlameSound {
+    const ctx = sound.context.audioContext;
+    const flame: FlameSound = { ended: true, set: () => {}, stop: () => {} };
+    if (ctx.state !== 'running' || this.suspended) return flame;
+    const t = ctx.currentTime;
+    const noise = this.noise(ctx);
+    // noise loops from random points, so several fires don't sum into one louder, phasey one
+    const loop = (buffer: AudioBuffer) => {
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      src.start(t, Math.random() * buffer.duration);
+      return src;
+    };
+    const filter = (type: BiquadFilterType, hz: number, q = 0.7) => {
+      const f = ctx.createBiquadFilter();
+      f.type = type;
+      f.frequency.value = hz;
+      f.Q.value = q;
+      return f;
+    };
+    const gain = (value: number) => {
+      const g = ctx.createGain();
+      g.gain.value = value;
+      return g;
+    };
+    const env = gain(0);
+    // flicker: the level wavering a little, two slow sines out of step
+    const flicker = gain(1);
+    const lfos = [3.3, 7.9].map((hz, i) => {
+      const o = ctx.createOscillator();
+      o.frequency.value = hz * (0.85 + Math.random() * 0.3);
+      o.connect(gain(i ? 0.08 : 0.15)).connect(flicker.gain);
+      o.start(t);
+      return o;
+    });
+    // the roar: low rumble, its cutoff opening as the fire comes out
+    const rumble = filter('lowpass', 300, 1.2);
+    const hiss = loop(noise.hiss);
+    hiss.connect(rumble).connect(flicker);
+    hiss.connect(filter('bandpass', 1800, 0.6)).connect(gain(0.25)).connect(flicker);
+    const crackle = loop(noise.crackle);
+    crackle.connect(filter('highpass', 1200)).connect(gain(0.5)).connect(flicker);
+    flicker.connect(env).connect(this.flameOut(ctx));
+    const sources = [hiss, crackle, ...lfos];
+
+    flame.ended = false;
+    flame.set = (level: number) => {
+      if (flame.ended) return;
+      this.flames.set(flame, performance.now());
+      const now = ctx.currentTime;
+      const k = Math.min(1, Math.max(0, level));
+      env.gain.setTargetAtTime(k, now, 0.05);
+      rumble.frequency.setTargetAtTime(300 + 900 * k, now, 0.08);
+    };
+    flame.stop = () => {
+      if (flame.ended) return;
+      flame.ended = true;
+      this.flames.delete(flame);
+      const now = ctx.currentTime;
+      env.gain.cancelScheduledValues(now);
+      env.gain.setTargetAtTime(0, now, 0.05);
+      for (const s of sources) s.stop(now + 0.4);
+    };
+    hiss.addEventListener('ended', () => env.disconnect());
+    return flame;
+  }
+
   setVolume(volume: number, muted: boolean) {
     this.volume = Math.min(1, Math.max(0, volume));
     this.muted = muted;
@@ -219,11 +297,15 @@ class GameAudio {
     const music = v * config.audio.music * this.musicFade();
     const theme = v * config.audio.music * this.themeFade();
     const fall = v * config.audio.fall;
+    const flame = v * config.audio.flame;
     if (effects !== this.applied.effects) sound.volumeAll = effects;
     if (music !== this.applied.music) this.music.volume = Math.min(1, Math.max(0, music));
     if (theme !== this.applied.theme) this.theme.volume = Math.min(1, Math.max(0, theme));
     if (fall !== this.applied.fall && this.fallBus) this.fallBus.gain.value = fall;
-    this.applied = { effects, music, theme, fall };
+    if (flame !== this.applied.flame && this.flameBus) this.flameBus.gain.value = flame;
+    this.applied = { effects, music, theme, fall, flame };
+    const now = performance.now();
+    for (const [f, setAt] of this.flames) if (now - setAt > FLAME_TIMEOUT_MS) f.stop();
   }
 
   /** The music's current level along its ramp; once `stopMusic` has faded it to 0, it's paused. */
@@ -297,6 +379,35 @@ class GameAudio {
       this.fallBus.connect((sound.context as webaudio.WebAudioContext).destination);
     }
     return this.fallBus;
+  }
+
+  private flameOut(ctx: AudioContext): GainNode {
+    if (!this.flameBus) {
+      this.flameBus = ctx.createGain();
+      this.flameBus.gain.value = this.applied.flame;
+      this.flameBus.connect((sound.context as webaudio.WebAudioContext).destination);
+    }
+    return this.flameBus;
+  }
+
+  /** 2 s of white noise, and of sparse pops of it (a fire's crackle) */
+  private noise(ctx: AudioContext) {
+    if (!this.flameNoise) {
+      const len = 2 * ctx.sampleRate;
+      const hiss = ctx.createBuffer(1, len, ctx.sampleRate);
+      const crackle = ctx.createBuffer(1, len, ctx.sampleRate);
+      const h = hiss.getChannelData(0), c = crackle.getChannelData(0);
+      let pop = 0;
+      for (let i = 0; i < len; i++) {
+        h[i] = Math.random() * 2 - 1;
+        // ~40 pops a second, each a few ms of noise dying away
+        if (Math.random() < 40 / ctx.sampleRate) pop = 0.3 + Math.random() * 0.7;
+        c[i] = (Math.random() * 2 - 1) * pop;
+        pop *= 0.995;
+      }
+      this.flameNoise = { hiss, crackle };
+    }
+    return this.flameNoise;
   }
 
   /** Start the background music, or carry on with it after `stopMusic`; otherwise nothing changes. */
@@ -375,5 +486,17 @@ class GameAudio {
     if (this.musicWanted && !this.suspended) void this.music.play().catch(() => {});
   }
 }
+
+/** A fire's sound playing (`GameAudio.startFlame`). */
+export interface FlameSound {
+  /** stopped (or never started: no sound allowed then); a new one is needed */
+  ended: boolean;
+  /** how loud, 0–1: how far the fire is out */
+  set(level: number): void;
+  stop(): void;
+}
+
+/** a fire sound not `set` for this long stops */
+const FLAME_TIMEOUT_MS = 250;
 
 export const audio = new GameAudio();
