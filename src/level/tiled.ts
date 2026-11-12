@@ -19,6 +19,7 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  * | Bat       | tile, `path` a polyline or polygon | a bat flying along `path`: there and back (polyline), round and round (polygon), from its point nearest the tile's centre |
  * |           | or a polyline, polygon         | the same, from its first point            |
  * |           | tile or point, no `path`       | a homing bat: no route, it goes for the bird, from the tile's centre / the point |
+ * | Dragon    | tile, `path` a polyline or none | a dragon sitting where the tile's feet are, spitting fire every `throwDelay` s or so, for `flameDuration` s: from its mouth along `path`, or without one straight ahead `fireLength` px; the tile flipped horizontally: it faces left |
  * | Friend    | point, or a tile               | a friend to save, standing on the point / where the tile's feet are |
  * | Coin      | point, or a tile               | a coin to collect, centred on the point / the tile's image |
  * | BirdStart | point, or a tile               | where the bird starts: its centre / where the tile shows it |
@@ -110,6 +111,7 @@ export const CLASS_DEFAULTS = {
   Hinge: { body: 0, to: 0, stiffness: 1 },
   Villain: { kind: 'villain', path: 0, throwDelay: 4 },
   Bat: { path: 0, speed: 2, pooDelay: 3 },
+  Dragon: { path: 0, fireLength: 240, throwDelay: 4, flameDuration: 1 },
   Friend: { kind: 'bunny' },
   BirdStart: {},
   Coin: {},
@@ -136,9 +138,13 @@ const TILE_POSITIONS: Partial<Record<ClassName, { x: number; y: number }>> = {
   Coin: coinDef.anchor,
   Villain: { x: 0.5, y: 1 },
   Bat: batDef.anchor,
+  Dragon: { x: 0.5, y: 1 },
   Friend: { x: 0.5, y: 1 },
   BirdStart: birdDef.anchor,
 };
+
+/** the flag Tiled sets on a tile object's gid when it's flipped horizontally */
+const FLIPPED_HORIZONTALLY = 0x80000000;
 
 export class LevelError extends Error {}
 
@@ -160,6 +166,7 @@ export function parseTiledMap(name: string, map: TiledMap, tilesets: Record<stri
     birdStart: null,
     villains: [],
     bats: [],
+    dragons: [],
     friends: [],
     coins: [],
     bodies: [],
@@ -277,6 +284,19 @@ function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup, objects: 
       if (route.every(([x, y]) => x === route[0][0] && y === route[0][1])) throw new Error('a Bat route needs some length');
       const { start, target } = tile ? nearestOnRoute(route, path.loop, tilePos()) : { start: route[0], target: 1 };
       level.bats.push({ route, loop: path.loop, start, target, speed, pooDelay });
+      break;
+    }
+    case 'Dragon': {
+      if (!tile) throw new Error('a Dragon must be a tile');
+      const fireLength = num(p.fireLength), throwDelay = num(p.throwDelay), flameDuration = num(p.flameDuration);
+      const path = num(p.path) ? pathOf(objects, p.path, false).points : null;
+      if (!path && fireLength <= 0) throw new Error('"fireLength" must be more than 0 (or give it a "path")');
+      if (throwDelay < 0) throw new Error('"throwDelay" can\'t be negative (0 = never spits)');
+      if (flameDuration < 0) throw new Error('"flameDuration" can\'t be negative');
+      const [x, y] = tilePos();
+      // Tiled's horizontal flip (X) turns it round
+      const facing = o.gid! & FLIPPED_HORIZONTALLY ? 'left' : 'right';
+      level.dragons.push({ x, y, facing, path, fireLength, throwDelay, flameDuration });
       break;
     }
     case 'Friend': {

@@ -168,6 +168,39 @@
             ]
         },
         {
+            "color": "#ff5f9e4f",
+            "drawFill": true,
+            "id": 18,
+            "members": [
+                {
+                    "name": "fireLength",
+                    "type": "float",
+                    "value": 240
+                },
+                {
+                    "name": "flameDuration",
+                    "type": "float",
+                    "value": 1
+                },
+                {
+                    "name": "path",
+                    "type": "object",
+                    "value": 0
+                },
+                {
+                    "name": "throwDelay",
+                    "type": "float",
+                    "value": 4
+                }
+            ],
+            "name": "Dragon",
+            "type": "class",
+            "useAs": [
+                "object",
+                "tile"
+            ]
+        },
+        {
             "color": "#ff2f8a3c",
             "drawFill": true,
             "id": 8,

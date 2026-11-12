@@ -22,6 +22,7 @@ import { HomingField, inSight } from './homing';
 import { Bird, type BirdSample } from './Bird';
 import { Button } from './Button';
 import { Coin } from './Coin';
+import { Dragon } from './Dragon';
 import { Friend } from './Friend';
 import { landingBranch } from './branches';
 import { Bodies, Composite, Engine, Events, Query, Sleeping, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
@@ -87,6 +88,8 @@ export class Game {
   private friendLayer = new Container();
   /** the coins: in front of the friends, behind the villain */
   private coinLayer = new Container();
+  /** the dragons and their fire: in front of the coins, behind the villain */
+  private dragonLayer = new Container();
   /** poos and apples: in front of the villain, behind the bird */
   private fx = new Container();
   /** the bird, then score popups */
@@ -119,6 +122,7 @@ export class Game {
   private poos: Poo[] = [];
   private apples: Apple[] = [];
   private friends: Friend[] = [];
+  private dragons: Dragon[] = [];
   private coins: Coin[] = [];
   private popups: Popup[] = [];
   private pending: (() => void)[] = [];
@@ -181,7 +185,7 @@ export class Game {
 
     // layers
     this.top.addChild(this.bird.view);
-    this.world.addChild(this.background, this.levelLayer, this.friendLayer, this.coinLayer, this.actors, this.fx, this.top, this.front);
+    this.world.addChild(this.background, this.levelLayer, this.friendLayer, this.coinLayer, this.dragonLayer, this.actors, this.fx, this.top, this.front);
     this.root.addChild(this.world, this.hud);
 
     // the icon is as tall as the digits' font size
@@ -329,6 +333,9 @@ export class Game {
     for (const f of this.friends) f.view.destroy();
     this.friends = this.level.friends.map((def) => new Friend(def));
     for (const f of this.friends) this.friendLayer.addChild(f.view);
+    for (const d of this.dragons) d.view.destroy({ children: true });
+    this.dragons = this.level.dragons.map((def) => new Dragon(def));
+    for (const d of this.dragons) this.dragonLayer.addChild(d.view);
     for (const c of this.coins) c.view.destroy();
     this.coins = this.level.coins.map((def) => new Coin(def));
     for (const c of this.coins) this.coinLayer.addChild(c.view);
@@ -413,6 +420,7 @@ export class Game {
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
     for (const f of this.friends) f.step(STEP_MS);
+    for (const d of this.dragons) d.step(STEP_MS);
     for (const c of this.coins) c.step(STEP_MS);
     const birdY = this.bird.body.position.y;
     const pooYs = new Map(this.poos.map((p) => [p, p.body.position.y]));
@@ -429,11 +437,11 @@ export class Game {
     this.saveFriends();
     this.collectCoins();
     if (this.allSavedT !== null && (this.allSavedT += STEP_MS) >= config.levelComplete.graceMs) this.completeLevel();
-    // bird touching a walking villain or a flying bat costs a life
+    // bird touching a walking villain, a flying bat or a dragon's fire costs a life
     const b = this.bird.body;
     const birdR = config.physics.birdRadius;
-    const touches = (a: Villain | Bat) => a.touches(b.position.x, b.position.y, birdR);
-    if (!this.bird.dying && !this.bird.invulnerable && (this.villains.some(touches) || this.bats.some(touches))) {
+    const touches = (a: Villain | Bat | Dragon) => a.touches(b.position.x, b.position.y, birdR);
+    if (!this.bird.dying && !this.bird.invulnerable && (this.villains.some(touches) || this.bats.some(touches) || this.dragons.some(touches))) {
       this.loseLife();
     }
     // ...and so does a bat's poo falling on it
@@ -879,6 +887,7 @@ export class Game {
     for (const p of this.poos) p.sync();
     for (const a of this.apples) a.sync();
     for (const f of this.friends) f.sync();
+    for (const d of this.dragons) d.sync();
     for (const c of this.coins) c.sync();
   }
 }

@@ -14,6 +14,7 @@ const ICONS = [
   { out: 'villain', svg: 'villain/walk_0', height: 130, feet: 0.98 },
   { out: 'ghost', svg: 'ghost/float_0', height: 130, feet: 0.98, shadow: true },
   { out: 'bat', svg: 'bat/fly_0', height: 64 },
+  { out: 'dragon', svg: 'dragon/idle', height: 85, feet: 106 / 110 },
   { out: 'bunny', svg: 'friend/bunny/idle', height: 64, feet: 1 },
   { out: 'bird', svg: 'bird/idle', height: 90 },
 ];

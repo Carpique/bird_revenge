@@ -9,6 +9,7 @@ import projectText from '../src/levels/bird-revenge.tiled-project?raw';
 import { Button } from '../src/game/Button';
 import { birdDef } from '../src/characters/bird';
 import { batDef } from '../src/characters/bat';
+import { dragonDef } from '../src/characters/dragon';
 import { friendDefs } from '../src/characters/friend';
 import { villainDef, villainLooks } from '../src/characters/villain';
 
@@ -131,7 +132,7 @@ describe('Tiled levels', () => {
     expect(() => parseTiledMap('t', mapOf([{ type: 'Coin', width: 10, height: 10 }]))).toThrow('must be a point');
     const map = mapOf([{ gid: 1, type: 'Terrain', width: 40, height: 40 }]);
     map.tilesets = [{ firstgid: 1, source: 'icons.tsj' }];
-    expect(() => parseTiledMap('t', map, tilesets)).toThrow('only a Coin, Villain, Bat, Friend, BirdStart can be a tile');
+    expect(() => parseTiledMap('t', map, tilesets)).toThrow('only a Coin, Villain, Bat, Dragon, Friend, BirdStart can be a tile');
     expect(() => parseTiledMap('t', map)).toThrow('tileset "icons.tsj" isn\'t loaded');
   });
 
@@ -187,7 +188,7 @@ describe('Tiled levels', () => {
   });
 
   describe('actor tiles (icons.tsj, bottom-centre aligned)', () => {
-    /** a map with the icons tileset (gid: coin 1, villain 2, bat 3, bunny 4, bird 5, ghost 6) and `objects` */
+    /** a map with the icons tileset (gid: coin 1, villain 2, bat 3, bunny 4, bird 5, ghost 6, dragon 7) and `objects` */
     const actorMap = (objects: Partial<TiledObject>[]) => {
       const map = mapOf(objects);
       map.tilesets = [{ firstgid: 1, source: 'icons.tsj' }];
@@ -197,7 +198,7 @@ describe('Tiled levels', () => {
       const tile = (tilesets['icons.tsj'] as { tiles: { id: number; imagewidth: number; imageheight: number }[] }).tiles[id];
       return { width: tile.imagewidth, height: tile.imageheight };
     };
-    const villain = { gid: 2, ...size(1) }, bat = { gid: 3, ...size(2) }, bunny = { gid: 4, ...size(3) }, bird = { gid: 5, ...size(4) }, ghost = { gid: 6, ...size(5) };
+    const villain = { gid: 2, ...size(1) }, bat = { gid: 3, ...size(2) }, bunny = { gid: 4, ...size(3) }, bird = { gid: 5, ...size(4) }, ghost = { gid: 6, ...size(5) }, dragon = { gid: 7, ...size(6) };
 
     it('has icons at the actors\' sizes in the game (else: npm run tiled-icons, and fix icons.tsj)', () => {
       // the villain's is cut at his feet
@@ -205,6 +206,32 @@ describe('Tiled levels', () => {
       expect(bat.height).toBe(batDef.displayHeight);
       expect(bunny.height).toBe(friendDefs.bunny.displayHeight);
       expect(bird.height).toBe(birdDef.displayHeight);
+      expect(dragon.height).toBe(Math.round(dragonDef.displayHeight * dragonDef.anchor.y));
+    });
+
+    it('sits a dragon at its feet, facing left when the tile is flipped, its fire straight ahead or along its path', () => {
+      const flipped = 0x80000000 + dragon.gid;
+      const level = parseTiledMap(
+        't',
+        actorMap([
+          { id: 1, ...dragon, x: 300, y: 640 },
+          { id: 2, ...dragon, gid: flipped, x: 900, y: 640, properties: [prop('fireLength', 'float', 150), prop('throwDelay', 'float', 0), prop('flameDuration', 'float', 2.5)] },
+          // the path is anywhere, on any layer, even a hidden one
+          { id: 3, x: 400, y: 600, polyline: [{ x: 0, y: 0 }, { x: 100, y: -50 }, { x: 200, y: 0 }], visible: false },
+          { id: 4, ...dragon, x: 300, y: 300, properties: [prop('path', 'object', 3)] },
+        ]),
+        tilesets,
+      );
+      const { throwDelay, flameDuration, fireLength } = CLASS_DEFAULTS.Dragon;
+      expect(level.dragons).toEqual([
+        { x: 300, y: 640, facing: 'right', path: null, fireLength, throwDelay, flameDuration },
+        { x: 900, y: 640, facing: 'left', path: null, fireLength: 150, throwDelay: 0, flameDuration: 2.5 },
+        { x: 300, y: 300, facing: 'right', path: [[400, 600], [500, 550], [600, 600]], fireLength, throwDelay, flameDuration },
+      ]);
+      expect(() => parseTiledMap('t', mapOf([{ type: 'Dragon', point: true }]))).toThrow('a Dragon must be a tile');
+      expect(() => parseTiledMap('t', actorMap([{ ...dragon, properties: [prop('fireLength', 'float', 0)] }]), tilesets)).toThrow('"fireLength"');
+      expect(() => parseTiledMap('t', actorMap([{ ...dragon, properties: [prop('throwDelay', 'float', -1)] }]), tilesets)).toThrow('"throwDelay"');
+      expect(() => parseTiledMap('t', actorMap([{ ...dragon, properties: [prop('path', 'object', 99)] }]), tilesets)).toThrow('its "path" must be a polyline');
     });
 
     it('shows the villains\' hitboxes as their tiles\' collision shapes (else: fix icons.tsj)', () => {

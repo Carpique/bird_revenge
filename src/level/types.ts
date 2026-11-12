@@ -111,6 +111,23 @@ export interface BatDef {
   pooDelay: number;
 }
 
+/** A dragon sitting still, spitting a stream of fire now and then; touching the fire costs the bird a life. It can't be hurt. */
+export interface DragonDef {
+  /** where its feet are */
+  x: number;
+  y: number;
+  /** the way its head points */
+  facing: 'left' | 'right';
+  /** the line its fire follows from its mouth (from the end nearer the mouth), or null: straight ahead `fireLength` px */
+  path: [number, number][] | null;
+  /** how far its fire reaches straight ahead (px), without a `path` */
+  fireLength: number;
+  /** average time between its spits (s); 0 = it never spits */
+  throwDelay: number;
+  /** how long the fire stays fully out (s), not counting rolling out and back */
+  flameDuration: number;
+}
+
 export type ButtonAction = 'open' | 'close';
 
 /**
@@ -143,6 +160,7 @@ export interface LevelDef {
   birdStart: { x: number; y: number } | null;
   villains: VillainDef[];
   bats: BatDef[];
+  dragons: DragonDef[];
   /** saving all of them completes the level (a level without any never ends) */
   friends: FriendDef[];
   coins: CoinDef[];

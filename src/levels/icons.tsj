@@ -9,7 +9,7 @@
  "name":"icons",
  "objectalignment":"bottom",
  "spacing":0,
- "tilecount":6,
+ "tilecount":7,
  "tiledversion":"1.12.2",
  "tileheight":127,
  "tiles":[
@@ -114,8 +114,15 @@
                  "value":"ghost"
                 }],
          "type":"Villain"
+        }, 
+        {
+         "id":6,
+         "image":"tiles\/dragon.png",
+         "imageheight":82,
+         "imagewidth":131,
+         "type":"Dragon"
         }],
- "tilewidth":100,
+ "tilewidth":131,
  "type":"tileset",
  "version":"1.11"
 }
