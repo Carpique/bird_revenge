@@ -15,7 +15,7 @@ vi.mock('../src/render/FireStream', async () => {
   return { FireStream: class extends Container { step() {} } };
 });
 
-const def = (more: Partial<DragonDef> = {}): DragonDef => ({ x: 300, y: 640, facing: 'right', path: null, fireLength: 240, throwDelay: 4, flameDuration: 1, ...more });
+const def = (more: Partial<DragonDef> = {}): DragonDef => ({ x: 300, y: 640, facing: 'right', path: null, fireLength: 240, initialDelay: 0, throwDelay: 4, flameDuration: 1, ...more });
 
 /** Steps `d` until `until` holds (at most a minute), returning the ms that took. */
 function stepUntil(d: Dragon, until: () => boolean): number {
@@ -83,14 +83,26 @@ describe('a dragon', () => {
     expect(back).toBeLessThan(roll + 2 * STEP_MS);
   });
 
-  it('spits every throwDelay or so, and never with a throwDelay of 0', () => {
-    const d = new Dragon(def({ throwDelay: 2 }));
-    stepUntil(d, () => d.phase === 'spitting');
-    stepUntil(d, () => d.phase === 'resting');
-    const wait = stepUntil(d, () => d.phase !== 'resting');
+  it('first spits initialDelay into the level, at once by default', () => {
+    const now = new Dragon(def());
+    expect(stepUntil(now, () => now.phase === 'opening')).toBe(STEP_MS);
+    const later = new Dragon(def({ initialDelay: 1.5 }));
+    const first = stepUntil(later, () => later.phase === 'opening');
+    expect(first).toBeGreaterThanOrEqual(1500);
+    expect(first).toBeLessThan(1500 + STEP_MS + 1);
+  });
+
+  it('spits again throwDelay or so after its fire is fully back in, and never with a throwDelay of 0', () => {
     const spread = dragonConfig.intervalSpread;
-    expect(wait).toBeGreaterThanOrEqual(2000 * (1 - spread) - STEP_MS);
-    expect(wait).toBeLessThanOrEqual(2000 * (1 + spread) + STEP_MS);
+    for (let i = 0; i < 20; i++) {
+      const d = new Dragon(def({ throwDelay: 2 }));
+      stepUntil(d, () => d.reach > 0);
+      // the fire fully back in: the wait starts here, while the jaw is still closing
+      stepUntil(d, () => d.reach === 0);
+      const wait = stepUntil(d, () => d.phase === 'opening');
+      expect(wait).toBeGreaterThanOrEqual(2000 * (1 - spread) - STEP_MS);
+      expect(wait).toBeLessThanOrEqual(2000 * (1 + spread) + STEP_MS);
+    }
 
     const never = new Dragon(def({ throwDelay: 0 }));
     expect(stepUntil(never, () => never.phase !== 'resting')).toBeGreaterThanOrEqual(60_000);

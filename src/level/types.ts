@@ -122,7 +122,9 @@ export interface DragonDef {
   path: [number, number][] | null;
   /** how far its fire reaches straight ahead (px), without a `path` */
   fireLength: number;
-  /** average time between its spits (s); 0 = it never spits */
+  /** time from the level's start to its first spit (s) */
+  initialDelay: number;
+  /** average time between its spits (s), from when the fire is fully back in to the next spit; 0 = it never spits */
   throwDelay: number;
   /** how long the fire stays fully out (s), not counting rolling out and back */
   flameDuration: number;

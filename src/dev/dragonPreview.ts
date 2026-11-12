@@ -40,9 +40,9 @@ async function main() {
   const defaults = { ...CLASS_DEFAULTS.Dragon, path: null, throwDelay: 3 };
   const dragons = [
     new Dragon({ ...defaults, x: 420, y: WORLD.groundY, facing: 'right' }),
-    new Dragon({ ...defaults, x: 930, y: WORLD.groundY, facing: 'left', fireLength: 160 }),
+    new Dragon({ ...defaults, x: 930, y: WORLD.groundY, facing: 'left', fireLength: 160, initialDelay: 1 }),
     // fire along a path: up and over, then down
-    new Dragon({ ...defaults, x: 640, y: 380, facing: 'right', path: [[720, 340], [800, 260], [900, 260], [980, 420]] }),
+    new Dragon({ ...defaults, x: 640, y: 380, facing: 'right', initialDelay: 2, path: [[720, 340], [800, 260], [900, 260], [980, 420]] }),
   ];
   for (const d of dragons) world.addChild(d.view);
   // a wall in the path dragon's way, to show the fire stopping at it (the game uses the level's bodies)

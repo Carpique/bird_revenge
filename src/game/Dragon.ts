@@ -13,8 +13,8 @@ import { fireRoute, type FirePath } from './firePath';
 export type DragonPhase = 'resting' | 'opening' | 'spitting' | 'closing';
 
 /**
- * A dragon: it never moves and can't be hurt (it's outside the physics world, and poos pass it by); every `throwDelay`
- * seconds or so it spits fire along its route (`fireRoute`), up to the first wall, terrain or crate in the way. The bird touching the fire loses a life (`touches`).
+ * A dragon: it never moves and can't be hurt (it's outside the physics world, and poos pass it by); `initialDelay` s
+ * into the level, then every `throwDelay` s or so after its fire is back in, it spits fire along its route (`fireRoute`), up to the first wall, terrain or crate in the way. The bird touching the fire loses a life (`touches`).
  * Its view holds the dragon and, in world coordinates, its fire.
  */
 export class Dragon {
@@ -23,8 +23,13 @@ export class Dragon {
   phase: DragonPhase = 'resting';
   private readonly sprite: CharacterSprite<DragonAnim>;
   private readonly fire: FireStream;
-  /** ms left in the current phase */
-  private phaseMs: number;
+  /** ms left in the current phase (opening, spitting, closing) */
+  private phaseMs = 0;
+  /**
+   * ms until the next spit starts (the jaw opening): `initialDelay` at the start, then `throwDelay` or so from when the
+   * fire is fully back in (counting on while the jaw closes); never (Infinity) with a `throwDelay` of 0
+   */
+  private spitIn: number;
   /** ms since the spit began */
   private spitT = 0;
   /** how far along its route the fire can go before something of the level blocks it (px) */
@@ -35,8 +40,7 @@ export class Dragon {
   private shake = { x: 0, y: 0, ms: 0 };
 
   constructor(readonly def: DragonDef) {
-    const [lo, hi] = dragonConfig.firstRestShare;
-    this.phaseMs = this.nextSpitDelay() * (lo + Math.random() * (hi - lo));
+    this.spitIn = def.throwDelay > 0 ? def.initialDelay * 1000 : Infinity;
     this.route = fireRoute(def);
     this.clear = this.route.length;
     this.sprite = new CharacterSprite<DragonAnim>(dragonDef);
@@ -82,7 +86,7 @@ export class Dragon {
 
   /** Spit now, if it's resting. */
   spitNow() {
-    if (this.phase === 'resting') this.phaseMs = 0;
+    if (this.phase === 'resting') this.spitIn = 0;
   }
 
   /**
@@ -91,8 +95,16 @@ export class Dragon {
    */
   step(stepMs: number, blocked?: (x: number, y: number) => boolean) {
     this.fire.step(stepMs);
+    if (this.phase === 'resting' || this.phase === 'closing') this.spitIn -= stepMs;
+    if (this.phase === 'resting') {
+      this.stepFidget(stepMs);
+      if (this.spitIn <= 0) {
+        this.enter('opening', animMs('open'));
+        this.fidget = 'idle';
+      }
+      return;
+    }
     this.phaseMs -= stepMs;
-    if (this.phase === 'resting') this.stepFidget(stepMs);
     if (this.phase === 'spitting') {
       this.spitT += stepMs;
       this.stepShake(stepMs);
@@ -100,20 +112,18 @@ export class Dragon {
     }
     if (this.phaseMs > 0) return;
     switch (this.phase) {
-      case 'resting':
-        this.enter('opening', animMs('open'));
-        this.fidget = 'idle';
-        break;
       case 'opening':
         this.enter('spitting', this.spitMs);
         this.spitT = 0;
         break;
       case 'spitting':
+        // the fire is fully back in: the wait for the next spit starts now
+        this.spitIn = this.nextSpitDelay();
         this.enter('closing', animMs('close'));
         this.shake = { x: 0, y: 0, ms: 0 };
         break;
       case 'closing':
-        this.enter('resting', this.nextSpitDelay());
+        this.enter('resting', 0);
         this.fidgetMs = randomWait();
         break;
     }
@@ -133,7 +143,7 @@ export class Dragon {
     this.phaseMs = ms;
   }
 
-  /** ms until the next spit: around `throwDelay`, never (Infinity) when it's 0 */
+  /** ms from the fire being back in to the next spit: around `throwDelay`, never (Infinity) when it's 0 */
   private nextSpitDelay() {
     if (this.def.throwDelay <= 0) return Infinity;
     const ms = this.def.throwDelay * 1000, spread = dragonConfig.intervalSpread;

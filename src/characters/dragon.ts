@@ -75,10 +75,8 @@ export const fireLayers: FireLayer[] = ['outline', 'outer', 'mid', 'core'];
  * it); 1, the burning part, its rounded end included, stops where the tail starts.
  */
 export const dragonConfig = {
-  /** the time between spits is random within ± this share of the dragon's `throwDelay` */
+  /** the time between spits is random within ± this share of the dragon's `throwDelay` (the first: its `initialDelay`, exactly) */
   intervalSpread: 0.4,
-  /** the first spit comes after a random part of that (so dragons side by side don't spit together) */
-  firstRestShare: [0.3, 1] as [number, number],
   fidget: { minWaitMs: 900, maxWaitMs: 2600, blinkMs: 160, tailMs: 450, smokeMs: 600, tailChance: 0.3, smokeChance: 0.3 },
   /** the body shaking while it spits: up to this far (px) each way, a new offset every `shakeMs` */
   shake: { px: 1.2, ms: 45 },

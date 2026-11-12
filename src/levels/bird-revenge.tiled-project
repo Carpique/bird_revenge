@@ -183,6 +183,11 @@
                     "value": 1
                 },
                 {
+                    "name": "initialDelay",
+                    "type": "float",
+                    "value": 0
+                },
+                {
                     "name": "path",
                     "type": "object",
                     "value": 0

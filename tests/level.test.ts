@@ -215,22 +215,23 @@ describe('Tiled levels', () => {
         't',
         actorMap([
           { id: 1, ...dragon, x: 300, y: 640 },
-          { id: 2, ...dragon, gid: flipped, x: 900, y: 640, properties: [prop('fireLength', 'float', 150), prop('throwDelay', 'float', 0), prop('flameDuration', 'float', 2.5)] },
+          { id: 2, ...dragon, gid: flipped, x: 900, y: 640, properties: [prop('fireLength', 'float', 150), prop('initialDelay', 'float', 1.5), prop('throwDelay', 'float', 0), prop('flameDuration', 'float', 2.5)] },
           // the path is anywhere, on any layer, even a hidden one
           { id: 3, x: 400, y: 600, polyline: [{ x: 0, y: 0 }, { x: 100, y: -50 }, { x: 200, y: 0 }], visible: false },
           { id: 4, ...dragon, x: 300, y: 300, properties: [prop('path', 'object', 3)] },
         ]),
         tilesets,
       );
-      const { throwDelay, flameDuration, fireLength } = CLASS_DEFAULTS.Dragon;
+      const { initialDelay, throwDelay, flameDuration, fireLength } = CLASS_DEFAULTS.Dragon;
       expect(level.dragons).toEqual([
-        { x: 300, y: 640, facing: 'right', path: null, fireLength, throwDelay, flameDuration },
-        { x: 900, y: 640, facing: 'left', path: null, fireLength: 150, throwDelay: 0, flameDuration: 2.5 },
-        { x: 300, y: 300, facing: 'right', path: [[400, 600], [500, 550], [600, 600]], fireLength, throwDelay, flameDuration },
+        { x: 300, y: 640, facing: 'right', path: null, fireLength, initialDelay, throwDelay, flameDuration },
+        { x: 900, y: 640, facing: 'left', path: null, fireLength: 150, initialDelay: 1.5, throwDelay: 0, flameDuration: 2.5 },
+        { x: 300, y: 300, facing: 'right', path: [[400, 600], [500, 550], [600, 600]], fireLength, initialDelay, throwDelay, flameDuration },
       ]);
       expect(() => parseTiledMap('t', mapOf([{ type: 'Dragon', point: true }]))).toThrow('a Dragon must be a tile');
       expect(() => parseTiledMap('t', actorMap([{ ...dragon, properties: [prop('fireLength', 'float', 0)] }]), tilesets)).toThrow('"fireLength"');
       expect(() => parseTiledMap('t', actorMap([{ ...dragon, properties: [prop('throwDelay', 'float', -1)] }]), tilesets)).toThrow('"throwDelay"');
+      expect(() => parseTiledMap('t', actorMap([{ ...dragon, properties: [prop('initialDelay', 'float', -1)] }]), tilesets)).toThrow('"initialDelay"');
       expect(() => parseTiledMap('t', actorMap([{ ...dragon, properties: [prop('path', 'object', 99)] }]), tilesets)).toThrow('its "path" must be a polyline');
     });
 
