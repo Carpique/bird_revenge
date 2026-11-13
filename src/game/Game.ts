@@ -28,6 +28,7 @@ import { Friend } from './Friend';
 import { landingBranch } from './branches';
 import { Bodies, Composite, Engine, Events, Query, Sleeping, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
 import { Poo } from './Poo';
+import { surfaceHit } from './surfaceHit';
 import { spanInBand, Villain, type Span } from './Villain';
 
 /** how far (px) a surface may be from a villain's feet and still be what he walks on */
@@ -466,7 +467,10 @@ export class Game {
       audio.play('splat');
       this.loseLife();
     }
-    // ...and so does an apple
+    // an apple splats on whatever of the level is in its way, or on the ground: checked before it can hit the bird (which may
+    // be resting just behind a thin wall or shelf), and along the whole of its last step, so it can't cut a corner
+    for (const a of this.apples) if (a.state === 'flying') this.splatApple(a);
+    // an apple hitting the bird costs a life too
     for (const a of this.apples) {
       if (a.state !== 'flying' || this.bird.dying || this.bird.invulnerable) continue;
       const hitR = config.physics.birdRadius + config.apple.radius;
@@ -475,8 +479,6 @@ export class Game {
         this.loseLife();
       }
     }
-    // an apple stops at whatever of the level is in its way
-    for (const a of this.apples) if (a.state === 'flying' && Query.point(this.levelBodies, { x: a.x, y: a.y }).length) a.hit();
     // a falling poo of the bird's knocks an apple out of the air: both blink out
     const hitR = config.physics.pooRadius + config.apple.radius;
     for (const p of this.poos) {
@@ -608,6 +610,12 @@ export class Game {
         p.state = 'done';
       }
     }
+    // ...and an apple's splat on any side of it
+    for (const a of this.apples) {
+      if (a.state !== 'splat') continue;
+      const t = SURFACE_TOLERANCE;
+      if (a.x >= min.x - t && a.x <= max.x + t && a.y >= min.y - t && a.y <= max.y + t) a.state = 'done';
+    }
   }
 
   /** Each dragon's fire roars, as loud as it's far out, from rolling out until it's back in. */
@@ -723,6 +731,23 @@ export class Game {
     const apple = new Apple(x, y, v * Math.cos(angle), v * Math.sin(angle), kind);
     this.apples.push(apple);
     this.fx.addChild(apple.view);
+  }
+
+  /** An apple that flew into the level or the ground this step splats there, harmless from then on (as a poo, it just goes on a movable body). */
+  private splatApple(a: Apple) {
+    const from = { x: a.prevX, y: a.prevY }, to = { x: a.x, y: a.y };
+    const hit = surfaceHit(this.levelBodies, from, to);
+    if (hit) {
+      if (hit.body.isStatic) a.splat(hit.x, hit.y, hit.normal);
+      else a.state = 'done';
+    } else if (Query.point(this.levelBodies, to).length) {
+      // already inside something (thrown from within it): gone
+      a.state = 'done';
+    } else if (a.y >= WORLD.groundY) {
+      const t = a.y > a.prevY ? (WORLD.groundY - a.prevY) / (a.y - a.prevY) : 1;
+      a.splat(a.prevX + (a.x - a.prevX) * t, WORLD.groundY, { x: 0, y: -1 });
+    } else return;
+    audio.play('splat');
   }
 
   private dropPoo() {

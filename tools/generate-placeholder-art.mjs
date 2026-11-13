@@ -212,6 +212,34 @@ write('ghost/hit.svg', ghost({ phase: 0.25, seed: 1300, hit: true }));
     '<defs><radialGradient id="glow"><stop offset="0.45" stop-color="#9dff4f" stop-opacity="0.75"/><stop offset="1" stop-color="#9dff4f" stop-opacity="0"/></radialGradient></defs>\n' +
     '<circle cx="20" cy="20" r="20" fill="url(#glow)"/>\n';
   write('glue/glue.svg', svg(40, 40, d).replace('<g ', `${glow}<g `));
+
+  // ...splatted on a surface (the image's bottom edge): a puddle with drops flung off it
+  const puddle = [
+    gen.path('M 6 31 C 8 24 16 25 22 20 C 27 13 35 12 41 17 C 47 13 55 17 58 23 C 65 24 72 26 74 31 Z', o(1410, { fill: glue, fillStyle: 'solid', stroke: glueInk, strokeWidth: 1.8, roughness: 0.8 })),
+    gen.circle(10, 15, 6, o(1411, { fill: glue, fillStyle: 'solid', stroke: glueInk, strokeWidth: 1.2, roughness: 0.5 })),
+    gen.circle(66, 12, 5, o(1412, { fill: glue, fillStyle: 'solid', stroke: glueInk, strokeWidth: 1.2, roughness: 0.5 })),
+    gen.circle(50, 6, 3.5, o(1413, { fill: glue, fillStyle: 'solid', stroke: glueInk, strokeWidth: 1.2, roughness: 0.5 })),
+    gen.curve([[26, 22], [31, 18], [37, 19]], o(1414, { stroke: '#eaffd6', strokeWidth: 2.2, roughness: 0.5 })),
+  ];
+  const puddleGlow =
+    '<defs><radialGradient id="glow"><stop offset="0.45" stop-color="#9dff4f" stop-opacity="0.6"/><stop offset="1" stop-color="#9dff4f" stop-opacity="0"/></radialGradient></defs>\n' +
+    '<ellipse cx="40" cy="26" rx="40" ry="20" fill="url(#glow)"/>\n';
+  write('glue/splat.svg', svg(80, 32, puddle).replace('<g ', `${puddleGlow}<g `));
+}
+
+// ---------------------------------------------------------------- apple splat (apple.svg itself is drawn by hand)
+// lies on a surface (the image's bottom edge): red mush with pale flesh showing, bits flung off it, and the leaf
+{
+  const skin = '#d23a2c', flesh = '#f6e3b0', leaf = '#5c9c3a';
+  const thin = { strokeWidth: 1.6, roughness: 0.8 };
+  write('apple/splat.svg', svg(80, 32, [
+    gen.polygon([[5, 30], [12, 23], [22, 24], [29, 15], [39, 20], [48, 12], [56, 21], [66, 21], [75, 30]], o(1420, { fill: skin, fillStyle: 'solid', strokeWidth: 1.8, roughness: 1 })),
+    gen.polygon([[24, 29], [31, 23], [40, 26], [48, 21], [56, 29]], o(1421, { fill: flesh, fillStyle: 'solid', ...thin })),
+    gen.circle(9, 13, 6, o(1422, { fill: skin, fillStyle: 'solid', ...thin })),
+    gen.circle(69, 11, 5, o(1423, { fill: skin, fillStyle: 'solid', ...thin })),
+    gen.circle(22, 8, 4, o(1424, { fill: flesh, fillStyle: 'solid', ...thin })),
+    gen.path('M 54 9 C 56 4 61 2 65 3 C 63 8 59 10 54 9 Z', o(1425, { fill: leaf, fillStyle: 'solid', ...thin })),
+  ]));
 }
 
 // ---------------------------------------------------------------- bat (seen from the front, centre at the middle)
