@@ -12,8 +12,18 @@ export const scenery = {
     { image: 'assets/scenery/cloud_0.svg', x: 1000, y: 260, height: 70, driftSpeed: 8 },
   ],
   /**
+   * A distant, hazy layer of clouds at the world's top edge, where the bird can't fly higher, and thinner wisps in
+   * the sky above it; seen when the screen is taller than 16:9. Each band scatters `count` soft clouds across the
+   * screen: `y` from..to (most near the first), `width` and `height` from..to, `alpha` from..to. The first band
+   * marks the limit: nearly closed, with a small gap here and there.
+   */
+  haze: [
+    { count: 11, y: [-45, -80], width: [240, 460], height: [50, 90], alpha: [0.45, 0.75], driftSpeed: 5 },
+    { count: 12, y: [-120, -700], width: [160, 380], height: [28, 60], alpha: [0.2, 0.45], driftSpeed: 2.5 },
+  ] as { count: number; y: [number, number]; width: [number, number]; height: [number, number]; alpha: [number, number]; driftSpeed: number }[],
+  /**
    * Each level's time of day (`timeOfDay` in Tiled) colours the background. The sky: a gradient from `horizon` (at the
-   * ground) up to `top` (at the world's top edge). `tint` darkens the clouds and the ground; `clouds` is their opacity.
+   * ground) up to `top` (at the world's top edge). `tint` darkens the clouds and the ground; `clouds` is the clouds' opacity.
    * `between`: more colours on the way, at 0 (top) .. 1 (horizon); `behindGround`: the colour behind the ground (which
    * lets it show through), `horizon` if not given. The sun shows in the afternoon; the moon and the stars at night, the moon where the sun would be.
    */

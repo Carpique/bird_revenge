@@ -9,7 +9,7 @@ const ICON =
 /**
  * Above the game's box on a phone held upright (`body.boxed`, see style.css): asks to turn the phone sideways, where
  * the game fills the screen.
- */
+   */
 export class RotateHint {
   constructor(parent: HTMLElement) {
     const update = () => {

@@ -1,4 +1,4 @@
-import { Container, FillGradient, Graphics, Sprite } from 'pixi.js';
+import { Container, FillGradient, Graphics, Sprite, Texture } from 'pixi.js';
 import { WORLD } from '../config';
 import type { TimeOfDay } from '../level/types';
 import { tex } from '../render/assets';
@@ -57,13 +57,62 @@ function stars(perWorld: number): [Graphics, Graphics] {
   return layers;
 }
 
-/** The sky, sun or moon and stars, drifting clouds and the ground behind everything; `timeOfDay` sets which. */
+/** How far past the world's sides the haze reaches before wrapping round: more than half its widest cloud. */
+const HAZE_MARGIN = 360;
+
+/** A soft white blob fading out to nothing at its rim; stretched, the stuff the haze is made of. */
+function blobTexture(): Texture {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const fade = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  fade.addColorStop(0, 'rgba(255,255,255,1)');
+  fade.addColorStop(0.45, 'rgba(255,255,255,0.6)');
+  fade.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, 0, size, size);
+  return Texture.from(canvas);
+}
+
+/**
+ * The hazy clouds of one band (`scenery.haze`): each a flat blob with two smaller ones over it, off centre, for an
+ * uneven shape. Spread evenly across the screen, then shifted at random, which leaves the gaps.
+ */
+function hazeBand(band: (typeof scenery.haze)[number], blob: Texture, rnd: () => number) {
+  const between = ([from, to]: [number, number], t = rnd()) => from + (to - from) * t;
+  const span = WORLD.width + 2 * HAZE_MARGIN;
+  const blobs: { sprite: Sprite; alpha: number; speed: number }[] = [];
+  const add = (x: number, y: number, width: number, height: number, alpha: number) => {
+    const sprite = new Sprite(blob);
+    sprite.anchor.set(0.5);
+    sprite.position.set(x, y);
+    sprite.width = width;
+    sprite.height = height;
+    blobs.push({ sprite, alpha, speed: band.driftSpeed });
+  };
+  for (let i = 0; i < band.count; i++) {
+    const x = -HAZE_MARGIN + ((i + rnd()) / band.count) * span, y = between(band.y, rnd() ** 1.5);
+    const width = between(band.width), height = between(band.height), alpha = between(band.alpha);
+    add(x, y, width, height, alpha);
+    for (const side of [-1, 1]) {
+      const k = 0.5 + rnd() * 0.3;
+      add(x + side * rnd() * 0.35 * width, y + (rnd() - 0.5) * 0.6 * height, width * k, height * k, alpha * 0.7);
+    }
+  }
+  return blobs;
+}
+
+/** The sky, sun or moon and stars, drifting clouds, the haze above the world and the ground behind everything; `timeOfDay` sets which. */
 export class Background extends Container {
   private sky = new Graphics();
   private sun: Sprite;
   private moon: Graphics;
   private stars: [Graphics, Graphics];
   private clouds: { sprite: Sprite; speed: number }[] = [];
+  /** the hazy clouds at and above the world's top, where the bird can't fly */
+  private haze = new Container();
+  private hazeClouds: { sprite: Sprite; alpha: number; speed: number }[] = [];
   private ground = new Ground();
   private time: TimeOfDay | null = null;
   /** the sky's gradient, destroyed when the sky changes */
@@ -84,7 +133,10 @@ export class Background extends Container {
       this.clouds.push({ sprite, speed: c.driftSpeed });
       this.addChild(sprite);
     }
-    this.addChild(this.ground);
+    const rnd = random(11), blob = blobTexture();
+    for (const band of scenery.haze) this.hazeClouds.push(...hazeBand(band, blob, rnd));
+    this.haze.addChild(...this.hazeClouds.map((c) => c.sprite));
+    this.addChild(this.haze, this.ground);
     this.timeOfDay = 'afternoon';
   }
 
@@ -99,6 +151,10 @@ export class Background extends Container {
     for (const c of this.clouds) {
       c.sprite.tint = look.tint;
       c.sprite.alpha = look.clouds;
+    }
+    for (const c of this.hazeClouds) {
+      c.sprite.tint = look.tint;
+      c.sprite.alpha = c.alpha * look.clouds;
     }
     this.ground.tint = look.tint;
   }
@@ -129,9 +185,10 @@ export class Background extends Container {
       .fill('behindGround' in look ? look.behindGround : look.horizon);
   }
 
-  /** Extend the ground to the screen's edges (`view`); call after `fitWorld`. */
+  /** Extend the ground to the screen's edges (`view`), and show the haze if the screen reaches above the world; call after `fitWorld`. */
   fit() {
     this.ground.fit();
+    this.haze.visible = view.top < 0;
   }
 
   update(dtMs: number) {
@@ -141,6 +198,13 @@ export class Background extends Container {
       c.sprite.x += (c.speed * dtMs) / 1000;
       const half = c.sprite.width / 2;
       if (c.sprite.x - half > right) c.sprite.x = left - half;
+    }
+    if (this.haze.visible) {
+      // all wrap round the same stretch, so each band keeps its pattern
+      for (const c of this.hazeClouds) {
+        c.sprite.x += (c.speed * dtMs) / 1000;
+        if (c.sprite.x > WORLD.width + HAZE_MARGIN) c.sprite.x -= WORLD.width + 2 * HAZE_MARGIN;
+      }
     }
     if (this.stars[0].visible) {
       this.t += dtMs;
