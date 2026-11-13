@@ -185,7 +185,7 @@
                         {
                          "name":"throwDelay",
                          "type":"float",
-                         "value":4
+                         "value":6
                         }],
                  "rotation":0,
                  "type":"",
