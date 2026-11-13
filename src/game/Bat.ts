@@ -15,6 +15,12 @@ const LEAN = 0.04, MAX_LEAN = 0.3;
 
 const randomBetween = (lo: number, hi: number) => lo + Math.random() * Math.max(0, hi - lo);
 
+/** Whether going from `from` to `to` keeps out of the fire, or (already in it) at least goes no deeper. */
+const outOfFire = (fireGap: FireGap, from: { x: number; y: number }, to: { x: number; y: number }) => {
+  const gap = fireGap(to);
+  return gap >= 0 || gap >= fireGap(from);
+};
+
 /** What a homing bat steers by: the way to the bird, where the other flying bats are, and whether it can see the bird. */
 export interface Homing {
   field: HomingField;
@@ -22,6 +28,9 @@ export interface Homing {
   /** nothing static between it and the bird, centre to centre (see `inSight`) */
   seesBird: boolean;
 }
+
+/** How far a bat at a point is from a dragon's fire, edge to edge (px); below 0: in it (see `Dragon.gap`). */
+export type FireGap = (p: { x: number; y: number }) => number;
 
 /**
  * Flies along its route at a steady speed, from its start: there and back again along an open polyline,
@@ -32,6 +41,8 @@ export interface Homing {
  * flutters about where it started.
  * Hit by the bird's poo, it hangs in the air for a moment in its "hit" pose, then tumbles off the bottom of the screen,
  * gone for good. Touching a flying bat costs the bird a life, as a walking villain does.
+ * A dragon's fire is a wall to it while it's out: one on a route turns back at it (one going round a closed route
+ * hangs there till it's gone), a homing one slides along it, or stops.
  */
 export class Bat {
   readonly body: MBody;
@@ -118,16 +129,16 @@ export class Bat {
     return { x: this.x, y: this.y };
   }
 
-  /** `homing`: what a homing bat steers by; without it, one hangs where it is. */
-  step(stepMs: number, homing?: Homing) {
+  /** `homing`: what a homing bat steers by; without it, one hangs where it is. `fireGap`: the dragons' fire to keep out of. */
+  step(stepMs: number, homing?: Homing, fireGap?: FireGap) {
     if (this.frozen && this.state === 'flying') return;
     this.timer += stepMs;
     switch (this.state) {
       case 'flying': {
         const x0 = this.x;
         this.age += stepMs / 1000;
-        if (this.homing) this.home(this.def.speed, homing);
-        else this.fly(this.def.speed);
+        if (this.homing) this.home(this.def.speed, homing, fireGap);
+        else this.flyClearOf(fireGap);
         this.vx = this.x - x0;
         this.pooIn -= stepMs;
         if (this.pooIn <= 0) {
@@ -165,6 +176,15 @@ export class Bat {
     else this.view.play(this.state === 'flying' ? 'fly' : 'hit');
   }
 
+  /** Moves along the route, unless that takes it into the fire: then it turns back (or, on a closed route, waits). */
+  private flyClearOf(fireGap: FireGap | undefined) {
+    const before = { x: this.x, y: this.y, target: this.target, dir: this.dir };
+    this.fly(this.def.speed);
+    if (!fireGap || outOfFire(fireGap, before, this.position)) return;
+    ({ x: this.x, y: this.y, target: this.target, dir: this.dir } = before);
+    this.turnBack();
+  }
+
   /** Moves `dist` px along the route, turning at the ends of an open one, going round a closed one. */
   private fly(dist: number) {
     const route = this.def.route;
@@ -190,7 +210,7 @@ export class Bat {
    * so its path curves the way a bat's does, and no two bats fly alike. Before it has seen the bird it loops about where
    * it started instead. Its wings never go into a body: blocked, it slides along it, or stops.
    */
-  private home(speed: number, homing: Homing | undefined) {
+  private home(speed: number, homing: Homing | undefined, fireGap: FireGap | undefined) {
     const { homingSeparation: separation, homingSeparationWeight: separationWeight, homingTurn: turn, homingWander, homingWanderHz, homingIdleRadius } = config.bat;
     if (homing?.seesBird) this.spotted = true;
     const swing = this.wander.reduce((a, w) => a + w.weight * Math.sin(2 * Math.PI * homingWanderHz * w.f * this.age + w.phase), 0);
@@ -231,7 +251,8 @@ export class Bat {
     const field = homing?.field;
     // one already in something (a body moved onto it, or it started there) may move only so as not to go in deeper
     const now = field?.overlap(this.position) ?? 0;
-    const free = (x: number, y: number) => !field || field.overlap({ x, y }) <= now;
+    const free = (x: number, y: number) =>
+      (!field || field.overlap({ x, y }) <= now) && (!fireGap || outOfFire(fireGap, this.position, { x, y }));
     const nx = this.x + this.v.x, ny = this.y + this.v.y;
     if (free(nx, ny)) [this.x, this.y] = [nx, ny];
     else if (free(nx, this.y)) [this.x, this.v.y] = [nx, 0];

@@ -79,6 +79,25 @@ describe('a bat', () => {
     expect(onPoo).not.toHaveBeenCalled();
   });
 
+  it('turns back at a dragon\'s fire on an open route, and waits at it on a closed one', () => {
+    // fire across x = 200 (a bat's half width either side of it is "in" it)
+    const fireGap = (p: { x: number; y: number }) => Math.abs(p.x - 200) - 30;
+    const open = batOf({ route: [[100, 100], [300, 100]], loop: false, speed: 2, pooDelay: 0 });
+    const xs: number[] = [];
+    for (let i = 0; i < 200; i++) {
+      open.step(STEP_MS, undefined, fireGap);
+      xs.push(posOf(open).x);
+    }
+    expect(Math.max(...xs)).toBeLessThanOrEqual(170);
+    expect(Math.max(...xs)).toBeGreaterThan(165);
+    // turned back: at the start again
+    expect(Math.min(...xs.slice(100))).toBeCloseTo(100);
+    const closed = batOf({ route: [[100, 100], [300, 100], [300, 200], [100, 200]], loop: true, speed: 2, pooDelay: 0 });
+    for (let i = 0; i < 200; i++) closed.step(STEP_MS, undefined, fireGap);
+    expect(posOf(closed).x).toBeGreaterThan(165);
+    expect(posOf(closed).x).toBeLessThanOrEqual(170);
+  });
+
   it('is hurt by touching only while flying, and knocked off by a hit', () => {
     const b = batOf({ route: [[200, 200], [400, 200]], loop: false, speed: 2, pooDelay: 0 });
     b.step(STEP_MS);
@@ -153,6 +172,19 @@ describe('a homing bat (no route)', () => {
     run([b], new HomingField(), [wall], { x: 1000, y: 300 }, 60 * 10, (bat) => {
       expect(bat.position.x - hw).toBeGreaterThanOrEqual(176);
     }, false);
+  });
+
+  it('keeps out of a dragon\'s fire between it and the bird', () => {
+    // fire across x = 600, from top to bottom
+    const fireGap = (p: { x: number; y: number }) => Math.abs(p.x - 600) - 30;
+    const b = homer(900, 300, 2);
+    const field = new HomingField();
+    field.update([], { x: 300, y: 300 });
+    for (let i = 0; i < 600; i++) {
+      b.step(STEP_MS, { field, others: [], seesBird: true }, fireGap);
+      expect(fireGap(b.position)).toBeGreaterThanOrEqual(0);
+    }
+    expect(b.position.x).toBeLessThan(640);
   });
 
   it('keeps apart from the other bats', () => {

@@ -1,5 +1,6 @@
 import { Application, Container, Graphics, Rectangle, Sprite, Text, type Texture } from 'pixi.js';
 import { audio, type FlameSound } from '../audio/audio';
+import { batRadius } from '../characters/bat';
 import { coinDef } from '../characters/coin';
 import { splatHalfWidth } from '../characters/poo';
 import { villainDef } from '../characters/villain';
@@ -427,8 +428,9 @@ export class Game {
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
     for (const f of this.friends) f.step(STEP_MS);
-    // a dragon's fire stops at the level's walls, terrain and crates (as apples do), not at characters
-    const blocksFire = (x: number, y: number) => Query.point(this.levelBodies, { x, y }).length > 0;
+    // a dragon's fire stops at the level's walls, terrain and crates (as apples do), and at walking villains and flying bats
+    const characters = [...this.villains.filter((v) => v.hittable), ...this.bats.filter((b) => b.hittable)].map((c) => c.body);
+    const blocksFire = (x: number, y: number) => Query.point(this.levelBodies, { x, y }).length > 0 || Query.point(characters, { x, y }).length > 0;
     for (const d of this.dragons) d.step(STEP_MS, blocksFire);
     this.stepFlameSounds();
     for (const c of this.coins) c.step(STEP_MS);
@@ -652,7 +654,7 @@ export class Game {
   /** Stretches of ground sheltered from above right now. Static for now; moving obstacles would recompute them here each step. */
   /**
    * What a villain with his feet at `feetY` (and the top of his hitbox at `head`) won't walk into (crates move, so every step): the bird's poo splats he'd step in,
-   * the level's bodies reaching into his height, and wherever there's nothing to stand on at his feet
+   * the level's bodies and dragons' fire reaching into his height, and wherever there's nothing to stand on at his feet
    * (all but the ground's or his shelf's top).
    */
   private villainObstacles(feetY: number, head: number): Span[] {
@@ -662,6 +664,8 @@ export class Game {
       .map((p) => ({ x0: p.view.x - splatHalfWidth, x1: p.view.x + splatHalfWidth }));
     // the part of each body between his head and feet, not its bounding box: a sloping roof only blocks where it comes down
     const bodies = this.levelBodies.flatMap((b) => spanInBand(b, head, feetY - SURFACE_TOLERANCE) ?? []);
+    // a dragon's fire, while it's out, is a wall too
+    bodies.push(...this.dragons.flatMap((d) => d.spansInBand(head, feetY)));
     if (near(WORLD.groundY)) return [...splats, ...bodies];
     // off the ground: he stands only on the tops of bodies at his feet
     const tops = this.levelBodies
@@ -686,14 +690,16 @@ export class Game {
       this.homingField.update(this.levelBodies, bird);
     }
     const flying = this.bats.filter((b) => b.hittable);
+    // the dragons' fire is a wall to them
+    const fireGap = (p: { x: number; y: number }) => Math.min(Infinity, ...this.dragons.map((d) => d.gap(p.x, p.y, batRadius)));
     for (const b of this.bats) {
       if (!b.homing) {
-        b.step(STEP_MS);
+        b.step(STEP_MS, undefined, fireGap);
         continue;
       }
       // one already after the bird needn't look again
       const seesBird = !b.chasing && b.hittable && bird !== null && inSight(this.levelBodies, b.position, bird);
-      b.step(STEP_MS, { field: this.homingField, others: flying.filter((o) => o !== b).map((o) => o.position), seesBird });
+      b.step(STEP_MS, { field: this.homingField, others: flying.filter((o) => o !== b).map((o) => o.position), seesBird }, fireGap);
     }
   }
 

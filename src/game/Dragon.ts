@@ -14,7 +14,8 @@ export type DragonPhase = 'resting' | 'opening' | 'spitting' | 'closing';
 
 /**
  * A dragon: it never moves and can't be hurt (it's outside the physics world, and poos pass it by); `initialDelay` s
- * into the level, then exactly `throwDelay` s after its fire is back in, it spits fire along its route (`fireRoute`), up to the first wall, terrain or crate in the way. The bird touching the fire loses a life (`touches`).
+ * into the level, then exactly `throwDelay` s after its fire is back in, it spits fire along its route (`fireRoute`), up to the first wall, terrain, crate, villain or bat in the way. The bird touching the fire loses a life (`touches`);
+ * villains and bats keep out of it as out of a wall (`gap`, `spansInBand`).
  * Its timing is fixed, not random, and nothing else in the game changes it, so a player can learn its pattern.
  * Its view holds the dragon and, in world coordinates, its fire.
  */
@@ -35,8 +36,10 @@ export class Dragon {
   private spitIn: number;
   /** ms since the spit began */
   private spitT = 0;
-  /** how far along its route the fire can go before something of the level blocks it (px) */
+  /** how far along its route the fire can go before something blocks it (px) */
   private clear: number;
+  /** how far along its route the fire is out (px): it rolls out no faster than `rollMs` allows, also past a blocker gone */
+  private shown = 0;
   private fidget: DragonAnim = 'idle';
   /** ms until the current fidget (or the wait for the next one) ends */
   private fidgetMs = randomWait();
@@ -65,12 +68,12 @@ export class Dragon {
     return Math.max(0, Math.min(1, out));
   }
 
-  /** How far along its route the fire is out (px), stopping where the level blocks it; 0: none. */
+  /** How far along its route the fire is out (px), stopping where something blocks it; 0: none. */
   get reach(): number {
-    return Math.min(this.clear, this.out * this.route.length);
+    return this.phase === 'spitting' ? this.shown : 0;
   }
 
-  /** whether the level stops the fire where it is now */
+  /** whether something stops the fire where it is now */
   private get blocked() {
     const reach = this.reach;
     return reach > 0 && reach >= this.clear && this.clear < this.route.length;
@@ -92,14 +95,26 @@ export class Dragon {
     return burn > 0 && this.route.distanceTo(x, y, burn) < r + dragonConfig.fire.halfThickness;
   }
 
+  /** How far a circle at (x, y) with radius `r` is from the fire, edge to edge (px); below 0: in it; Infinity: no fire out. */
+  gap(x: number, y: number, r: number): number {
+    const reach = this.reach;
+    return reach > 0 ? this.route.distanceTo(x, y, reach) - r - dragonConfig.fire.halfThickness : Infinity;
+  }
+
+  /** The x ranges the fire covers between heights `top` and `bottom`, thickness and all: what a villain won't walk into. */
+  spansInBand(top: number, bottom: number): { x0: number; x1: number }[] {
+    const reach = this.reach;
+    return reach > 0 ? this.route.spansInBand(reach, top, bottom, dragonConfig.fire.halfThickness) : [];
+  }
+
   /** Spit now, if it's resting. */
   spitNow() {
     if (this.phase === 'resting') this.spitIn = 0;
   }
 
   /**
-   * `blocked`: whether a point is inside something of the level that stops the fire (walls, terrain, crates; not
-   * characters). Checked while it spits, as doors open and crates move.
+   * `blocked`: whether a point is inside something that stops the fire (walls, terrain, crates, villains, bats).
+   * Checked while it spits, as doors open, crates and characters move.
    */
   step(stepMs: number, blocked?: (x: number, y: number) => boolean) {
     this.fire.step(stepMs);
@@ -117,12 +132,15 @@ export class Dragon {
       this.spitT += stepMs;
       this.stepShake(stepMs);
       this.clear = blocked ? this.route.clearLength(blocked) : this.route.length;
+      const len = this.route.length;
+      this.shown = Math.min(this.clear, this.out * len, this.shown + (len * stepMs) / dragonConfig.fire.rollMs);
     }
     if (this.phaseMs > 0) return;
     switch (this.phase) {
       case 'opening':
         this.enter('spitting', this.spitMs);
         this.spitT = 0;
+        this.shown = 0;
         this.onSpit();
         break;
       case 'spitting':

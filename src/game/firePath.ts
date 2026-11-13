@@ -40,6 +40,33 @@ export class FirePath {
     return blocked(end[0], end[1]) ? Math.max(0, this.length - step) : this.length;
   }
 
+  /**
+   * The x ranges the path's first `reach` px cover between heights `top` and `bottom` (top < bottom), one per segment
+   * reaching into them, with `pad` px round it (the fire's thickness).
+   */
+  spansInBand(reach: number, top: number, bottom: number, pad: number): { x0: number; x1: number }[] {
+    const spans: { x0: number; x1: number }[] = [];
+    const lo = top - pad, hi = bottom + pad;
+    for (let i = 1; i < this.points.length && this.dist[i - 1] < reach; i++) {
+      const a = this.points[i - 1];
+      const end = this.dist[i] <= reach ? this.points[i] : [this.pointAt(reach).x, this.pointAt(reach).y];
+      // the part of the segment between lo and hi
+      const dy = end[1] - a[1];
+      let t0 = 0, t1 = 1;
+      if (dy === 0) {
+        if (a[1] < lo || a[1] > hi) continue;
+      } else {
+        const ta = (lo - a[1]) / dy, tb = (hi - a[1]) / dy;
+        t0 = Math.max(0, Math.min(ta, tb));
+        t1 = Math.min(1, Math.max(ta, tb));
+        if (t0 > t1) continue;
+      }
+      const xa = a[0] + (end[0] - a[0]) * t0, xb = a[0] + (end[0] - a[0]) * t1;
+      spans.push({ x0: Math.min(xa, xb) - pad, x1: Math.max(xa, xb) + pad });
+    }
+    return spans;
+  }
+
   /** How far (x, y) is from the path's first `reach` px. */
   distanceTo(x: number, y: number, reach: number): number {
     let best = Infinity;

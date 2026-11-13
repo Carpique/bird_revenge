@@ -65,6 +65,14 @@ describe('a dragon fire route', () => {
     expect(clear).toBeLessThan(150);
     expect(p.clearLength(() => true)).toBe(0);
   });
+  it('covers x ranges at a height, padded by its thickness', () => {
+    const p = new FirePath([[0, 0], [100, 0], [100, 100]]);
+    expect(p.spansInBand(200, -10, 10, 5)).toEqual([{ x0: -5, x1: 105 }, { x0: 95, x1: 105 }]);
+    // only the second leg reaches down there, and only as far as the fire's out
+    expect(p.spansInBand(200, 40, 60, 5)).toEqual([{ x0: 95, x1: 105 }]);
+    expect(p.spansInBand(120, 40, 60, 5)).toEqual([]);
+    expect(p.spansInBand(50, -10, 10, 0)).toEqual([{ x0: 0, x1: 50 }]);
+  });
 });
 
 describe('a dragon', () => {
@@ -148,5 +156,37 @@ describe('a dragon', () => {
     expect(d.touches(mx + 80, my, 10)).toBe(true);
     // behind the wall
     expect(d.touches(mx + 180, my, 10)).toBe(false);
+  });
+
+  it('stops at a character in the way, and rolls on once it has gone, no faster than it rolls out', () => {
+    const d = new Dragon(def());
+    const mx = 300 + dragonMouth.x;
+    let there = true;
+    const bat = (x: number) => there && x >= mx + 60 && x <= mx + 100;
+    const step = () => d.step(STEP_MS, bat);
+    while (d.phase !== 'spitting') step();
+    for (let ms = 0; ms < dragonConfig.fire.rollMs + 100; ms += STEP_MS) step();
+    expect(d.reach).toBeLessThanOrEqual(60);
+    expect(d.reach).toBeGreaterThan(50);
+    there = false;
+    const before = d.reach;
+    step();
+    expect(d.reach - before).toBeCloseTo((240 * STEP_MS) / dragonConfig.fire.rollMs);
+    for (let ms = 0; ms < dragonConfig.fire.rollMs; ms += STEP_MS) step();
+    expect(d.reach).toBeCloseTo(240);
+  });
+
+  it('tells how far things are from its fire, and what it covers, only while it is out', () => {
+    const d = new Dragon(def());
+    const [mx, my] = [300 + dragonMouth.x, 640 + dragonMouth.y];
+    const half = dragonConfig.fire.halfThickness;
+    expect(d.gap(mx + 100, my, 10)).toBe(Infinity);
+    expect(d.spansInBand(my - 50, my + 50)).toEqual([]);
+    while (d.phase !== 'spitting') d.step(STEP_MS);
+    for (let ms = 0; ms < dragonConfig.fire.rollMs + 100; ms += STEP_MS) d.step(STEP_MS);
+    expect(d.gap(mx + 100, my - 40, 10)).toBeCloseTo(40 - 10 - half);
+    expect(d.gap(mx + 100, my, 10)).toBeLessThan(0);
+    expect(d.spansInBand(my - 50, my + 50)).toEqual([{ x0: mx - half, x1: mx + 240 + half }]);
+    expect(d.spansInBand(my - 100, my - 50)).toEqual([]);
   });
 });
