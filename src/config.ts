@@ -597,6 +597,12 @@ export const config = {
 
   score: { villain: 1, bat: 1, pedestrian: -1 },
 
+  /**
+   * a movable body (a crate) bounces off villains, bats and dragons, with this restitution (0 = stops dead, 1 = loses no speed;
+   * set as a level loads); hitting a villain or bat while falling at least `minSpeed` (px per physics step), it knocks it off
+   */
+  crush: { minSpeed: 2, bounce: 0.5 },
+
   /** a saved friend grows to this many times its size while fading out, in this long */
   friend: { savedScale: 4, savedMs: 1000 },
 

@@ -3,7 +3,7 @@ import { config, WORLD } from '../config';
 import type { BatDef } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
 import type { HomingField } from './homing';
-import { Bodies, Body, type MBody } from './physics';
+import { BIRD_POO, Bodies, Body, characterBody, type MBody } from './physics';
 
 type State = 'flying' | 'hit' | 'falling' | 'gone';
 type BatAnim = keyof typeof batDef.animations;
@@ -83,12 +83,12 @@ export class Bat {
     this.target = def.target;
     this.pooIn = this.nextPooDelay();
     const { width, height } = batHitbox;
-    this.body = Bodies.rectangle(this.x, this.y, width, height, {
-      label: 'bat',
-      isStatic: true,
-      isSensor: true,
-      chamfer: { radius: height / 2 },
-    });
+    // solid only to crates, which bounce off it, and the bird's poo
+    this.body = characterBody(
+      Bodies.rectangle(this.x, this.y, width, height, { label: 'bat', isStatic: true, chamfer: { radius: height / 2 } }),
+      config.crush.bounce,
+      BIRD_POO,
+    );
   }
 
   get hittable() {
@@ -162,7 +162,7 @@ export class Bat {
       case 'gone':
         break;
     }
-    // only a flying bat can be hit, so the body just parks off-screen otherwise
+    // only a flying bat can be hit (or bounced off), so the body just parks off-screen otherwise
     Body.setPosition(this.body, this.state === 'flying' ? { x: this.x, y: this.y } : { x: -1000, y: -1000 });
     // the wide hitbox leans with the wings
     if (this.state === 'flying') Body.setAngle(this.body, this.lean);

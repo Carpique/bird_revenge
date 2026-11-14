@@ -15,6 +15,23 @@ export const forceFor = (body: MBody, accelPxPerS2: number) => (body.mass * acce
 /** Bodies in this group never collide with each other (bird and its poo). */
 export const BIRD_GROUP = -1;
 
+/**
+ * Collision categories. Everything is in Matter's default one (1) but the level's movable bodies (crates) and the poos.
+ * The characters are solid only to what their mask names: crates bounce off a villain, bat or dragon and the poos that
+ * splat on it hit it, while the bird, terrain and (for villains and bats) a bat's poo go through.
+ */
+export const CRATE = 0x0002, BIRD_POO = 0x0004, BAT_POO = 0x0008;
+
+/**
+ * Makes the static `body` a character's: crates bounce off it (by `bounce`, a restitution) and `hitBy` (categories) hits it.
+ * The restitution is set here, not as an option: Matter zeroes a static body's as it's made.
+ */
+export function characterBody(body: MBody, bounce: number, hitBy: number): MBody {
+  body.restitution = bounce;
+  body.collisionFilter.mask = CRATE | hitBy;
+  return body;
+}
+
 type Point = { x: number; y: number };
 
 /** Squared distance from (px, py) to the segment a–b. */

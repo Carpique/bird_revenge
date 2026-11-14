@@ -3,7 +3,7 @@ import { villainDef, villainLooks, type VillainHitbox } from '../characters/vill
 import { config, WORLD } from '../config';
 import type { VillainDef, VillainKind } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
-import { Bodies, Body, circleTouches, type MBody } from './physics';
+import { BIRD_POO, Bodies, Body, characterBody, circleTouches, type MBody } from './physics';
 
 type State = 'walking' | 'hit' | 'falling' | 'gone';
 type VillainAnim = keyof typeof villainDef.animations;
@@ -136,11 +136,12 @@ export class Villain {
     this.held = new CharacterSprite(missiles[def.kind].def);
     this.held.visible = false;
     this.place(def);
-    this.body = Bodies.fromVertices(this.x, this.hitboxY, [ellipse(this.hitbox)], {
-      label: 'villain',
-      isStatic: true,
-      isSensor: true,
-    });
+    // solid only to crates, which bounce off him, and the bird's poo
+    this.body = characterBody(
+      Bodies.fromVertices(this.x, this.hitboxY, [ellipse(this.hitbox)], { label: 'villain', isStatic: true }),
+      config.crush.bounce,
+      BIRD_POO,
+    );
   }
 
   get hittable() {
@@ -241,7 +242,7 @@ export class Villain {
         break;
     }
     this.heldMs = this.holding ? this.heldMs + stepMs : 0;
-    // only a walking villain can be hit, so the body just parks off-screen otherwise
+    // only a walking villain can be hit (or bounced off), so the body just parks off-screen otherwise
     Body.setPosition(this.body, { x: this.state === 'walking' ? this.x : -1000, y: this.hitboxY });
   }
 

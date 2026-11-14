@@ -185,7 +185,7 @@ describe('a dragon', () => {
     expect(left.touchesBody(300 + 45, 640 - 50, 3)).toBe(false);
     expect(left.touchesBody(300 - 45, 640 - 50, 3)).toBe(true);
     expect(right.touchesBody(300 - 60, 640 - 20, 5)).toBe(false);
-    expect(right.body.isSensor && right.body.isStatic).toBe(true);
+    expect(right.body.isStatic).toBe(true);
   });
 
   it('tells how far things are from its fire, and what it covers, only while it is out', () => {

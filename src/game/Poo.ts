@@ -3,7 +3,7 @@ import { config, WORLD } from '../config';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { Smoke } from '../render/Smoke';
 import { Knockout } from './Knockout';
-import { BIRD_GROUP, Bodies, Body, type MBody } from './physics';
+import { BAT_POO, BIRD_GROUP, BIRD_POO, Bodies, Body, type MBody } from './physics';
 
 type PooAnim = keyof typeof pooDef.animations;
 
@@ -33,7 +33,7 @@ export class Poo {
       label: 'poo',
       restitution: 0,
       frictionAir: 0.01,
-      collisionFilter: { group: BIRD_GROUP },
+      collisionFilter: { group: BIRD_GROUP, category: owner === 'bat' ? BAT_POO : BIRD_POO },
     });
     Body.setVelocity(this.body, { x: vx, y: vy });
   }

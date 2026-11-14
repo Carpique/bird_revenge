@@ -828,11 +828,18 @@ export class Game {
     this.fx.addChild(poo.view);
   }
 
-  /** What a falling poo hit: the bird's knocks villains and bats off, a bat's goes through them; either splats on the ground, terrain and dragons. */
+  /**
+   * What a falling poo hit: the bird's knocks villains and bats off, a bat's goes through them; either splats on the ground, terrain and dragons.
+   * And what a crate hit (`crush`).
+   */
   private onCollision(pair: MPair) {
-    const { bodyA: a, bodyB: b } = pair;
+    // the bodies, not their parts (a crate or a dragon may be made of several)
+    const a = pair.bodyA.parent, b = pair.bodyB.parent;
     const labels = [a.label, b.label];
-    if (!labels.includes('poo')) return;
+    if (!labels.includes('poo')) {
+      if (labels.includes('body')) this.crush(a.label === 'body' ? a : b, a.label === 'body' ? b : a);
+      return;
+    }
     const pooBody = a.label === 'poo' ? a : b;
     const other = pooBody === a ? b : a;
     const poo = this.poos.find((p) => p.body === pooBody);
@@ -846,11 +853,7 @@ export class Game {
         if (poo.state !== 'falling') return;
         poo.stopSound();
         audio.play('splat');
-        if (bat.hit()) {
-          this.addScore(config.score.bat, pooBody.position.x, pooBody.position.y);
-          audio.play('bat-dies');
-          this.after(1000, () => audio.play('score'));
-        }
+        this.knockOff(bat, pooBody.position.x, pooBody.position.y);
         Composite.remove(this.engine.world, pooBody);
         poo.state = 'done';
       });
@@ -859,11 +862,7 @@ export class Game {
         if (poo.state !== 'falling') return;
         poo.stopSound();
         audio.play('splat');
-        if (villain.hit()) {
-          this.addScore(config.score.villain, pooBody.position.x, pooBody.position.y);
-          audio.play(villain.kind === 'ghost' ? 'ghost-dies' : 'bad-guy-dies');
-          this.after(1000, () => audio.play('score'));
-        }
+        this.knockOff(villain, pooBody.position.x, pooBody.position.y);
         Composite.remove(this.engine.world, pooBody);
         poo.state = 'done';
       });
@@ -894,6 +893,35 @@ export class Game {
         poo.state = 'done';
       });
     }
+  }
+
+  /** A villain or bat is knocked off, by a poo or a falling body: it scores, shown at (x, y). Nothing happens to one already knocked off. */
+  private knockOff(c: Villain | Bat, x: number, y: number) {
+    if (!c.hit()) return;
+    // one standing by is in play from now on, to fall off
+    this.asleep.delete(c);
+    if (c instanceof Bat) {
+      this.addScore(config.score.bat, x, y);
+      audio.play('bat-dies');
+    } else {
+      this.addScore(config.score.villain, x, y);
+      audio.play(c.kind === 'ghost' ? 'ghost-dies' : 'bad-guy-dies');
+    }
+    this.after(1000, () => audio.play('score'));
+  }
+
+  /**
+   * A movable body of the level (a crate) bounces off villains, bats and dragons: Matter does that. One falling on a walking
+   * villain or a flying bat knocks it off too, as the bird's poo does: once this step's bounce is done, so the crate goes
+   * its way, and nothing more bumps into the one knocked off. Dragons don't mind.
+   */
+  private crush(crate: MBody, other: MBody) {
+    // as it came in: read before Matter turns it round
+    if (crate.velocity.y < config.crush.minSpeed) return;
+    const c = this.villains.find((v) => v.body === other) ?? this.bats.find((b) => b.body === other);
+    if (!c?.hittable) return;
+    const { x, y } = other.position;
+    this.pending.push(() => this.knockOff(c, x, y));
   }
 
   /** The bird dies and falls off the screen; the lost heart blinks meanwhile. */

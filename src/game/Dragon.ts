@@ -1,10 +1,11 @@
 import { Container } from 'pixi.js';
 import { dragonConfig, dragonDef, dragonHitbox, type DragonAnim } from '../characters/dragon';
+import { config } from '../config';
 import type { DragonDef } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { FireStream } from '../render/FireStream';
 import { fireRoute, type FirePath } from './firePath';
-import { Bodies, circleTouches, Vertices, type MBody } from './physics';
+import { BAT_POO, BIRD_POO, Bodies, characterBody, circleTouches, Vertices, type MBody } from './physics';
 
 /**
  * resting: fidgeting now and then; opening: the jaw opening; spitting: the fire rolling out along its route, staying
@@ -14,7 +15,7 @@ import { Bodies, circleTouches, Vertices, type MBody } from './physics';
 export type DragonPhase = 'resting' | 'opening' | 'spitting' | 'closing';
 
 /**
- * A dragon: it never moves and can't be hurt (a poo just splats on it: its `body` is a sensor, there only for poos to hit);
+ * A dragon: it never moves and can't be hurt (a poo just splats on it and a crate bounces off: its `body` is solid only to those);
  * `initialDelay` s into the level, then exactly `throwDelay` s after its fire is back in, it spits fire along its route (`fireRoute`), up to the first wall, terrain, crate, villain or bat in the way. The bird touching the dragon (`touchesBody`)
  * or its fire (`touches`) loses a life; villains and bats keep out of the fire as out of a wall (`gap`, `spansInBand`).
  * Its timing is fixed, not random, and nothing else in the game changes it, so a player can learn its pattern.
@@ -55,7 +56,7 @@ export class Dragon {
     const side = def.facing === 'left' ? -1 : 1;
     const outline = dragonHitbox.map((p) => ({ x: def.x + side * p.x, y: def.y + p.y }));
     const centre = Vertices.centre(outline);
-    this.body = Bodies.fromVertices(centre.x, centre.y, [outline], { label: 'dragon', isStatic: true, isSensor: true });
+    this.body = characterBody(Bodies.fromVertices(centre.x, centre.y, [outline], { label: 'dragon', isStatic: true }), config.crush.bounce, BIRD_POO | BAT_POO);
     this.sprite = new CharacterSprite<DragonAnim>(dragonDef);
     this.sprite.setFacing(def.facing);
     this.fire = new FireStream(this.route);
