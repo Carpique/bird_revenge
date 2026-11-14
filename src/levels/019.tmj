@@ -667,6 +667,126 @@
                  "width":416,
                  "x":112,
                  "y":528
+                }, 
+                {
+                 "height":48,
+                 "id":115,
+                 "name":"",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"density",
+                         "type":"float",
+                         "value":0.001
+                        }, 
+                        {
+                         "name":"material",
+                         "propertytype":"Material",
+                         "type":"string",
+                         "value":"wood"
+                        }],
+                 "rotation":0,
+                 "type":"Body",
+                 "visible":true,
+                 "width":48,
+                 "x":1504,
+                 "y":432
+                }, 
+                {
+                 "height":48,
+                 "id":116,
+                 "name":"",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"density",
+                         "type":"float",
+                         "value":0.001
+                        }, 
+                        {
+                         "name":"material",
+                         "propertytype":"Material",
+                         "type":"string",
+                         "value":"wood"
+                        }],
+                 "rotation":0,
+                 "type":"Body",
+                 "visible":true,
+                 "width":48,
+                 "x":1504,
+                 "y":384
+                }, 
+                {
+                 "height":48,
+                 "id":117,
+                 "name":"",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"density",
+                         "type":"float",
+                         "value":0.001
+                        }, 
+                        {
+                         "name":"material",
+                         "propertytype":"Material",
+                         "type":"string",
+                         "value":"wood"
+                        }],
+                 "rotation":0,
+                 "type":"Body",
+                 "visible":true,
+                 "width":48,
+                 "x":1504,
+                 "y":336
+                }, 
+                {
+                 "height":48,
+                 "id":118,
+                 "name":"",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"density",
+                         "type":"float",
+                         "value":0.001
+                        }, 
+                        {
+                         "name":"material",
+                         "propertytype":"Material",
+                         "type":"string",
+                         "value":"wood"
+                        }],
+                 "rotation":0,
+                 "type":"Body",
+                 "visible":true,
+                 "width":48,
+                 "x":1504,
+                 "y":288
+                }, 
+                {
+                 "height":48,
+                 "id":119,
+                 "name":"",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"density",
+                         "type":"float",
+                         "value":0.001
+                        }, 
+                        {
+                         "name":"material",
+                         "propertytype":"Material",
+                         "type":"string",
+                         "value":"wood"
+                        }],
+                 "rotation":0,
+                 "type":"Body",
+                 "visible":true,
+                 "width":48,
+                 "x":1504,
+                 "y":240
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -1072,7 +1192,7 @@
          "y":0
         }],
  "nextlayerid":8,
- "nextobjectid":115,
+ "nextobjectid":120,
  "orientation":"orthogonal",
  "properties":[
         {

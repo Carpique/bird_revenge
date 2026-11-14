@@ -902,7 +902,7 @@ export class Game {
   }
 
   /**
-   * A movable body of the level (a crate) bounces off villains, bats and dragons: Matter does that. One falling on a walking
+   * A movable body of the level (a crate) bounces off villains (but ghosts, which it goes through), bats and dragons: Matter does that. One falling on a walking
    * villain or a flying bat knocks it off too, as the bird's poo does: once this step's bounce is done, so the crate goes
    * its way, and nothing more bumps into the one knocked off. Dragons don't mind.
    */

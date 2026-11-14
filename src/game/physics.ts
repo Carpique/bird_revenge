@@ -17,18 +17,19 @@ export const BIRD_GROUP = -1;
 
 /**
  * Collision categories. Everything is in Matter's default one (1) but the level's movable bodies (crates) and the poos.
- * The characters are solid only to what their mask names: crates bounce off a villain, bat or dragon and the poos that
+ * The characters are solid only to what their mask names: crates bounce off a villain (not a ghost), bat or dragon and the poos that
  * splat on it hit it, while the bird, terrain and (for villains and bats) a bat's poo go through.
  */
 export const CRATE = 0x0002, BIRD_POO = 0x0004, BAT_POO = 0x0008;
 
 /**
  * Makes the static `body` a character's: crates bounce off it (by `bounce`, a restitution) and `hitBy` (categories) hits it.
- * The restitution is set here, not as an option: Matter zeroes a static body's as it's made.
+ * One that isn't `solid` (a ghost) crates go through too. The restitution is set here, not as an option: Matter zeroes
+ * a static body's as it's made.
  */
-export function characterBody(body: MBody, bounce: number, hitBy: number): MBody {
+export function characterBody(body: MBody, bounce: number, hitBy: number, solid = true): MBody {
   body.restitution = bounce;
-  body.collisionFilter.mask = CRATE | hitBy;
+  body.collisionFilter.mask = (solid ? CRATE : 0) | hitBy;
   return body;
 }
 
