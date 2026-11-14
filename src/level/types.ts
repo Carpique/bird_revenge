@@ -111,7 +111,7 @@ export interface BatDef {
   pooDelay: number;
 }
 
-/** A dragon sitting still, spitting a stream of fire now and then; touching the fire costs the bird a life. It can't be hurt. */
+/** A dragon sitting still, spitting a stream of fire now and then; touching it or its fire costs the bird a life. It can't be hurt: a poo splats on it. */
 export interface DragonDef {
   /** where its feet are */
   x: number;

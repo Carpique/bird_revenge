@@ -176,6 +176,18 @@ describe('a dragon', () => {
     expect(d.reach).toBeCloseTo(240);
   });
 
+  it('is touched where it sits, the way it faces, fire or no fire', () => {
+    const right = new Dragon(def()), left = new Dragon(def({ facing: 'left' }));
+    // over its back; at its head; behind it, over the tail
+    expect(right.touchesBody(300, 640 - 80, 20)).toBe(true);
+    expect(right.touchesBody(300, 640 - 110, 20)).toBe(false);
+    expect(right.touchesBody(300 + 45, 640 - 50, 3)).toBe(true);
+    expect(left.touchesBody(300 + 45, 640 - 50, 3)).toBe(false);
+    expect(left.touchesBody(300 - 45, 640 - 50, 3)).toBe(true);
+    expect(right.touchesBody(300 - 60, 640 - 20, 5)).toBe(false);
+    expect(right.body.isSensor && right.body.isStatic).toBe(true);
+  });
+
   it('tells how far things are from its fire, and what it covers, only while it is out', () => {
     const d = new Dragon(def());
     const [mx, my] = [300 + dragonMouth.x, 640 + dragonMouth.y];

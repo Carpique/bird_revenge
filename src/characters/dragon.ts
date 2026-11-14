@@ -41,6 +41,15 @@ const k = dragonDef.displayHeight / FRAME.height;
 export const dragonMouth = { x: (142.7 - FRAME.width / 2) * k, y: (52.4 - FRAME.feetY) * k };
 
 /**
+ * What the bird and poos hit, in world px from the dragon's feet, facing right: a convex outline round its body, folded
+ * wing, horns and head (in frame px below), without the tail lying behind it. Change it when the drawing changes.
+ */
+export const dragonHitbox = [[24, 106], [24, 60], [46, 30], [88, 14], [124, 24], [156, 36], [156, 50], [120, 106]].map(([x, y]) => ({
+  x: (x - FRAME.width / 2) * k,
+  y: (y - FRAME.feetY) * k,
+}));
+
+/**
  * One puff of the fire stream, in four layers the stream draws on top of each other (all the puffs' outlines, then all
  * their outer flames, ...), so the overlapping puffs make one stream with one outline. `displayHeight`: a puff at full size.
  */

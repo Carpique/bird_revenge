@@ -3,7 +3,7 @@ import { villainDef, villainLooks, type VillainHitbox } from '../characters/vill
 import { config, WORLD } from '../config';
 import type { VillainDef, VillainKind } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
-import { Bodies, Body, Vertices, type MBody } from './physics';
+import { Bodies, Body, circleTouches, type MBody } from './physics';
 
 type State = 'walking' | 'hit' | 'falling' | 'gone';
 type VillainAnim = keyof typeof villainDef.animations;
@@ -69,13 +69,6 @@ const ellipse = ({ width, height }: VillainHitbox) =>
     const a = (i / ELLIPSE_SIDES) * Math.PI * 2;
     return { x: (Math.cos(a) * width) / 2, y: (Math.sin(a) * height) / 2 };
   });
-
-/** Squared distance from (px, py) to the segment a–b. */
-const distSqToSegment = (px: number, py: number, a: { x: number; y: number }, b: { x: number; y: number }) => {
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / (dx * dx + dy * dy)));
-  return (px - a.x - t * dx) ** 2 + (py - a.y - t * dy) ** 2;
-};
 
 /**
  * Walks back and forth along his path (on the ground, or on a shelf), now and then stopping for a moment and walking on the same way.
@@ -161,10 +154,7 @@ export class Villain {
 
   /** Does a circle (the bird) overlap the hitbox of a walking villain? */
   touches(cx: number, cy: number, r: number): boolean {
-    if (this.state !== 'walking') return false;
-    const vs = this.body.vertices;
-    if (Vertices.contains(vs, { x: cx, y: cy })) return true;
-    return vs.some((v, i) => distSqToSegment(cx, cy, v, vs[(i + 1) % vs.length]) < r * r);
+    return this.state === 'walking' && circleTouches(this.body.vertices, cx, cy, r);
   }
 
   /** y of the top of his hitbox */

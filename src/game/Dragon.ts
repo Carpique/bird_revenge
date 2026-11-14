@@ -1,9 +1,10 @@
 import { Container } from 'pixi.js';
-import { dragonConfig, dragonDef, type DragonAnim } from '../characters/dragon';
+import { dragonConfig, dragonDef, dragonHitbox, type DragonAnim } from '../characters/dragon';
 import type { DragonDef } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { FireStream } from '../render/FireStream';
 import { fireRoute, type FirePath } from './firePath';
+import { Bodies, circleTouches, Vertices, type MBody } from './physics';
 
 /**
  * resting: fidgeting now and then; opening: the jaw opening; spitting: the fire rolling out along its route, staying
@@ -13,15 +14,17 @@ import { fireRoute, type FirePath } from './firePath';
 export type DragonPhase = 'resting' | 'opening' | 'spitting' | 'closing';
 
 /**
- * A dragon: it never moves and can't be hurt (it's outside the physics world, and poos pass it by); `initialDelay` s
- * into the level, then exactly `throwDelay` s after its fire is back in, it spits fire along its route (`fireRoute`), up to the first wall, terrain, crate, villain or bat in the way. The bird touching the fire loses a life (`touches`);
- * villains and bats keep out of it as out of a wall (`gap`, `spansInBand`).
+ * A dragon: it never moves and can't be hurt (a poo just splats on it: its `body` is a sensor, there only for poos to hit);
+ * `initialDelay` s into the level, then exactly `throwDelay` s after its fire is back in, it spits fire along its route (`fireRoute`), up to the first wall, terrain, crate, villain or bat in the way. The bird touching the dragon (`touchesBody`)
+ * or its fire (`touches`) loses a life; villains and bats keep out of the fire as out of a wall (`gap`, `spansInBand`).
  * Its timing is fixed, not random, and nothing else in the game changes it, so a player can learn its pattern.
  * Its view holds the dragon and, in world coordinates, its fire.
  */
 export class Dragon {
   readonly view = new Container();
   readonly route: FirePath;
+  /** its hitbox (`dragonHitbox`), where it sits */
+  readonly body: MBody;
   phase: DragonPhase = 'resting';
   /** called as the fire starts rolling out */
   onSpit: () => void = () => {};
@@ -49,6 +52,10 @@ export class Dragon {
     this.spitIn = def.throwDelay > 0 ? def.initialDelay * 1000 : Infinity;
     this.route = fireRoute(def);
     this.clear = this.route.length;
+    const side = def.facing === 'left' ? -1 : 1;
+    const outline = dragonHitbox.map((p) => ({ x: def.x + side * p.x, y: def.y + p.y }));
+    const centre = Vertices.centre(outline);
+    this.body = Bodies.fromVertices(centre.x, centre.y, [outline], { label: 'dragon', isStatic: true, isSensor: true });
     this.sprite = new CharacterSprite<DragonAnim>(dragonDef);
     this.sprite.setFacing(def.facing);
     this.fire = new FireStream(this.route);
@@ -87,6 +94,11 @@ export class Dragon {
     const f = dragonConfig.fire;
     const tail = (this.blocked ? f.blockedTaperOver : f.taperOver) * f.tailShare;
     return Math.max(0, this.reach - f.hitTrim * (tail + f.halfThickness));
+  }
+
+  /** Whether a circle at (x, y) with radius `r` touches the dragon itself. */
+  touchesBody(x: number, y: number, r: number): boolean {
+    return circleTouches(this.body.vertices, x, y, r);
   }
 
   /** Whether a circle at (x, y) with radius `r` touches the fire. */

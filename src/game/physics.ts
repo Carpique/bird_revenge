@@ -14,3 +14,16 @@ export const forceFor = (body: MBody, accelPxPerS2: number) => (body.mass * acce
 
 /** Bodies in this group never collide with each other (bird and its poo). */
 export const BIRD_GROUP = -1;
+
+type Point = { x: number; y: number };
+
+/** Squared distance from (px, py) to the segment a–b. */
+const distSqToSegment = (px: number, py: number, a: Point, b: Point) => {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / (dx * dx + dy * dy)));
+  return (px - a.x - t * dx) ** 2 + (py - a.y - t * dy) ** 2;
+};
+
+/** Whether a circle at (cx, cy) with radius `r` overlaps the convex polygon `vs`. */
+export const circleTouches = (vs: Point[], cx: number, cy: number, r: number) =>
+  Vertices.contains(vs as Matter.Vector[], { x: cx, y: cy }) || vs.some((v, i) => distSqToSegment(cx, cy, v, vs[(i + 1) % vs.length]) < r * r);

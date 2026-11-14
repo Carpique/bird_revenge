@@ -345,12 +345,16 @@ export class Game {
     for (const f of this.friends) f.view.destroy();
     this.friends = this.level.friends.map((def) => new Friend(def));
     for (const f of this.friends) this.friendLayer.addChild(f.view);
-    for (const d of this.dragons) d.view.destroy({ children: true });
+    for (const d of this.dragons) {
+      Composite.remove(this.engine.world, d.body);
+      d.view.destroy({ children: true });
+    }
     for (const f of this.flameSounds.values()) f.stop();
     this.flameSounds.clear();
     this.dragons = this.level.dragons.map((def) => new Dragon(def));
     for (const d of this.dragons) {
       d.onSpit = () => audio.play('dragon-roar');
+      Composite.add(this.engine.world, d.body);
       this.dragonLayer.addChild(d.view);
     }
     for (const c of this.coins) c.view.destroy();
@@ -499,10 +503,11 @@ export class Game {
     this.saveFriends();
     this.collectCoins();
     if (this.allSavedT !== null && (this.allSavedT += STEP_MS) >= config.levelComplete.graceMs) this.completeLevel();
-    // bird touching a walking villain, a flying bat or a dragon's fire costs a life
+    // bird touching a walking villain, a flying bat, a dragon or its fire costs a life
     const b = this.bird.body;
     const birdR = config.physics.birdRadius;
-    const touches = (a: Villain | Bat | Dragon) => a.touches(b.position.x, b.position.y, birdR);
+    const touches = (a: Villain | Bat | Dragon) =>
+      a.touches(b.position.x, b.position.y, birdR) || (a instanceof Dragon && a.touchesBody(b.position.x, b.position.y, birdR));
     if (!this.bird.dying && !this.bird.invulnerable && (this.villains.some(touches) || this.bats.some(touches) || this.dragons.some(touches))) {
       this.loseLife();
     }
@@ -823,7 +828,7 @@ export class Game {
     this.fx.addChild(poo.view);
   }
 
-  /** What a falling poo hit: the bird's knocks villains and bats off, a bat's goes through them; either splats on the ground and terrain. */
+  /** What a falling poo hit: the bird's knocks villains and bats off, a bat's goes through them; either splats on the ground, terrain and dragons. */
   private onCollision(pair: MPair) {
     const { bodyA: a, bodyB: b } = pair;
     const labels = [a.label, b.label];
@@ -869,7 +874,7 @@ export class Game {
         poo.splat();
         if (bird) audio.play('splat');
       });
-    } else if (other.label === 'terrain') {
+    } else if (other.label === 'terrain' || other.label === 'dragon') {
       // lies along the surface it hit, where it touched (read now: Matter reuses the collision object)
       const y = surfaceY(other, pooBody, poo.radius, pair.collision.supports[0], pair.collision.normal);
       const angle = surfaceAngle(pair.collision.normal);
@@ -905,13 +910,19 @@ export class Game {
     this.timers.push({ ms, fn });
   }
 
-  /** The dead bird has left the screen: a new one appears at the level's start, or it's game over. */
+  /**
+   * The dead bird has left the screen: a new one appears (at the level's start if all of it shows there, else
+   * falling from the top of the screen, in the middle), or it's game over.
+   */
   private afterDeath() {
     if (this.lives > 0) {
-      const start = this.birdStart();
+      // the camera stays where it is: in a scrolling level the level's start may be off the screen
+      const r = config.physics.birdRadius;
+      const left = this.scrollX + view.left, right = this.scrollX + view.right;
+      const levelStart = this.birdStart();
+      const start = levelStart.x - r >= left && levelStart.x + r <= right ? levelStart : { x: (left + right) / 2, y: r };
       this.bird.respawn(start.x, start.y, true);
       Composite.add(this.engine.world, this.bird.body);
-      this.lookAtBird();
       return;
     }
     this.over = true;
@@ -1040,7 +1051,7 @@ function slideThrough(sign: GlowText, ms: number, slideMs: number, totalMs: numb
 }
 
 /**
- * y of the surface of `terrain` where the poo (of radius `r`) hit it. The contact point Matter reports is the deepest point of the overlap,
+ * y of the surface of `terrain` (or a dragon) where the poo (of radius `r`) hit it. The contact point Matter reports is the deepest point of the overlap,
  * so a fast poo's can lie well inside the terrain: walk it back out along the normal (towards the poo) to the surface.
  */
 function surfaceY(terrain: MBody, poo: MBody, r: number, support: { x: number; y: number } | undefined, n: { x: number; y: number }): number {
