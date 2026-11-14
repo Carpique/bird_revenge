@@ -57,6 +57,9 @@ function stars(perWorld: number): [Graphics, Graphics] {
   return layers;
 }
 
+/** How much of a scrolling level's scroll the clouds and the haze follow: far away, they move less than the level. */
+const PARALLAX = 0.3;
+
 /** How far past the world's sides the haze reaches before wrapping round: more than half its widest cloud. */
 const HAZE_MARGIN = 360;
 
@@ -103,7 +106,11 @@ function hazeBand(band: (typeof scenery.haze)[number], blob: Texture, rnd: () =>
   return blobs;
 }
 
-/** The sky, sun or moon and stars, drifting clouds, the haze above the world and the ground behind everything; `timeOfDay` sets which. */
+/**
+ * The sky, sun or moon and stars, drifting clouds, the haze above the world and the ground behind everything; `timeOfDay` sets which.
+ * It stays on the screen while a scrolling level moves in front of it: only the ground goes with the level, and the
+ * clouds a little (`PARALLAX`).
+ */
 export class Background extends Container {
   private sky = new Graphics();
   private sun: Sprite;
@@ -119,6 +126,8 @@ export class Background extends Container {
   private gradient: FillGradient | null = null;
   /** ms, for the stars' twinkling */
   private t = 0;
+  /** how far the level has scrolled (px) */
+  private scroll = 0;
 
   constructor() {
     super();
@@ -185,10 +194,26 @@ export class Background extends Container {
       .fill('behindGround' in look ? look.behindGround : look.horizon);
   }
 
-  /** Extend the ground to the screen's edges (`view`), and show the haze if the screen reaches above the world; call after `fitWorld`. */
-  fit() {
-    this.ground.fit();
+  /**
+   * Extend the ground to the screen's edges (`view`), and show the haze if the screen reaches above the world; call
+   * after `fitWorld`. `scroll`: how far the level has scrolled (px): the ground goes with it, the clouds part of the way.
+   */
+  fit(scroll = 0) {
+    this.ground.fit(scroll);
     this.haze.visible = view.top < 0;
+    const dx = (scroll - this.scroll) * PARALLAX;
+    this.scroll = scroll;
+    if (!dx) return;
+    const left = Math.min(0, view.left), right = Math.max(WORLD.width, view.right);
+    for (const c of this.clouds) {
+      c.sprite.x -= dx;
+      const half = c.sprite.width / 2;
+      // off one side, back in at the other; a jump of the camera (a new level) can take more than one turn
+      const span = right - left + 2 * half;
+      c.sprite.x = left - half + ((((c.sprite.x - (left - half)) % span) + span) % span);
+    }
+    const hazeSpan = WORLD.width + 2 * HAZE_MARGIN;
+    for (const c of this.hazeClouds) c.sprite.x = -HAZE_MARGIN + ((((c.sprite.x - dx + HAZE_MARGIN) % hazeSpan) + hazeSpan) % hazeSpan);
   }
 
   update(dtMs: number) {

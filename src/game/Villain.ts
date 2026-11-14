@@ -8,8 +8,8 @@ import { Bodies, Body, Vertices, type MBody } from './physics';
 type State = 'walking' | 'hit' | 'falling' | 'gone';
 type VillainAnim = keyof typeof villainDef.animations;
 
-/** his centre stays this far inside the screen edges, whatever his path */
-const MIN_X = 60, MAX_X = WORLD.width - 60;
+/** his centre stays this far inside the level's ends, whatever his path */
+const EDGE = 60;
 const HEIGHT = villainDef.displayHeight;
 /** where the apple leaves his hand: in front of him (the way he walks), about halfway up him */
 const HAND_DX = 22, HAND_DY = 65;
@@ -114,8 +114,8 @@ export class Villain {
   /** the way he walks, and looks */
   private dir: 1 | -1 = 1;
   /** his path: the stretch his centre stays within */
-  private lo = MIN_X;
-  private hi = MAX_X;
+  private lo = 0;
+  private hi = 0;
   private timer = 0;
   /** average s between throws, 0 = never throws */
   private throwDelay = 0;
@@ -134,8 +134,8 @@ export class Villain {
   /** called when an apple leaves his hand, with the hand position and the way he faces (the apple must fly that way, or straight up/down) */
   onThrow: ((x: number, y: number, dir: 1 | -1) => void) | null = null;
 
-  /** `keepOnScreen`: false lets his path run past the screen's edges (the title screen's passers-by) */
-  constructor(def: VillainDef, private keepOnScreen = true) {
+  /** `levelWidth`: his path is kept within the level; null lets it run past the screen's edges (the title screen's passers-by) */
+  constructor(def: VillainDef, private levelWidth: number | null = WORLD.width) {
     this.kind = def.kind;
     this.hitbox = villainLooks[def.kind].hitbox;
     this.view = new CharacterSprite<VillainAnim>(villainLooks[def.kind].def);
@@ -313,12 +313,12 @@ export class Villain {
     return this.feetY;
   }
 
-  /** Puts him at his start on his path (kept on the screen, his feet not below the ground), facing a random way. */
+  /** Puts him at his start on his path (kept in the level, his feet not below the ground), facing a random way. */
   private place({ x, y, path, throwDelay }: VillainDef) {
     this.throwDelay = throwDelay;
     this.feetY = Math.min(y, WORLD.groundY);
-    this.lo = this.keepOnScreen ? Math.max(path.x0, MIN_X) : path.x0;
-    this.hi = this.keepOnScreen ? Math.min(path.x1, MAX_X) : path.x1;
+    this.lo = this.levelWidth === null ? path.x0 : Math.max(path.x0, EDGE);
+    this.hi = this.levelWidth === null ? path.x1 : Math.min(path.x1, this.levelWidth - EDGE);
     if (this.lo > this.hi) this.lo = this.hi = (this.lo + this.hi) / 2;
     this.x = Math.max(this.lo, Math.min(x, this.hi));
     this.dir = Math.random() < 0.5 ? -1 : 1;

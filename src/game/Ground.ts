@@ -13,7 +13,7 @@ const SOIL = { from: 0.35, to: 0.87 };
 /**
  * The ground strip along the bottom of the world. Shared by the game and the splash screen. When the screen is
  * wider or taller than the world (`view`), `fit` repeats it out to the screen's sides and fills below it with
- * its soil, the pattern simply repeated.
+ * its soil, the pattern simply repeated. In a scrolling level it slides with the level, the pattern coming round again.
  */
 export class Ground extends Container {
   private strip: Texture;
@@ -33,11 +33,17 @@ export class Ground extends Container {
     this.fit();
   }
 
-  /** Cover the screen's width and, below the ground, its height (`view`); call after `fitWorld`. */
-  fit() {
+  /**
+   * Cover the screen's width and, below the ground, its height (`view`); call after `fitWorld`. `scroll`: how far
+   * the level has scrolled (px), the ground with it.
+   */
+  fit(scroll = 0) {
     const k = WORLD.width / this.strip.width;
     const soilTop = this.stripTop() + this.strip.height * k, soilH = this.soil.height * k;
-    const from = Math.floor(view.left / WORLD.width), to = Math.ceil(view.right / WORLD.width) - 1;
+    // the pattern repeats every world width, so only the rest of the scroll moves it
+    const shift = ((scroll % WORLD.width) + WORLD.width) % WORLD.width;
+    this.x = -shift;
+    const from = Math.floor((view.left + shift) / WORLD.width), to = Math.ceil((view.right + shift) / WORLD.width) - 1;
     const rows = Math.max(0, Math.ceil((view.bottom - soilTop) / soilH));
     const m = this.made;
     if (from >= m.from && to <= m.to && rows <= m.rows) return;

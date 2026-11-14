@@ -143,7 +143,7 @@ export class Passersby extends Container {
 
   private villain(kind: VillainKind, from: number, to: number): Walker {
     const path = from < to ? { x0: from, x1: to } : { x0: to, x1: from };
-    const villain = new Villain({ kind, x: from, y: WORLD.groundY, path, throwDelay: 0 }, false);
+    const villain = new Villain({ kind, x: from, y: WORLD.groundY, path, throwDelay: 0 }, null);
     // he'd turn back at the ends of his path; at the one he's heading for, he's gone instead (both, once he's turned back)
     let exit = to;
     return {

@@ -30,17 +30,24 @@ export function inSight(bodies: MBody[], a: Point, b: Point): boolean {
 }
 
 /**
- * The way to the bird, for the bats without a route (homing bats): a grid over the world, each cell holding how far it is
+ * The way to the bird, for the bats without a route (homing bats): a grid over the level, each cell holding how far it is
  * from the bird going round the level's bodies (Dijkstra, keeping clear of them where it can). `update` redraws it — the
  * bodies may have moved, and the bird surely has — and `way` says which way a bat at a point should fly.
  */
 export class HomingField {
   readonly cell = config.bat.homingCell;
-  readonly cols = Math.ceil(WORLD.width / this.cell);
+  readonly cols: number;
   readonly rows = Math.ceil(WORLD.height / this.cell);
-  private kind = new Uint8Array(this.cols * this.rows);
-  private dist = new Float64Array(this.cols * this.rows);
+  private kind: Uint8Array;
+  private dist: Float64Array;
   private bird: Point | null = null;
+
+  /** `width`: the level's */
+  constructor(private width = WORLD.width) {
+    this.cols = Math.ceil(width / this.cell);
+    this.kind = new Uint8Array(this.cols * this.rows);
+    this.dist = new Float64Array(this.cols * this.rows);
+  }
 
   /** Redraws the field around `bodies` (the level's), towards `bird` (null: no bird to go for). */
   update(bodies: MBody[], bird: Point | null) {
@@ -89,7 +96,7 @@ export class HomingField {
     const { halfWidth: hw, halfHeight: hh } = batOutline;
     if (p.y >= WORLD.height) return 1;
     // the world's edges, as walls
-    let worst = Math.max(0, 1 - (Math.max(0, p.x) / hw) ** 2, 1 - (Math.max(0, WORLD.width - p.x) / hw) ** 2, 1 - (Math.max(0, p.y) / hh) ** 2);
+    let worst = Math.max(0, 1 - (Math.max(0, p.x) / hw) ** 2, 1 - (Math.max(0, this.width - p.x) / hw) ** 2, 1 - (Math.max(0, p.y) / hh) ** 2);
     const { cell, cols, rows, kind } = this;
     const c0 = Math.max(0, Math.floor((p.x - hw) / cell)), c1 = Math.min(cols - 1, Math.floor((p.x + hw) / cell));
     const r0 = Math.max(0, Math.floor((p.y - hh) / cell)), r1 = Math.min(rows - 1, Math.floor((p.y + hh) / cell));
