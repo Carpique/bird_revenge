@@ -127,6 +127,7 @@ const RANGES: Record<string, [number, number, number]> = {
   'apple.warnBlinkHz': [0, 10, 0.5],
   'apple.aimSpread': [0, 45, 1],
   'apple.radius': [2, 40, 1],
+  'apple.mass': [0, 5, 0.05],
   'apple.poopedMs': [100, 3000, 50],
   'apple.poopedFallAfterMs': [0, 3000, 50],
   'bat.intervalSpread': [0, 1, 0.05],

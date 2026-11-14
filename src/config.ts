@@ -513,6 +513,8 @@ export const config = {
     aimSpread: 6,
     /** collision radius (px) */
     radius: 13,
+    /** its mass (Matter's units; the bird's poo is 0.25, a 60 px wooden crate 7): how hard it pushes a movable body it hits, and what its splat weighs on it */
+    mass: 0.5,
     /** spin while flying, turns per second */
     spin: 1.5,
     /** an apple hit by a poo: both stop, blink and fade out over this long */

@@ -340,7 +340,7 @@ export class Game {
       p.destroy();
     }
     this.poos = [];
-    for (const a of this.apples) a.view.destroy();
+    for (const a of this.apples) a.destroy();
     this.apples = [];
     for (const f of this.friends) f.view.destroy();
     this.friends = this.level.friends.map((def) => new Friend(def));
@@ -567,7 +567,7 @@ export class Game {
     });
     this.apples = this.apples.filter((a) => {
       if (a.state !== 'done') return true;
-      a.view.destroy();
+      a.destroy();
       return false;
     });
   }
@@ -792,13 +792,12 @@ export class Game {
     this.fx.addChild(apple.view);
   }
 
-  /** An apple that flew into the level or the ground this step splats there, harmless from then on (as a poo, it just goes on a movable body). */
+  /** An apple that flew into the level or the ground this step splats there, harmless from then on (a movable body it pushes, and its splat weighs on it). */
   private splatApple(a: Apple) {
     const from = { x: a.prevX, y: a.prevY }, to = { x: a.x, y: a.y };
     const hit = surfaceHit(this.levelBodies, from, to);
     if (hit) {
-      if (hit.body.isStatic) a.splat(hit.x, hit.y, hit.normal);
-      else a.state = 'done';
+      a.splat(hit.x, hit.y, hit.normal, hit.body.isStatic ? null : hit.body);
     } else if (Query.point(this.levelBodies, to).length) {
       // already inside something (thrown from within it): gone
       a.state = 'done';
@@ -829,7 +828,7 @@ export class Game {
   }
 
   /**
-   * What a falling poo hit: the bird's knocks villains and bats off, a bat's goes through them; either splats on the ground, terrain and dragons.
+   * What a falling poo hit: the bird's knocks villains and bats off, a bat's goes through them; either splats on the ground, terrain, movable bodies and dragons.
    * And what a crate hit (`crush`).
    */
   private onCollision(pair: MPair) {
@@ -873,24 +872,16 @@ export class Game {
         poo.splat();
         if (bird) audio.play('splat');
       });
-    } else if (other.label === 'terrain' || other.label === 'dragon') {
-      // lies along the surface it hit, where it touched (read now: Matter reuses the collision object)
+    } else if (other.label === 'terrain' || other.label === 'dragon' || other.label === 'body') {
+      // lies along the surface it hit, where it touched (read now: Matter reuses the collision object); on a movable
+      // body it stays on it, weighing on it, once this step's push is done
       const y = surfaceY(other, pooBody, poo.radius, pair.collision.supports[0], pair.collision.normal);
       const angle = surfaceAngle(pair.collision.normal);
       this.pending.push(() => {
         if (poo.state !== 'falling') return;
         Composite.remove(this.engine.world, pooBody);
-        poo.splat(y, angle);
+        poo.splat(y, angle, other.label === 'body' ? other : null);
         if (bird) audio.play('splat');
-      });
-    } else if (other.label === 'body') {
-      // a splat wouldn't stay on a moving thing: the poo just goes
-      this.pending.push(() => {
-        if (poo.state !== 'falling') return;
-        poo.stopSound();
-        if (bird) audio.play('splat');
-        Composite.remove(this.engine.world, pooBody);
-        poo.state = 'done';
       });
     }
   }
