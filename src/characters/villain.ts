@@ -54,10 +54,9 @@ export const ghostDef = {
 
 /**
  * Each villain kind's look; `floats`: it keeps moving (its `walk`) while it stands still, instead of standing mid-stride;
- * `alpha`: how opaque it's drawn (the ghost is see-through); `hitbox`: what a poo or the bird hits; `solid`: the level's
- * movable bodies bounce off it and knock it off as they fall on it (they go through the ghost, unharmed).
+ * `alpha`: how opaque it's drawn (the ghost is see-through); `hitbox`: what a poo or the bird hits.
  */
-export const villainLooks: Record<VillainKind, { def: typeof villainDef; floats: boolean; alpha: number; hitbox: VillainHitbox; solid: boolean }> = {
-  villain: { def: villainDef, floats: false, alpha: 1, hitbox: { width: 52, height: 124, lift: 0 }, solid: true },
-  ghost: { def: ghostDef, floats: true, alpha: 0.7, hitbox: { width: 68, height: 102, lift: 15 }, solid: false },
+export const villainLooks: Record<VillainKind, { def: typeof villainDef; floats: boolean; alpha: number; hitbox: VillainHitbox }> = {
+  villain: { def: villainDef, floats: false, alpha: 1, hitbox: { width: 52, height: 124, lift: 0 } },
+  ghost: { def: ghostDef, floats: true, alpha: 0.7, hitbox: { width: 68, height: 102, lift: 15 } },
 };

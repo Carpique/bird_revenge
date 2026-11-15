@@ -80,7 +80,7 @@ const ellipse = ({ width, height }: VillainHitbox) =>
  * the throw waits until it's in front.
  * A throw starts with the bird in front of him: for `apple.warnMs` he holds what he'll throw up in his hand (`held`), blinking,
  * as he walks on and then stops for the windup: the player's warning. He throws then even if the bird has got behind him.
- * A ghost (`kind`) is the same villain in another look, throwing glue instead of apples; the level's movable bodies go through it.
+ * A ghost (`kind`) is the same villain in another look, throwing glue instead of apples.
  * When hit, he is knocked off the screen arcade style: a little hop, then a parabolic fall past the bottom edge,
  * growing as if flying towards the camera. He's gone for good then.
  */
@@ -136,12 +136,11 @@ export class Villain {
     this.held = new CharacterSprite(missiles[def.kind].def);
     this.held.visible = false;
     this.place(def);
-    // solid only to crates, which bounce off him (a ghost they go through), and the bird's poo
+    // solid only to crates, which bounce off him, and the bird's poo
     this.body = characterBody(
       Bodies.fromVertices(this.x, this.hitboxY, [ellipse(this.hitbox)], { label: 'villain', isStatic: true }),
       config.crush.bounce,
       BIRD_POO,
-      villainLooks[def.kind].solid,
     );
   }
 
