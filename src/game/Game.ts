@@ -392,6 +392,19 @@ export class Game {
     }
   }
 
+  /**
+   * The crates on the screen don't sleep: Matter wakes a sleeping one only when something moving hits it, so one whose
+   * support was knocked from under it would hang in the air, and one moving among sleeping ones is as if between walls.
+   * Those off the screen do sleep, and so do the ones the level starts asleep, until something hits them.
+   */
+  private keepAwake() {
+    for (const b of this.built.bodies) {
+      if (b.def.kind !== 'body' || b.def.sleeping) continue;
+      const { min, max } = b.body.bounds;
+      if (this.onScreen((min.x + max.x) / 2, (max.x - min.x) / 2)) Sleeping.set(b.body, false);
+    }
+  }
+
   /** (Re)creates the level's bodies, joints and their drawing from `this.level`. */
   private buildLevel() {
     const world = this.engine.world;
@@ -490,6 +503,7 @@ export class Game {
     for (const c of this.coins) c.step(STEP_MS);
     const birdY = this.bird.body.position.y;
     const pooYs = new Map(this.poos.map((p) => [p, p.body.position.y]));
+    this.keepAwake();
     Engine.update(this.engine, STEP_MS);
     this.bird.perchOn(this.branches, birdY);
     this.bird.standOn(this.levelBodies);
