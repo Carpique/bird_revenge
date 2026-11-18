@@ -16,10 +16,12 @@ export const batDef = {
       loop: true,
     },
     hit: { frames: ['assets/bat/hit.svg'], fps: 1 },
+    /** knocked out by a falling body (a crate), not a poo: seeing stars */
+    hitCollision: { frames: ['assets/bat/hit-collision.svg'], fps: 1 },
   },
   defaultAnimation: 'fly',
   backing: true,
-} satisfies CharacterDef<'fly' | 'hit'>;
+} satisfies CharacterDef<'fly' | 'hit' | 'hitCollision'>;
 
 /** A homing bat (one without a route): the same bat in dark purple, so players can tell it will come for them. */
 export const homingBatDef = {
@@ -28,8 +30,9 @@ export const homingBatDef = {
   animations: {
     fly: { ...batDef.animations.fly, frames: batDef.animations.fly.frames.map((f) => f.replace('assets/bat/', 'assets/bat/homing/')) },
     hit: { ...batDef.animations.hit, frames: ['assets/bat/homing/hit.svg'] },
+    hitCollision: { ...batDef.animations.hitCollision, frames: ['assets/bat/homing/hit-collision.svg'] },
   },
-} satisfies CharacterDef<'fly' | 'hit'>;
+} satisfies CharacterDef<'fly' | 'hit' | 'hitCollision'>;
 
 /** Radius (px) of the bat's round body, for the bird bumping into it: the body and the inner wings, not the wing tips. */
 export const batRadius = 22;

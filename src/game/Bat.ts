@@ -3,6 +3,7 @@ import { config, WORLD } from '../config';
 import type { BatDef } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
 import type { HomingField } from './homing';
+import type { HitCause } from './Villain';
 import { BIRD_POO, Bodies, Body, characterBody, type MBody } from './physics';
 
 type State = 'flying' | 'hit' | 'falling' | 'gone';
@@ -39,7 +40,7 @@ export type FireGap = (p: { x: number; y: number }) => number;
  * A bat without a route homes in on the bird instead, at the same steady speed, once it has seen it (nothing static in
  * between): round the level's bodies (see `HomingField`), keeping apart from the other bats, turning smoothly; till then it
  * flutters about where it started.
- * Hit by the bird's poo, it hangs in the air for a moment in its "hit" pose, then tumbles off the bottom of the screen,
+ * Hit by the bird's poo (or a falling crate), it hangs in the air for a moment in its "hit" pose (seeing stars, for a crate), then tumbles off the bottom of the screen,
  * gone for good. Touching a flying bat costs the bird a life, as a walking villain does.
  * A dragon's fire is a wall to it while it's out: one on a route turns back at it (one going round a closed route
  * hangs there till it's gone), a homing one slides along it, or stops.
@@ -53,6 +54,8 @@ export class Bat {
   /** called when it poos, with where the poo leaves it */
   onPoo: ((x: number, y: number) => void) | null = null;
   private state: State = 'flying';
+  /** what knocked it off, for its pose */
+  private hitBy: HitCause = 'poo';
   private x: number;
   private y: number;
   /** sideways speed this step, for the lean */
@@ -102,9 +105,10 @@ export class Bat {
     return (cx - this.x) ** 2 + (cy - this.y) ** 2 < d * d;
   }
 
-  /** Returns true if this hit counts. */
-  hit(): boolean {
+  /** Knocked off by `cause`. Returns true if this hit counts. */
+  hit(cause: HitCause = 'poo'): boolean {
     if (!this.hittable) return false;
+    this.hitBy = cause;
     this.enter('hit');
     return true;
   }
@@ -178,7 +182,7 @@ export class Bat {
     this.view.position.set(this.x, this.y);
     if (this.state === 'flying') this.view.rotation = this.lean;
     if (this.frozen && this.state === 'flying') this.view.anim.stop();
-    else this.view.play(this.state === 'flying' ? 'fly' : 'hit');
+    else this.view.play(this.state === 'flying' ? 'fly' : this.hitBy === 'collision' ? 'hitCollision' : 'hit');
   }
 
   /** Moves along the route, unless that takes it into the fire: then it turns back (or, on a closed route, waits). */

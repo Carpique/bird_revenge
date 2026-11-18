@@ -31,7 +31,7 @@ import { landingBranch } from './branches';
 import { Bodies, Body, Composite, Engine, Events, Query, Sleeping, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
 import { Poo } from './Poo';
 import { surfaceHit } from './surfaceHit';
-import { spanInBand, Villain, type Span } from './Villain';
+import { spanInBand, Villain, type HitCause, type Span } from './Villain';
 
 /** how far (px) a surface may be from a villain's feet and still be what he walks on */
 const SURFACE_TOLERANCE = 8;
@@ -936,9 +936,12 @@ export class Game {
     }
   }
 
-  /** A villain or bat is knocked off, by a poo or a falling body: it scores, shown at (x, y). Nothing happens to one already knocked off. */
-  private knockOff(c: Villain | Bat, x: number, y: number) {
-    if (!c.hit()) return;
+  /**
+   * A villain or bat is knocked off, by a poo or a falling body (`cause`, for its pose): it scores, shown at (x, y).
+   * Nothing happens to one already knocked off.
+   */
+  private knockOff(c: Villain | Bat, x: number, y: number, cause: HitCause = 'poo') {
+    if (!c.hit(cause)) return;
     // one standing by is in play from now on, to fall off
     this.asleep.delete(c);
     if (c instanceof Bat) {
@@ -962,7 +965,7 @@ export class Game {
     const c = this.villains.find((v) => v.body === other) ?? this.bats.find((b) => b.body === other);
     if (!c?.hittable) return;
     const { x, y } = other.position;
-    this.pending.push(() => this.knockOff(c, x, y));
+    this.pending.push(() => this.knockOff(c, x, y, 'collision'));
   }
 
   /** The bird dies and falls off the screen; the lost heart blinks meanwhile. */

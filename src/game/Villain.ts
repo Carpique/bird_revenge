@@ -7,6 +7,8 @@ import { BIRD_POO, Bodies, Body, characterBody, circleTouches, type MBody } from
 
 type State = 'walking' | 'hit' | 'falling' | 'gone';
 type VillainAnim = keyof typeof villainDef.animations;
+/** what knocks a villain or a bat off: the bird's poo, or a falling body (a crate), which shows the "seeing stars" pose */
+export type HitCause = 'poo' | 'collision';
 
 /** his centre stays this far inside the level's ends, whatever his path (or without one) */
 const EDGE = 60;
@@ -82,7 +84,7 @@ const ellipse = ({ width, height }: VillainHitbox) =>
  * A throw starts with the bird in front of him: for `apple.warnMs` he holds what he'll throw up in his hand (`held`), blinking,
  * as he walks on and then stops for the windup: the player's warning. He throws then even if the bird has got behind him.
  * A ghost (`kind`) is the same villain in another look, throwing glue instead of apples.
- * When hit, he is knocked off the screen arcade style: a little hop, then a parabolic fall past the bottom edge,
+ * When hit (by a poo, or a falling crate: then he's seeing stars rather than wearing the poo), he is knocked off the screen arcade style: a little hop, then a parabolic fall past the bottom edge,
  * growing as if flying towards the camera. He's gone for good then.
  */
 export class Villain {
@@ -97,6 +99,8 @@ export class Villain {
   /** stands still where he is, mid-stride (the level is won); one already knocked off still flies away */
   frozen = false;
   private state: State = 'walking';
+  /** what knocked him off, for his pose */
+  private hitBy: HitCause = 'poo';
   private x = 0;
   /** y of his feet: what he walks on */
   private feetY = WORLD.groundY;
@@ -171,9 +175,10 @@ export class Villain {
     return this.feetY - this.hitbox.lift - this.hitbox.height / 2;
   }
 
-  /** Returns true if this hit counts. */
-  hit(): boolean {
+  /** Knocked off by `cause`. Returns true if this hit counts. */
+  hit(cause: HitCause = 'poo'): boolean {
     if (!this.hittable) return false;
+    this.hitBy = cause;
     this.enter('hit');
     return true;
   }
@@ -264,7 +269,7 @@ export class Villain {
     if (this.frozen && this.state === 'walking') this.view.anim.stop();
     // standing still: in the windup of a throw, or stopped for a moment (a ghost's sheet waves on)
     else if ((this.winding || this.pauseLeft !== null) && !villainLooks[this.kind].floats) this.view.showPhase('walk', 0);
-    else this.view.play(this.state === 'walking' ? 'walk' : 'hit');
+    else this.view.play(this.state === 'walking' ? 'walk' : this.hitBy === 'collision' ? 'hitCollision' : 'hit');
   }
 
   /** in the windup of a throw: standing still */

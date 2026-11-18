@@ -18,10 +18,12 @@ export const villainDef = {
       loop: true,
     },
     hit: { frames: ['assets/villain/hit.svg'], fps: 1 },
+    /** knocked out by a falling body (a crate), not a poo: seeing stars */
+    hitCollision: { frames: ['assets/villain/hit-collision.svg'], fps: 1 },
   },
   defaultAnimation: 'walk',
   backing: true,
-} satisfies CharacterDef<'walk' | 'hit'>;
+} satisfies CharacterDef<'walk' | 'hit' | 'hitCollision'>;
 
 /**
  * Collision shape (world px): the ellipse inscribed in a `width` × `height` box, centred horizontally on the feet,
@@ -49,8 +51,9 @@ export const ghostDef = {
       loop: true,
     },
     hit: { frames: ['assets/ghost/hit.svg'], fps: 1 },
+    hitCollision: { frames: ['assets/ghost/hit-collision.svg'], fps: 1 },
   },
-} satisfies CharacterDef<'walk' | 'hit'>;
+} satisfies CharacterDef<'walk' | 'hit' | 'hitCollision'>;
 
 /**
  * Each villain kind's look; `floats`: it keeps moving (its `walk`) while it stands still, instead of standing mid-stride;
