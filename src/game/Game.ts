@@ -344,9 +344,15 @@ export class Game {
     this.poos = [];
     for (const a of this.apples) a.destroy();
     this.apples = [];
-    for (const f of this.friends) f.view.destroy();
+    for (const f of this.friends) {
+      Composite.remove(this.engine.world, f.body);
+      f.view.destroy();
+    }
     this.friends = this.level.friends.map((def) => new Friend(def));
-    for (const f of this.friends) this.friendLayer.addChild(f.view);
+    for (const f of this.friends) {
+      Composite.add(this.engine.world, f.body);
+      this.friendLayer.addChild(f.view);
+    }
     for (const d of this.dragons) {
       Composite.remove(this.engine.world, d.body);
       d.view.destroy({ children: true });
@@ -596,6 +602,7 @@ export class Game {
     for (const f of this.friends) {
       if (f.state !== 'waiting' || !f.touches(b.x, b.y, config.physics.birdRadius)) continue;
       f.save();
+      Composite.remove(this.engine.world, f.body);
       this.front.addChild(f.view);
       audio.play('friend');
     }

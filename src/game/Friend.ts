@@ -2,13 +2,15 @@ import { friendDefs, friendFidget, friendRadius, type FriendAnim } from '../char
 import { config } from '../config';
 import type { FriendDef } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
+import { Bodies, characterBody, type MBody } from './physics';
 
 /**
- * A little animal to save. It sits still (outside the physics world), blinking now and then, until the bird
- * flies into it; saved, it grows upwards from its feet and fades away, then it's gone.
+ * A little animal to save. It sits still, blinking now and then, until the bird flies into it; saved, it grows upwards
+ * from its feet and fades away, then it's gone. Its `body` is solid only to crates, which bounce off it while it waits.
  */
 export class Friend {
   readonly view: CharacterSprite<FriendAnim>;
+  readonly body: MBody;
   state: 'waiting' | 'saved' | 'done' = 'waiting';
   /** its centre */
   readonly x: number;
@@ -28,6 +30,7 @@ export class Friend {
     this.halfHeight = character.displayHeight / 2;
     this.y = def.y - this.halfHeight;
     this.radius = friendRadius[def.kind];
+    this.body = characterBody(Bodies.circle(this.x, this.y, this.radius, { label: 'friend', isStatic: true }), config.crush.bounce, 0);
   }
 
   /** Whether a circle at (x, y) with radius `r` reaches it. */

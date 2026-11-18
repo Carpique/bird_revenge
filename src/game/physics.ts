@@ -17,7 +17,7 @@ export const BIRD_GROUP = -1;
 
 /**
  * Collision categories. Everything is in Matter's default one (1) but the level's movable bodies (crates) and the poos.
- * The characters are solid only to what their mask names: crates bounce off a villain, bat or dragon and the poos that
+ * The characters are solid only to what their mask names: crates bounce off a villain, bat, dragon or friend and the poos that
  * splat on it hit it, while the bird, terrain and (for villains and bats) a bat's poo go through.
  */
 export const CRATE = 0x0002, BIRD_POO = 0x0004, BAT_POO = 0x0008;
