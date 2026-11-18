@@ -2,7 +2,7 @@ import { Application, Container, Graphics, Rectangle, Sprite, Text, type Texture
 import { audio, type FlameSound } from '../audio/audio';
 import { batOutline, batRadius } from '../characters/bat';
 import { coinDef } from '../characters/coin';
-import { dragonDef } from '../characters/dragon';
+import { dragonConfig, dragonDef } from '../characters/dragon';
 import { splatHalfWidth } from '../characters/poo';
 import { villainDef } from '../characters/villain';
 import { config, WORLD } from '../config';
@@ -95,7 +95,7 @@ export class Game {
   private bounds: MBody[] = [];
   /**
    * a scrolling level's villains, bats and dragons not seen yet: each stands by, unstepped, until it first comes
-   * onto the screen, and is in play from then on. Empty in a level that doesn't scroll
+   * onto the screen (a dragon: it or any of its fire route), and is in play from then on. Empty in a level that doesn't scroll
    */
   private asleep = new Set<Villain | Bat | Dragon>();
   /** the walking villains, and the bats in front of them */
@@ -389,13 +389,20 @@ export class Game {
     return x + halfWidth > this.scrollX + view.left && x - halfWidth < this.scrollX + view.right;
   }
 
-  /** The villains, bats and dragons that have come onto the screen are in play from now on. */
+  /** Whether any of a dragon's fire route (its whole length, thickness and all) is on the screen. */
+  private routeOnScreen(d: Dragon) {
+    const xs = d.route.points.map((p) => p[0]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    return this.onScreen((x0 + x1) / 2, (x1 - x0) / 2 + dragonConfig.fire.halfThickness);
+  }
+
+  /** The villains, bats and dragons (they or their fire route) that have come onto the screen are in play from now on. */
   private wake() {
     for (const a of this.asleep) {
       const seen =
         a instanceof Villain ? this.onScreen(a.centreX, villainDef.displayHeight / 2)
         : a instanceof Bat ? this.onScreen(a.position.x, batOutline.halfWidth)
-        : this.onScreen(a.def.x, dragonDef.displayHeight / 2);
+        : this.onScreen(a.def.x, dragonDef.displayHeight / 2) || this.routeOnScreen(a);
       if (seen) this.asleep.delete(a);
     }
   }
