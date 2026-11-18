@@ -4,13 +4,16 @@ import { config, WORLD } from '../config';
 import type { VillainKind } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { Knockout } from './Knockout';
+import type { MBody } from './physics';
+import { strike, Stuck } from './stuck';
 
 type AppleAnim = keyof typeof appleDef.animations;
 
 /**
  * Thrown by the villain: an apple, or the ghost's glue (`kind`: who threw it). Flies in a straight line at constant speed (no gravity, outside the physics world)
- * until it leaves the screen. Hit by a poo, it stops, blinks out and drops. Flown into the level or the ground, it splats there
- * as a poo does: a splat lies on the surface for a while, fading out, and hurts no one.
+ * until it leaves the level. Hit by a poo, it stops, blinks out and drops. Flown into the level or the ground, it splats there
+ * as a poo does: a splat lies on the surface for a while, fading out, and hurts no one. A movable body it pushes as it hits,
+ * and its splat stays on the body, weighing on it (`apple.mass`) until it's gone.
  */
 export class Apple {
   readonly view: CharacterSprite<AppleAnim>;
@@ -21,6 +24,8 @@ export class Apple {
   private age = 0;
   private knockout: Knockout | null = null;
   private splatT = 0;
+  /** its splat lying on a movable body */
+  private stuck: Stuck | null = null;
   /** where it was before its last step: it flew from there to (x, y) */
   prevX: number;
   prevY: number;
@@ -31,6 +36,8 @@ export class Apple {
     private vx: number,
     private vy: number,
     kind: VillainKind = 'villain',
+    /** the level's width: it's gone once past its ends */
+    private levelWidth = WORLD.width,
   ) {
     this.view = new CharacterSprite<AppleAnim>(missiles[kind].def);
     this.spins = missiles[kind].spins;
@@ -47,9 +54,9 @@ export class Apple {
 
   /**
    * Flew into a surface at (x, y): becomes a splat lying on it, its top the way of the surface's `normal`
-   * (so under a shelf it hangs down, on a wall it sticks out sideways).
+   * (so under a shelf it hangs down, on a wall it sticks out sideways). `on`: the movable body it hit.
    */
-  splat(x: number, y: number, normal: { x: number; y: number }) {
+  splat(x: number, y: number, normal: { x: number; y: number }, on: MBody | null = null) {
     this.state = 'splat';
     this.splatT = 0;
     // a little into the surface, as a poo's splat is
@@ -60,10 +67,27 @@ export class Apple {
     this.view.anim.anchor.set(0.5, 1);
     this.view.scale.set(1);
     this.view.rotation = Math.atan2(normal.x, -normal.y);
+    if (!on) return;
+    strike(on, x, y, this.vx, this.vy, config.apple.mass);
+    this.stuck = new Stuck(on, this.x, this.y, this.view.rotation, config.apple.mass);
+  }
+
+  destroy() {
+    this.stuck?.release();
+    this.view.destroy();
+  }
+
+  /** The splat where the body it lies on is now. */
+  private follow() {
+    if (!this.stuck) return;
+    ({ x: this.x, y: this.y } = this.stuck.position);
+    this.view.rotation = this.stuck.rotation;
   }
 
   step(stepMs: number) {
     if (this.state === 'splat') {
+      this.follow();
+      this.stuck?.step();
       this.splatT += stepMs;
       if (this.splatT >= splatLifetimeMs) this.state = 'done';
       return;
@@ -86,10 +110,11 @@ export class Apple {
       this.view.scale.set(1 + w, 1 - w);
     }
     const m = config.apple.radius * 2;
-    if (this.x < -m || this.x > WORLD.width + m || this.y < -m || this.y > WORLD.height + m) this.state = 'done';
+    if (this.x < -m || this.x > this.levelWidth + m || this.y < -m || this.y > WORLD.height + m) this.state = 'done';
   }
 
   sync() {
+    if (this.state === 'splat') this.follow();
     this.view.position.set(this.x, this.y);
     if (this.state === 'splat') this.view.alpha = Math.min(1, 3 * (1 - this.splatT / splatLifetimeMs));
     else if (this.knockout) this.view.alpha = this.knockout.alpha;

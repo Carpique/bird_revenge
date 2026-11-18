@@ -1,7 +1,8 @@
 import { Application, Container, Graphics, Rectangle, Sprite, Text, type Texture } from 'pixi.js';
 import { audio, type FlameSound } from '../audio/audio';
-import { batRadius } from '../characters/bat';
+import { batOutline, batRadius } from '../characters/bat';
 import { coinDef } from '../characters/coin';
+import { dragonDef } from '../characters/dragon';
 import { splatHalfWidth } from '../characters/poo';
 import { villainDef } from '../characters/villain';
 import { config, WORLD } from '../config';
@@ -21,6 +22,7 @@ import { Background } from './Background';
 import { Bat } from './Bat';
 import { HomingField, inSight } from './homing';
 import { Bird, type BirdSample } from './Bird';
+import { centredOn, follow, scrolls } from './camera';
 import { Button } from './Button';
 import { Coin } from './Coin';
 import { Dragon } from './Dragon';
@@ -83,7 +85,19 @@ export class Game {
   onStep: (() => void) | null = null;
 
   private engine: MEngine;
+  /** the background and, in front of it, the world; the score and the signs (`hud`) are apart, in front of both */
+  private scene = new Container();
+  /** all that is in the level: slides sideways over the background in a level wider than the world (`scrollX`) */
   private world = new Container();
+  /** the camera: the level x at the world's left edge; 0 unless the level scrolls (`scrolls`, `camera.ts`) */
+  private scrollX = 0;
+  /** the ground, walls and ceiling round the level */
+  private bounds: MBody[] = [];
+  /**
+   * a scrolling level's villains, bats and dragons not seen yet: each stands by, unstepped, until it first comes
+   * onto the screen, and is in play from then on. Empty in a level that doesn't scroll
+   */
+  private asleep = new Set<Villain | Bat | Dragon>();
   /** the walking villains, and the bats in front of them */
   private actors = new Container();
   /** the friends to save: behind the villain */
@@ -170,16 +184,6 @@ export class Game {
     // resting bodies sleep until something touches them (the bird never does)
     this.engine = Engine.create({ gravity: { x: 0, y: config.physics.gravity }, enableSleeping: true });
 
-    // static world bounds: ground, walls, ceiling. Only the ground has friction (the bird has none of its own),
-    // so the bird doesn't stick to the walls or ceiling when pushed against them
-    const opts = { isStatic: true, restitution: 0, friction: 0, frictionStatic: 0 };
-    Composite.add(this.engine.world, [
-      Bodies.rectangle(WORLD.width / 2, WORLD.groundY + 100, WORLD.width * 3, 200, { ...opts, friction: 0.2, frictionStatic: 0.5, label: 'ground' }),
-      Bodies.rectangle(-50, WORLD.height / 2, 100, WORLD.height * 3, { ...opts, label: 'wall' }),
-      Bodies.rectangle(WORLD.width + 50, WORLD.height / 2, 100, WORLD.height * 3, { ...opts, label: 'wall' }),
-      Bodies.rectangle(WORLD.width / 2, -60, WORLD.width * 3, 100, { ...opts, label: 'ceiling' }),
-    ]);
-
     this.bird = new Bird(this.birdStart().x);
     Composite.add(this.engine.world, this.bird.body);
 
@@ -189,8 +193,9 @@ export class Game {
 
     // layers
     this.top.addChild(this.bird.view);
-    this.world.addChild(this.background, this.levelLayer, this.friendLayer, this.coinLayer, this.dragonLayer, this.actors, this.fx, this.top, this.front);
-    this.root.addChild(this.world, this.hud);
+    this.world.addChild(this.levelLayer, this.friendLayer, this.coinLayer, this.dragonLayer, this.actors, this.fx, this.top, this.front);
+    this.scene.addChild(this.background, this.world);
+    this.root.addChild(this.scene, this.hud);
 
     // the icon is as tall as the digits' font size
     const small = BACKING.smallWidth;
@@ -235,11 +240,14 @@ export class Game {
     this.restartLevel();
   }
 
-  /** A picture of `level` as it starts, `width` px wide, without the score and lives (the level select's thumbnails). */
+  /**
+   * A picture of `level` as it starts, `width` px wide, without the score and lives (the level select's thumbnails);
+   * of a scrolling level, the screen it starts on.
+   */
   snapshot(level: LevelDef, width: number): Texture {
     this.loadLevel(level);
     return this.app.renderer.generateTexture({
-      target: this.world,
+      target: this.scene,
       frame: new Rectangle(0, 0, WORLD.width, WORLD.height),
       resolution: width / WORLD.width,
       clearColor: scenery.skyColor,
@@ -307,7 +315,7 @@ export class Game {
       v.held.destroy();
     }
     this.villains = this.level.villains.map((def) => {
-      const v = new Villain(def);
+      const v = new Villain(def, this.level.width);
       v.onThrow = (x, y, dir) => this.throwApple(x, y, dir, v.kind);
       Composite.add(this.engine.world, v.body);
       this.actors.addChildAt(v.view, 0);
@@ -332,17 +340,21 @@ export class Game {
       p.destroy();
     }
     this.poos = [];
-    for (const a of this.apples) a.view.destroy();
+    for (const a of this.apples) a.destroy();
     this.apples = [];
     for (const f of this.friends) f.view.destroy();
     this.friends = this.level.friends.map((def) => new Friend(def));
     for (const f of this.friends) this.friendLayer.addChild(f.view);
-    for (const d of this.dragons) d.view.destroy({ children: true });
+    for (const d of this.dragons) {
+      Composite.remove(this.engine.world, d.body);
+      d.view.destroy({ children: true });
+    }
     for (const f of this.flameSounds.values()) f.stop();
     this.flameSounds.clear();
     this.dragons = this.level.dragons.map((def) => new Dragon(def));
     for (const d of this.dragons) {
       d.onSpit = () => audio.play('dragon-roar');
+      Composite.add(this.engine.world, d.body);
       this.dragonLayer.addChild(d.view);
     }
     for (const c of this.coins) c.view.destroy();
@@ -353,13 +365,62 @@ export class Game {
     this.pending = [];
     this.timers = [];
     this.acc = 0;
+    this.asleep = new Set(scrolls(this.level.width) ? [...this.villains, ...this.bats, ...this.dragons] : []);
+    this.lookAtBird();
+    this.wake();
     this.sync();
+  }
+
+  /** The camera straight to the bird, in the middle of the screen as far as the level's ends allow (a level without scrolling: all of it). */
+  private lookAtBird() {
+    this.scrollX = scrolls(this.level.width) ? centredOn(this.bird.body.position.x, this.level.width) : 0;
+  }
+
+  /** Whether something `halfWidth` wide at `x` is on the screen, at least in part. */
+  private onScreen(x: number, halfWidth: number) {
+    return x + halfWidth > this.scrollX + view.left && x - halfWidth < this.scrollX + view.right;
+  }
+
+  /** The villains, bats and dragons that have come onto the screen are in play from now on. */
+  private wake() {
+    for (const a of this.asleep) {
+      const seen =
+        a instanceof Villain ? this.onScreen(a.centreX, villainDef.displayHeight / 2)
+        : a instanceof Bat ? this.onScreen(a.position.x, batOutline.halfWidth)
+        : this.onScreen(a.def.x, dragonDef.displayHeight / 2);
+      if (seen) this.asleep.delete(a);
+    }
+  }
+
+  /**
+   * The crates on the screen don't sleep: Matter wakes a sleeping one only when something moving hits it, so one whose
+   * support was knocked from under it would hang in the air, and one moving among sleeping ones is as if between walls.
+   * Those off the screen do sleep, and so do the ones the level starts asleep, until something hits them.
+   */
+  private keepAwake() {
+    for (const b of this.built.bodies) {
+      if (b.def.kind !== 'body' || b.def.sleeping) continue;
+      const { min, max } = b.body.bounds;
+      if (this.onScreen((min.x + max.x) / 2, (max.x - min.x) / 2)) Sleeping.set(b.body, false);
+    }
   }
 
   /** (Re)creates the level's bodies, joints and their drawing from `this.level`. */
   private buildLevel() {
     const world = this.engine.world;
-    Composite.remove(world, [...this.built.bodies.map((b) => b.body), ...this.built.joints.map((j) => j.constraint)]);
+    Composite.remove(world, [...this.bounds, ...this.built.bodies.map((b) => b.body), ...this.built.joints.map((j) => j.constraint)]);
+    // the ground, walls and ceiling round the level, however wide it is. Only the ground has friction (the bird has
+    // none of its own), so the bird doesn't stick to the walls or ceiling when pushed against them
+    const opts = { isStatic: true, restitution: 0, friction: 0, frictionStatic: 0 };
+    const width = this.level.width, across = width + 2 * WORLD.width;
+    this.bounds = [
+      Bodies.rectangle(width / 2, WORLD.groundY + 100, across, 200, { ...opts, friction: 0.2, frictionStatic: 0.5, label: 'ground' }),
+      Bodies.rectangle(-50, WORLD.height / 2, 100, WORLD.height * 3, { ...opts, label: 'wall' }),
+      Bodies.rectangle(width + 50, WORLD.height / 2, 100, WORLD.height * 3, { ...opts, label: 'wall' }),
+      Bodies.rectangle(width / 2, -60, across, 100, { ...opts, label: 'ceiling' }),
+    ];
+    Composite.add(world, this.bounds);
+    this.homingField = new HomingField(width);
     this.levelView?.destroy();
     this.built = buildLevel(this.level);
     const timeOfDay = this.level.timeOfDay ?? 'afternoon';
@@ -381,7 +442,6 @@ export class Game {
 
   private update(dtMs: number) {
     fitWorld(this.app, this.root);
-    this.background.fit();
     // the score and lives at the top of the screen, which may be above the world's (`view`)
     this.scoreBox.y = this.coinBox.y = this.hearts.y = view.top + 14;
     this.pausedText.visible = this.paused && this.showPausedText && !this.showingSign;
@@ -424,7 +484,13 @@ export class Game {
     this.bird.step(this.controls, STEP_MS, () => this.dropPoo());
     const bp = this.bird.body.position;
     const bird = this.bird.dying ? null : { x: bp.x, y: bp.y };
-    for (const v of this.villains) v.step(STEP_MS, { bird, obstacles: this.villainObstacles(v.feet, v.top) });
+    this.wake();
+    for (const v of this.villains) {
+      if (this.asleep.has(v)) continue;
+      // in a scrolling level he throws only at a bird he can see: from on the screen
+      const target = scrolls(this.level.width) && !this.onScreen(v.centreX, villainDef.displayHeight / 2) ? null : bird;
+      v.step(STEP_MS, { bird: target, obstacles: this.villainObstacles(v.feet, v.top) });
+    }
     this.stepBats(bird);
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
@@ -432,11 +498,12 @@ export class Game {
     // a dragon's fire stops at the level's walls, terrain and crates (as apples do), and at walking villains and flying bats
     const characters = [...this.villains.filter((v) => v.hittable), ...this.bats.filter((b) => b.hittable)].map((c) => c.body);
     const blocksFire = (x: number, y: number) => Query.point(this.levelBodies, { x, y }).length > 0 || Query.point(characters, { x, y }).length > 0;
-    for (const d of this.dragons) d.step(STEP_MS, blocksFire);
+    for (const d of this.dragons) if (!this.asleep.has(d)) d.step(STEP_MS, blocksFire);
     this.stepFlameSounds();
     for (const c of this.coins) c.step(STEP_MS);
     const birdY = this.bird.body.position.y;
     const pooYs = new Map(this.poos.map((p) => [p, p.body.position.y]));
+    this.keepAwake();
     Engine.update(this.engine, STEP_MS);
     this.bird.perchOn(this.branches, birdY);
     this.bird.standOn(this.levelBodies);
@@ -450,10 +517,11 @@ export class Game {
     this.saveFriends();
     this.collectCoins();
     if (this.allSavedT !== null && (this.allSavedT += STEP_MS) >= config.levelComplete.graceMs) this.completeLevel();
-    // bird touching a walking villain, a flying bat or a dragon's fire costs a life
+    // bird touching a walking villain, a flying bat, a dragon or its fire costs a life
     const b = this.bird.body;
     const birdR = config.physics.birdRadius;
-    const touches = (a: Villain | Bat | Dragon) => a.touches(b.position.x, b.position.y, birdR);
+    const touches = (a: Villain | Bat | Dragon) =>
+      a.touches(b.position.x, b.position.y, birdR) || (a instanceof Dragon && a.touchesBody(b.position.x, b.position.y, birdR));
     if (!this.bird.dying && !this.bird.invulnerable && (this.villains.some(touches) || this.bats.some(touches) || this.dragons.some(touches))) {
       this.loseLife();
     }
@@ -501,6 +569,10 @@ export class Game {
       audio.playHiss();
     }
     if (this.bird.fallen) this.afterDeath();
+    // the camera follows the bird (not its fall off the screen) out of the middle third of the screen
+    if (scrolls(this.level.width) && !this.bird.dying) {
+      this.scrollX = follow(this.scrollX, this.bird.body.position.x, this.level.width, view.left, view.right);
+    }
     // remove finished poos
     this.poos = this.poos.filter((p) => {
       if (p.state !== 'done') return true;
@@ -509,7 +581,7 @@ export class Game {
     });
     this.apples = this.apples.filter((a) => {
       if (a.state !== 'done') return true;
-      a.view.destroy();
+      a.destroy();
       return false;
     });
   }
@@ -686,21 +758,22 @@ export class Game {
       if (t.x0 > from) gaps.push({ x0: from, x1: t.x0 });
       from = Math.max(from, t.x1);
     }
-    gaps.push({ x0: from, x1: 2 * WORLD.width });
+    gaps.push({ x0: from, x1: this.level.width + WORLD.width });
     return [...splats, ...bodies, ...gaps];
   }
 
   /** Steps the bats; the homing ones go for `bird` (null: none to go for), by a field worked out again every `replanMs`. */
   private stepBats(bird: { x: number; y: number } | null) {
-    const homers = this.bats.filter((b) => b.homing && b.hittable);
+    const homers = this.bats.filter((b) => b.homing && b.hittable && !this.asleep.has(b));
     if (homers.length && (this.replanIn -= STEP_MS) <= 0) {
       this.replanIn = config.bat.homingReplanMs;
       this.homingField.update(this.levelBodies, bird);
     }
-    const flying = this.bats.filter((b) => b.hittable);
+    const flying = this.bats.filter((b) => b.hittable && !this.asleep.has(b));
     // the dragons' fire is a wall to them
     const fireGap = (p: { x: number; y: number }) => Math.min(Infinity, ...this.dragons.map((d) => d.gap(p.x, p.y, batRadius)));
     for (const b of this.bats) {
+      if (this.asleep.has(b)) continue;
       if (!b.homing) {
         b.step(STEP_MS, undefined, fireGap);
         continue;
@@ -719,7 +792,7 @@ export class Game {
   /**
    * Throw an apple from (x, y) in a straight line at where the bird is now (no leading, so moving dodges it).
    * It flies only the way the villain faces (`dir`): aimed behind him (the aim error, or the bird crossing over him
-   * during the windup), it goes straight up or down instead. It keeps going until it leaves the screen.
+   * during the windup), it goes straight up or down instead. It keeps going until it leaves the level.
    * A ghost (`kind`) throws glue instead, which does just what an apple does.
    */
   private throwApple(x: number, y: number, dir: 1 | -1, kind: VillainKind) {
@@ -728,18 +801,17 @@ export class Game {
     let angle = Math.atan2(target.y - y, target.x - x);
     angle += ((Math.random() * 2 - 1) * config.apple.aimSpread * Math.PI) / 180;
     if (Math.cos(angle) * dir < 0) angle = Math.sin(angle) < 0 ? -Math.PI / 2 : Math.PI / 2;
-    const apple = new Apple(x, y, v * Math.cos(angle), v * Math.sin(angle), kind);
+    const apple = new Apple(x, y, v * Math.cos(angle), v * Math.sin(angle), kind, this.level.width);
     this.apples.push(apple);
     this.fx.addChild(apple.view);
   }
 
-  /** An apple that flew into the level or the ground this step splats there, harmless from then on (as a poo, it just goes on a movable body). */
+  /** An apple that flew into the level or the ground this step splats there, harmless from then on (a movable body it pushes, and its splat weighs on it). */
   private splatApple(a: Apple) {
     const from = { x: a.prevX, y: a.prevY }, to = { x: a.x, y: a.y };
     const hit = surfaceHit(this.levelBodies, from, to);
     if (hit) {
-      if (hit.body.isStatic) a.splat(hit.x, hit.y, hit.normal);
-      else a.state = 'done';
+      a.splat(hit.x, hit.y, hit.normal, hit.body.isStatic ? null : hit.body);
     } else if (Query.point(this.levelBodies, to).length) {
       // already inside something (thrown from within it): gone
       a.state = 'done';
@@ -769,11 +841,18 @@ export class Game {
     this.fx.addChild(poo.view);
   }
 
-  /** What a falling poo hit: the bird's knocks villains and bats off, a bat's goes through them; either splats on the ground and terrain. */
+  /**
+   * What a falling poo hit: the bird's knocks villains and bats off, a bat's goes through them; either splats on the ground, terrain, movable bodies and dragons.
+   * And what a crate hit (`crush`).
+   */
   private onCollision(pair: MPair) {
-    const { bodyA: a, bodyB: b } = pair;
+    // the bodies, not their parts (a crate or a dragon may be made of several)
+    const a = pair.bodyA.parent, b = pair.bodyB.parent;
     const labels = [a.label, b.label];
-    if (!labels.includes('poo')) return;
+    if (!labels.includes('poo')) {
+      if (labels.includes('body')) this.crush(a.label === 'body' ? a : b, a.label === 'body' ? b : a);
+      return;
+    }
     const pooBody = a.label === 'poo' ? a : b;
     const other = pooBody === a ? b : a;
     const poo = this.poos.find((p) => p.body === pooBody);
@@ -787,11 +866,7 @@ export class Game {
         if (poo.state !== 'falling') return;
         poo.stopSound();
         audio.play('splat');
-        if (bat.hit()) {
-          this.addScore(config.score.bat, pooBody.position.x, pooBody.position.y);
-          audio.play('bat-dies');
-          this.after(1000, () => audio.play('score'));
-        }
+        this.knockOff(bat, pooBody.position.x, pooBody.position.y);
         Composite.remove(this.engine.world, pooBody);
         poo.state = 'done';
       });
@@ -800,11 +875,7 @@ export class Game {
         if (poo.state !== 'falling') return;
         poo.stopSound();
         audio.play('splat');
-        if (villain.hit()) {
-          this.addScore(config.score.villain, pooBody.position.x, pooBody.position.y);
-          audio.play(villain.kind === 'ghost' ? 'ghost-dies' : 'bad-guy-dies');
-          this.after(1000, () => audio.play('score'));
-        }
+        this.knockOff(villain, pooBody.position.x, pooBody.position.y);
         Composite.remove(this.engine.world, pooBody);
         poo.state = 'done';
       });
@@ -815,26 +886,47 @@ export class Game {
         poo.splat();
         if (bird) audio.play('splat');
       });
-    } else if (other.label === 'terrain') {
-      // lies along the surface it hit, where it touched (read now: Matter reuses the collision object)
+    } else if (other.label === 'terrain' || other.label === 'dragon' || other.label === 'body') {
+      // lies along the surface it hit, where it touched (read now: Matter reuses the collision object); on a movable
+      // body it stays on it, weighing on it, once this step's push is done
       const y = surfaceY(other, pooBody, poo.radius, pair.collision.supports[0], pair.collision.normal);
       const angle = surfaceAngle(pair.collision.normal);
       this.pending.push(() => {
         if (poo.state !== 'falling') return;
         Composite.remove(this.engine.world, pooBody);
-        poo.splat(y, angle);
+        poo.splat(y, angle, other.label === 'body' ? other : null);
         if (bird) audio.play('splat');
-      });
-    } else if (other.label === 'body') {
-      // a splat wouldn't stay on a moving thing: the poo just goes
-      this.pending.push(() => {
-        if (poo.state !== 'falling') return;
-        poo.stopSound();
-        if (bird) audio.play('splat');
-        Composite.remove(this.engine.world, pooBody);
-        poo.state = 'done';
       });
     }
+  }
+
+  /** A villain or bat is knocked off, by a poo or a falling body: it scores, shown at (x, y). Nothing happens to one already knocked off. */
+  private knockOff(c: Villain | Bat, x: number, y: number) {
+    if (!c.hit()) return;
+    // one standing by is in play from now on, to fall off
+    this.asleep.delete(c);
+    if (c instanceof Bat) {
+      this.addScore(config.score.bat, x, y);
+      audio.play('bat-dies');
+    } else {
+      this.addScore(config.score.villain, x, y);
+      audio.play(c.kind === 'ghost' ? 'ghost-dies' : 'bad-guy-dies');
+    }
+    this.after(1000, () => audio.play('score'));
+  }
+
+  /**
+   * A movable body of the level (a crate) bounces off villains, bats and dragons: Matter does that. One falling on a walking
+   * villain or a flying bat knocks it off too, as the bird's poo does: once this step's bounce is done, so the crate goes
+   * its way, and nothing more bumps into the one knocked off. Dragons don't mind.
+   */
+  private crush(crate: MBody, other: MBody) {
+    // as it came in: read before Matter turns it round
+    if (crate.velocity.y < config.crush.minSpeed) return;
+    const c = this.villains.find((v) => v.body === other) ?? this.bats.find((b) => b.body === other);
+    if (!c?.hittable) return;
+    const { x, y } = other.position;
+    this.pending.push(() => this.knockOff(c, x, y));
   }
 
   /** The bird dies and falls off the screen; the lost heart blinks meanwhile. */
@@ -851,10 +943,17 @@ export class Game {
     this.timers.push({ ms, fn });
   }
 
-  /** The dead bird has left the screen: a new one appears at the level's start, or it's game over. */
+  /**
+   * The dead bird has left the screen: a new one appears (at the level's start if all of it shows there, else
+   * falling from the top of the screen, in the middle), or it's game over.
+   */
   private afterDeath() {
     if (this.lives > 0) {
-      const start = this.birdStart();
+      // the camera stays where it is: in a scrolling level the level's start may be off the screen
+      const r = config.physics.birdRadius;
+      const left = this.scrollX + view.left, right = this.scrollX + view.right;
+      const levelStart = this.birdStart();
+      const start = levelStart.x - r >= left && levelStart.x + r <= right ? levelStart : { x: (left + right) / 2, y: r };
       this.bird.respawn(start.x, start.y, true);
       Composite.add(this.engine.world, this.bird.body);
       return;
@@ -924,6 +1023,8 @@ export class Game {
   }
 
   private sync() {
+    this.world.x = -this.scrollX;
+    this.background.fit(this.scrollX);
     // hearts: the one being lost blinks while the bird falls
     const deathMs = this.bird.deathMs;
     this.hearts.children.forEach((h, i) => {
@@ -983,7 +1084,7 @@ function slideThrough(sign: GlowText, ms: number, slideMs: number, totalMs: numb
 }
 
 /**
- * y of the surface of `terrain` where the poo (of radius `r`) hit it. The contact point Matter reports is the deepest point of the overlap,
+ * y of the surface of `terrain` (or a dragon) where the poo (of radius `r`) hit it. The contact point Matter reports is the deepest point of the overlap,
  * so a fast poo's can lie well inside the terrain: walk it back out along the normal (towards the poo) to the surface.
  */
 function surfaceY(terrain: MBody, poo: MBody, r: number, support: { x: number; y: number } | undefined, n: { x: number; y: number }): number {

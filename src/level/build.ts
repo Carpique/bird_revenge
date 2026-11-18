@@ -1,5 +1,5 @@
 import decomp from 'poly-decomp';
-import { Bodies, Common, Constraint, Vertices, type MBody, type MConstraint } from '../game/physics';
+import { Bodies, Common, Constraint, CRATE, Vertices, type MBody, type MConstraint } from '../game/physics';
 import type { BodyDef, JointDef, LevelDef, Material } from './types';
 
 // lets Matter split concave polygons into convex parts
@@ -43,7 +43,7 @@ function buildBody(def: BodyDef): LevelBody {
     def.kind === 'terrain'
       ? // like the ground: no bounce, a bit of friction
         { isStatic: true, friction: def.friction, frictionStatic: 0.5, restitution: 0, label: 'terrain' }
-      : { ...MATERIALS[def.material], ...(def.density > 0 ? { density: def.density } : {}), isSleeping: def.sleeping, label: 'body' };
+      : { ...MATERIALS[def.material], ...(def.density > 0 ? { density: def.density } : {}), isSleeping: def.sleeping, label: 'body', collisionFilter: { category: CRATE } };
   const s = def.shape;
   switch (s.kind) {
     case 'rect': {

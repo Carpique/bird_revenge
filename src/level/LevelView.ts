@@ -16,6 +16,13 @@ const OPEN_ALPHA = 0.15;
 const RES = 2;
 /** room around a shape for the sketchy strokes */
 const PAD = 6;
+/**
+ * the picture of the terrain is cut into pieces this wide (world px): a scrolling level's would be too large for one
+ * texture. A level without scrolling fits in one
+ */
+const PIECE = 1280;
+/** how far each piece reaches into the next (world px), so no gap shows between them when the stage is scaled */
+const PIECE_OVERLAP = 2;
 /** how far towards white the solid fill under the hachure is: it hides the sky between the strokes */
 const UNDERLAY_LIGHTEN = 0.55;
 /** the solid fill under the bark (terrain, branches): a warm orange-brown rather than its paled colour */
@@ -36,7 +43,7 @@ const style = (seed: number, fill: string, extra: Options = {}): Options => ({
 
 /**
  * Draws a level's bodies, branches, joints and buttons in the placeholder art's sketchy style (Rough.js, at load time).
- * Terrain and branches go into one picture; each movable body is its own sprite following its physics body,
+ * Terrain and branches go into one picture (in pieces, when the level scrolls); each movable body is its own sprite following its physics body,
  * and so is each door (terrain a button switches), which fades while it's open.
  */
 export class LevelView extends Container {
@@ -51,7 +58,7 @@ export class LevelView extends Container {
     super();
     const targets = new Set(level.buttons.map((b) => b.target));
     const terrain = built.bodies.filter((b) => b.def.kind === 'terrain' && !targets.has(b.def.id));
-    this.addChild(staticSprite(level, terrain));
+    this.addChild(...staticSprites(level, terrain));
     for (const item of built.bodies) {
       if (!targets.has(item.def.id)) continue;
       const sprite = bodySprite(item, style(item.def.id * 7, BARK, { hachureAngle: 20 }));
@@ -130,19 +137,30 @@ function canvas(w: number, h: number) {
 
 const textureOf = (c: HTMLCanvasElement) => new Texture({ source: new CanvasSource({ resource: c, resolution: RES }) });
 
-function staticSprite(level: LevelDef, terrain: LevelBody[]): Sprite {
-  const { c, ctx, rc } = canvas(level.width, level.height);
-  for (const br of level.branches) drawBranch(rc, br);
-  for (const item of terrain) {
-    // the outline is around the body's centre, unrotated
-    const { x, y } = item.body.position;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(item.body.angle);
-    drawShape(rc, item, style(item.def.id * 7, BARK, { hachureAngle: 20 }));
-    ctx.restore();
+/** The terrain and the branches, in pieces side by side; each draws what reaches into it, the same strokes in both of two it straddles (seeded). */
+function staticSprites(level: LevelDef, terrain: LevelBody[]): Sprite[] {
+  const sprites: Sprite[] = [];
+  for (let x0 = 0; x0 < level.width; x0 += PIECE) {
+    const w = Math.min(PIECE + PIECE_OVERLAP, level.width - x0);
+    const inPiece = (min: number, max: number) => max + PAD > x0 && min - PAD < x0 + w;
+    const { c, ctx, rc } = canvas(w, level.height);
+    ctx.translate(-x0, 0);
+    for (const br of level.branches) if (inPiece(Math.min(br.from[0], br.to[0]), Math.max(br.from[0], br.to[0]))) drawBranch(rc, br);
+    for (const item of terrain) {
+      if (!inPiece(item.body.bounds.min.x, item.body.bounds.max.x)) continue;
+      // the outline is around the body's centre, unrotated
+      const { x, y } = item.body.position;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(item.body.angle);
+      drawShape(rc, item, style(item.def.id * 7, BARK, { hachureAngle: 20 }));
+      ctx.restore();
+    }
+    const sprite = new Sprite(textureOf(c));
+    sprite.x = x0;
+    sprites.push(sprite);
   }
-  return new Sprite(textureOf(c));
+  return sprites;
 }
 
 function bodySprite(item: LevelBody, o?: Options): Sprite {

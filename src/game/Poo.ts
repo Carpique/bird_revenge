@@ -3,7 +3,8 @@ import { config, WORLD } from '../config';
 import { CharacterSprite } from '../render/CharacterSprite';
 import { Smoke } from '../render/Smoke';
 import { Knockout } from './Knockout';
-import { BIRD_GROUP, Bodies, Body, type MBody } from './physics';
+import { BAT_POO, BIRD_GROUP, BIRD_POO, Bodies, Body, type MBody } from './physics';
+import { Stuck } from './stuck';
 
 type PooAnim = keyof typeof pooDef.animations;
 
@@ -24,6 +25,8 @@ export class Poo {
   private evaporateT = 0;
   /** the smoke going up from it while it evaporates, beside it in its layer */
   private smoke: Smoke | null = null;
+  /** its splat lying on a movable body */
+  private stuck: Stuck | null = null;
 
   constructor(x: number, y: number, vx: number, vy: number, readonly owner: PooOwner = 'bird') {
     this.view = new CharacterSprite<PooAnim>(owner === 'bat' ? batPooDef : pooDef);
@@ -33,7 +36,7 @@ export class Poo {
       label: 'poo',
       restitution: 0,
       frictionAir: 0.01,
-      collisionFilter: { group: BIRD_GROUP },
+      collisionFilter: { group: BIRD_GROUP, category: owner === 'bat' ? BAT_POO : BIRD_POO },
     });
     Body.setVelocity(this.body, { x: vx, y: vy });
   }
@@ -43,9 +46,10 @@ export class Poo {
 
   /**
    * Landed: becomes a splat at surface height `y` (the ground by default), tilted by `angle` to lie
-   * along a branch (caller removes the physics body).
+   * along a branch (caller removes the physics body). `on`: the movable body it landed on; the splat stays on it as it
+   * moves and weighs on it, where it lies, with the poo's mass until it's gone (`destroy`); splats add up.
    */
-  splat(y = WORLD.groundY, angle = 0) {
+  splat(y = WORLD.groundY, angle = 0, on: MBody | null = null) {
     this.stopSound();
     this.state = 'splat';
     this.splatT = 0;
@@ -53,6 +57,15 @@ export class Poo {
     this.view.play('splat');
     this.view.rotation = angle;
     this.view.position.set(this.body.position.x, y + 2);
+    if (on) this.stuck = new Stuck(on, this.view.x, this.view.y, angle, this.body.mass);
+  }
+
+  /** The splat where the body it lies on is now. */
+  private follow() {
+    if (!this.stuck) return;
+    const { x, y } = this.stuck.position;
+    this.view.position.set(x, y);
+    this.view.rotation = this.stuck.rotation;
   }
 
   /** Hit an apple: stops where it is, then blinks out and drops (caller removes the physics body). */
@@ -75,6 +88,7 @@ export class Poo {
   }
 
   destroy() {
+    this.stuck?.release();
     this.view.destroy();
     this.smoke?.destroy({ children: true });
   }
@@ -92,6 +106,8 @@ export class Poo {
       return;
     }
     if (this.state !== 'splat') return;
+    this.follow();
+    this.stuck?.step();
     this.splatT += stepMs;
     if (this.splatT >= splatLifetimeMs) this.state = 'done';
   }
@@ -100,6 +116,7 @@ export class Poo {
     if (this.state === 'falling') {
       this.view.position.set(this.body.position.x, this.body.position.y);
     } else if (this.state === 'splat') {
+      this.follow();
       this.view.alpha = Math.min(1, 3 * (1 - this.splatT / splatLifetimeMs));
     } else if (this.state === 'evaporating') {
       const e = config.evaporate;

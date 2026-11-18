@@ -513,6 +513,8 @@ export const config = {
     aimSpread: 6,
     /** collision radius (px) */
     radius: 13,
+    /** its mass (Matter's units; the bird's poo is 0.25, a 60 px wooden crate 7): how hard it pushes a movable body it hits, and what its splat weighs on it */
+    mass: 0.5,
     /** spin while flying, turns per second */
     spin: 1.5,
     /** an apple hit by a poo: both stop, blink and fade out over this long */
@@ -596,6 +598,12 @@ export const config = {
   },
 
   score: { villain: 1, bat: 1, pedestrian: -1 },
+
+  /**
+   * a movable body (a crate) bounces off villains, bats and dragons, with this restitution (0 = stops dead, 1 = loses no speed;
+   * set as a level loads); hitting a villain or bat while falling at least `minSpeed` (px per physics step), it knocks it off
+   */
+  crush: { minSpeed: 2, bounce: 0.5 },
 
   /** a saved friend grows to this many times its size while fading out, in this long */
   friend: { savedScale: 4, savedMs: 1000 },

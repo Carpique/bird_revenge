@@ -3,13 +3,13 @@ import { villainDef, villainLooks, type VillainHitbox } from '../characters/vill
 import { config, WORLD } from '../config';
 import type { VillainDef, VillainKind } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
-import { Bodies, Body, Vertices, type MBody } from './physics';
+import { BIRD_POO, Bodies, Body, characterBody, circleTouches, type MBody } from './physics';
 
 type State = 'walking' | 'hit' | 'falling' | 'gone';
 type VillainAnim = keyof typeof villainDef.animations;
 
-/** his centre stays this far inside the screen edges, whatever his path */
-const MIN_X = 60, MAX_X = WORLD.width - 60;
+/** his centre stays this far inside the level's ends, whatever his path */
+const EDGE = 60;
 const HEIGHT = villainDef.displayHeight;
 /** where the apple leaves his hand: in front of him (the way he walks), about halfway up him */
 const HAND_DX = 22, HAND_DY = 65;
@@ -70,13 +70,6 @@ const ellipse = ({ width, height }: VillainHitbox) =>
     return { x: (Math.cos(a) * width) / 2, y: (Math.sin(a) * height) / 2 };
   });
 
-/** Squared distance from (px, py) to the segment a–b. */
-const distSqToSegment = (px: number, py: number, a: { x: number; y: number }, b: { x: number; y: number }) => {
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / (dx * dx + dy * dy)));
-  return (px - a.x - t * dx) ** 2 + (py - a.y - t * dy) ** 2;
-};
-
 /**
  * Walks back and forth along his path (on the ground, or on a shelf), now and then stopping for a moment and walking on the same way.
  * He starts off a random way, and his stops and throws are random too, so villains don't move in step.
@@ -114,8 +107,8 @@ export class Villain {
   /** the way he walks, and looks */
   private dir: 1 | -1 = 1;
   /** his path: the stretch his centre stays within */
-  private lo = MIN_X;
-  private hi = MAX_X;
+  private lo = 0;
+  private hi = 0;
   private timer = 0;
   /** average s between throws, 0 = never throws */
   private throwDelay = 0;
@@ -134,8 +127,8 @@ export class Villain {
   /** called when an apple leaves his hand, with the hand position and the way he faces (the apple must fly that way, or straight up/down) */
   onThrow: ((x: number, y: number, dir: 1 | -1) => void) | null = null;
 
-  /** `keepOnScreen`: false lets his path run past the screen's edges (the title screen's passers-by) */
-  constructor(def: VillainDef, private keepOnScreen = true) {
+  /** `levelWidth`: his path is kept within the level; null lets it run past the screen's edges (the title screen's passers-by) */
+  constructor(def: VillainDef, private levelWidth: number | null = WORLD.width) {
     this.kind = def.kind;
     this.hitbox = villainLooks[def.kind].hitbox;
     this.view = new CharacterSprite<VillainAnim>(villainLooks[def.kind].def);
@@ -143,11 +136,12 @@ export class Villain {
     this.held = new CharacterSprite(missiles[def.kind].def);
     this.held.visible = false;
     this.place(def);
-    this.body = Bodies.fromVertices(this.x, this.hitboxY, [ellipse(this.hitbox)], {
-      label: 'villain',
-      isStatic: true,
-      isSensor: true,
-    });
+    // solid only to crates, which bounce off him, and the bird's poo
+    this.body = characterBody(
+      Bodies.fromVertices(this.x, this.hitboxY, [ellipse(this.hitbox)], { label: 'villain', isStatic: true }),
+      config.crush.bounce,
+      BIRD_POO,
+    );
   }
 
   get hittable() {
@@ -161,10 +155,7 @@ export class Villain {
 
   /** Does a circle (the bird) overlap the hitbox of a walking villain? */
   touches(cx: number, cy: number, r: number): boolean {
-    if (this.state !== 'walking') return false;
-    const vs = this.body.vertices;
-    if (Vertices.contains(vs, { x: cx, y: cy })) return true;
-    return vs.some((v, i) => distSqToSegment(cx, cy, v, vs[(i + 1) % vs.length]) < r * r);
+    return this.state === 'walking' && circleTouches(this.body.vertices, cx, cy, r);
   }
 
   /** y of the top of his hitbox */
@@ -251,7 +242,7 @@ export class Villain {
         break;
     }
     this.heldMs = this.holding ? this.heldMs + stepMs : 0;
-    // only a walking villain can be hit, so the body just parks off-screen otherwise
+    // only a walking villain can be hit (or bounced off), so the body just parks off-screen otherwise
     Body.setPosition(this.body, { x: this.state === 'walking' ? this.x : -1000, y: this.hitboxY });
   }
 
@@ -313,12 +304,12 @@ export class Villain {
     return this.feetY;
   }
 
-  /** Puts him at his start on his path (kept on the screen, his feet not below the ground), facing a random way. */
+  /** Puts him at his start on his path (kept in the level, his feet not below the ground), facing a random way. */
   private place({ x, y, path, throwDelay }: VillainDef) {
     this.throwDelay = throwDelay;
     this.feetY = Math.min(y, WORLD.groundY);
-    this.lo = this.keepOnScreen ? Math.max(path.x0, MIN_X) : path.x0;
-    this.hi = this.keepOnScreen ? Math.min(path.x1, MAX_X) : path.x1;
+    this.lo = this.levelWidth === null ? path.x0 : Math.max(path.x0, EDGE);
+    this.hi = this.levelWidth === null ? path.x1 : Math.min(path.x1, this.levelWidth - EDGE);
     if (this.lo > this.hi) this.lo = this.hi = (this.lo + this.hi) / 2;
     this.x = Math.max(this.lo, Math.min(x, this.hi));
     this.dir = Math.random() < 0.5 ? -1 : 1;
