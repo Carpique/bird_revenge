@@ -454,6 +454,12 @@
                  "id":50,
                  "name":"",
                  "opacity":1,
+                 "properties":[
+                        {
+                         "name":"speed",
+                         "type":"float",
+                         "value":1
+                        }],
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -467,6 +473,12 @@
                  "id":52,
                  "name":"",
                  "opacity":1,
+                 "properties":[
+                        {
+                         "name":"speed",
+                         "type":"float",
+                         "value":1
+                        }],
                  "rotation":0,
                  "type":"",
                  "visible":true,
@@ -480,6 +492,12 @@
                  "id":53,
                  "name":"",
                  "opacity":1,
+                 "properties":[
+                        {
+                         "name":"speed",
+                         "type":"float",
+                         "value":1
+                        }],
                  "rotation":0,
                  "type":"",
                  "visible":true,
