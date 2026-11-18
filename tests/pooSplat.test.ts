@@ -23,7 +23,7 @@ vi.mock('../src/render/CharacterSprite', () => ({
 
 /** A wooden plank as a level builds it: 200 wide, its top at y 290. */
 const plank = (): MBody => {
-  const def = { id: 1, kind: 'body', material: 'wood', density: 0, sleeping: false, shape: { kind: 'rect', x: 600, y: 300, width: 200, height: 20, angle: 0 } };
+  const def = { id: 1, kind: 'body', material: 'wood', density: 0, sleeping: false, frozen: false, shape: { kind: 'rect', x: 600, y: 300, width: 200, height: 20, angle: 0 } };
   return buildLevel({ bodies: [def], joints: [] } as unknown as LevelDef).bodies[0].body;
 };
 

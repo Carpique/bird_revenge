@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Constraint, Engine, Composite } from '../src/game/physics';
+import { Body, Constraint, Engine, Composite } from '../src/game/physics';
 import { buildLevel } from '../src/level/build';
 import { DEMO, gameLevels, levels, listedLevels, nextLevel } from '../src/levels';
 import { LETTERS, letterCoins, letterLevels } from '../src/level/letters';
@@ -344,6 +344,22 @@ describe('Tiled levels', () => {
     ).toThrow('does the opposite');
   });
 
+  it('reads unfreeze buttons, whose target must be a frozen Body', () => {
+    const level = (frozen: boolean, target = 1) =>
+      parseTiledMap(
+        't',
+        mapOf([
+          { type: 'Body', width: 10, height: 10, properties: [prop('frozen', 'bool', frozen)] },
+          { type: 'Terrain', width: 10, height: 10 },
+          { type: 'Button', width: 10, height: 10, properties: [prop('target', 'object', target), prop('action', 'string', 'unfreeze')] },
+        ]),
+      );
+    expect(level(true).bodies[0]).toMatchObject({ kind: 'body', frozen: true });
+    expect(level(true).buttons[0]).toMatchObject({ target: 1, action: 'unfreeze' });
+    expect(() => level(false)).toThrow('"target" isn\'t a frozen Body');
+    expect(() => level(true, 2)).toThrow('"target" isn\'t a frozen Body');
+  });
+
   it('skips hidden layers', () => {
     expect(parseTiledMap('t', mapOf([{ type: 'Terrain', width: 10, height: 10 }], false)).bodies).toEqual([]);
   });
@@ -413,6 +429,20 @@ describe('building a level', () => {
     expect(p.x).toBeCloseTo(100, 0);
     expect(p.y).toBeCloseTo(100, 0);
     expect(Math.abs(built.bodies[0].body.angle)).toBeGreaterThan(0.3);
+  });
+
+  it('holds a frozen body still until it is let go, with its mass back', () => {
+    const frozen = buildLevel(parseTiledMap('t', mapOf([{ type: 'Body', x: 100, y: 100, width: 40, height: 40, properties: [prop('frozen', 'bool', true)] }])));
+    const { body } = frozen.bodies[0];
+    expect(body.isStatic).toBe(true);
+    const engine = Engine.create();
+    Composite.add(engine.world, body);
+    for (let i = 0; i < 30; i++) Engine.update(engine, 1000 / 60);
+    expect(body.position).toEqual({ x: 120, y: 120 });
+    Body.setStatic(body, false);
+    expect(body.mass).toBeCloseTo(40 * 40 * 0.002);
+    for (let i = 0; i < 30; i++) Engine.update(engine, 1000 / 60);
+    expect(body.position.y).toBeGreaterThan(130);
   });
 });
 

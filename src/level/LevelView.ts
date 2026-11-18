@@ -56,7 +56,7 @@ export class LevelView extends Container {
 
   constructor(level: LevelDef, private built: BuiltLevel) {
     super();
-    const targets = new Set(level.buttons.map((b) => b.target));
+    const targets = new Set(level.buttons.filter((b) => b.action !== 'unfreeze').map((b) => b.target));
     const terrain = built.bodies.filter((b) => b.def.kind === 'terrain' && !targets.has(b.def.id));
     this.addChild(...staticSprites(level, terrain));
     for (const item of built.bodies) {

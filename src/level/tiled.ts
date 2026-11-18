@@ -10,7 +10,7 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  * | class     | Tiled shape                    | becomes                                   |
  * |-----------|--------------------------------|-------------------------------------------|
  * | Terrain   | rectangle, ellipse, polygon    | static body                               |
- * | Body      | rectangle, ellipse, polygon    | movable body                              |
+ * | Body      | rectangle, ellipse, polygon    | movable body; `frozen`: held still until an unfreeze Button lets it go |
  * | Branch    | polyline                       | one-way platform, one per segment         |
  * | Rope      | point                          | rope from the point to `body`             |
  * | Hinge     | point                          | `body` pinned at the point                |
@@ -23,7 +23,7 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  * | Friend    | point, or a tile               | a friend to save, standing on the point / where the tile's feet are |
  * | Coin      | point, or a tile               | a coin to collect, centred on the point / the tile's image |
  * | BirdStart | point, or a tile               | where the bird starts: its centre / where the tile shows it |
- * | Button    | rectangle (unrotated)          | a button on the surface under its bottom edge, switching the Terrain `target` |
+ * | Button    | rectangle (unrotated)          | a button on the surface under its bottom edge, switching the Terrain `target` (open, close), or letting the frozen Body `target` go (unfreeze) |
  *
  * Objects without a class are ignored (handy for notes and guides, and the paths of tiles); hidden layers and objects are skipped
  * (but a `path` can be on any layer).
@@ -105,7 +105,7 @@ export interface TiledMap {
  */
 export const CLASS_DEFAULTS = {
   Terrain: { friction: 0.6 },
-  Body: { material: 'wood', density: 0, sleeping: false },
+  Body: { material: 'wood', density: 0, sleeping: false, frozen: false },
   Branch: {},
   Rope: { body: 0, to: 0, length: 0, stiffness: 1 },
   Hinge: { body: 0, to: 0, stiffness: 1 },
@@ -128,7 +128,7 @@ const TIMES_OF_DAY: readonly TimeOfDay[] = ['morning', 'afternoon', 'evening', '
 const MATERIALS: readonly Material[] = ['wood', 'stone', 'rubber', 'ice'];
 const FRIEND_KINDS: readonly FriendKind[] = ['bunny'];
 const VILLAIN_KINDS: readonly VillainKind[] = ['villain', 'ghost'];
-const BUTTON_ACTIONS: readonly ButtonAction[] = ['open', 'close'];
+const BUTTON_ACTIONS: readonly ButtonAction[] = ['open', 'close', 'unfreeze'];
 
 /**
  * The classes a tile object can have, and the point of the tile's image (as a fraction of its size) that is where the thing is.
@@ -202,8 +202,13 @@ export function parseTiledMap(name: string, map: TiledMap, tilesets: Record<stri
     if (j.to !== null && !ids.has(j.to)) problems.push(`a ${j.kind} at (${j.x}, ${j.y}): its "to" isn't a Body or Terrain`);
   }
   const terrain = new Set(level.bodies.filter((b) => b.kind === 'terrain').map((b) => b.id));
+  const frozen = new Set(level.bodies.filter((b) => b.kind === 'body' && b.frozen).map((b) => b.id));
   const actions = new Map<number, ButtonAction>();
   for (const b of level.buttons) {
+    if (b.action === 'unfreeze') {
+      if (!frozen.has(b.target)) problems.push(`button ${b.id}: its "target" isn't a frozen Body`);
+      continue;
+    }
     if (!terrain.has(b.target)) problems.push(`button ${b.id}: its "target" isn't a Terrain`);
     else if ((actions.get(b.target) ?? b.action) !== b.action) problems.push(`button ${b.id}: another button does the opposite to its target`);
     actions.set(b.target, b.action);
@@ -231,7 +236,7 @@ function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup, objects: 
     case 'Body': {
       const material = String(p.material) as Material;
       if (!MATERIALS.includes(material)) throw new Error(`unknown material "${material}"`);
-      level.bodies.push({ kind: 'body', id: o.id, name: o.name, shape: shapeOf(o), material, density: num(p.density), sleeping: Boolean(p.sleeping) });
+      level.bodies.push({ kind: 'body', id: o.id, name: o.name, shape: shapeOf(o), material, density: num(p.density), sleeping: Boolean(p.sleeping), frozen: Boolean(p.frozen) });
       break;
     }
     case 'Branch':

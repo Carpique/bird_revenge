@@ -15,7 +15,7 @@ const villain = () => new Villain({ kind: 'villain', x: 600, y: WORLD.groundY, p
 
 /** A wooden crate as a level builds it, above the villain's head. */
 const crate = (): MBody => {
-  const def = { id: 1, kind: 'body', material: 'wood', density: 0, sleeping: false, shape: { kind: 'rect', x: 600, y: 300, width: 50, height: 50, angle: 0 } };
+  const def = { id: 1, kind: 'body', material: 'wood', density: 0, sleeping: false, frozen: false, shape: { kind: 'rect', x: 600, y: 300, width: 50, height: 50, angle: 0 } };
   return buildLevel({ bodies: [def], joints: [] } as unknown as LevelDef).bodies[0].body;
 };
 

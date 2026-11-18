@@ -28,7 +28,7 @@ import { Coin } from './Coin';
 import { Dragon } from './Dragon';
 import { Friend } from './Friend';
 import { landingBranch } from './branches';
-import { Bodies, Composite, Engine, Events, Query, Sleeping, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
+import { Bodies, Body, Composite, Engine, Events, Query, Sleeping, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
 import { Poo } from './Poo';
 import { surfaceHit } from './surfaceHit';
 import { spanInBand, Villain, type Span } from './Villain';
@@ -124,6 +124,8 @@ export class Game {
   private buttons: Button[] = [];
   /** each door (terrain a button switches) is there (true) or open (false), by terrain id */
   private doors = new Map<number, boolean>();
+  /** the ids of the movable bodies still frozen (static until an "unfreeze" button lets them go) */
+  private frozen = new Set<number>();
   /** the level's branches the bird can sit on */
   private branches: readonly Branch[] = [];
   private bird: Bird;
@@ -432,7 +434,8 @@ export class Game {
     this.branches = this.level.branches;
     this.buttons = this.level.buttons.map((def) => new Button(def));
     // every door starts there (as built); the "close" ones open straight away
-    this.doors = new Map(this.buttons.map((b) => [b.def.target, true]));
+    this.doors = new Map(this.buttons.filter((b) => b.def.action !== 'unfreeze').map((b) => [b.def.target, true]));
+    this.frozen = new Set(this.built.bodies.filter((b) => b.def.kind === 'body' && b.def.frozen).map((b) => b.def.id));
     this.switchDoors();
   }
 
@@ -624,7 +627,7 @@ export class Game {
     if (this.level.goal === 'coins' && this.coins.length && this.coins.every((c) => c.state !== 'waiting')) this.goalReached();
   }
 
-  /** A button is pressed by the bird's feet on it, a poo of the bird's falling into it or its splat lying on it; the doors follow. */
+  /** A button is pressed by the bird's feet on it, a poo of the bird's falling into it or its splat lying on it; the doors and frozen bodies follow. */
   private pressButtons() {
     const b = this.bird.body.position;
     const r = config.physics.birdRadius;
@@ -639,8 +642,17 @@ export class Game {
         );
       if (button.step(pressed, STEP_MS)) audio.play('button');
       this.levelView?.setPressed(button.def.id, button.pressed);
+      if (button.active && button.def.action === 'unfreeze') this.unfreeze(button.def.target);
     }
     this.switchDoors();
+  }
+
+  /** A frozen body starts its physics, for good. */
+  private unfreeze(id: number) {
+    if (!this.frozen.delete(id)) return;
+    const body = this.built.bodies.find((b) => b.def.id === id)!.body;
+    Body.setStatic(body, false);
+    Sleeping.set(body, false);
   }
 
   /**
@@ -648,8 +660,9 @@ export class Game {
    * a "close" door there only then. An open door is out of the physics world, and out of `levelBodies`.
    */
   private switchDoors() {
-    const active = new Set(this.buttons.filter((b) => b.active).map((b) => b.def.target));
-    const actions = new Map(this.buttons.map((b) => [b.def.target, b.def.action]));
+    const doorButtons = this.buttons.filter((b) => b.def.action !== 'unfreeze');
+    const active = new Set(doorButtons.filter((b) => b.active).map((b) => b.def.target));
+    const actions = new Map(doorButtons.map((b) => [b.def.target, b.def.action]));
     for (const { def, body } of this.built.bodies) {
       const action = actions.get(def.id);
       if (!action) continue;
@@ -665,7 +678,7 @@ export class Game {
     }
     // a door about to switch back blinks, as the button of it that lasts longest says
     const longest = new Map<number, Button>();
-    for (const b of this.buttons) {
+    for (const b of doorButtons) {
       const l = longest.get(b.def.target);
       if (!l || b.remaining > l.remaining) longest.set(b.def.target, b);
     }

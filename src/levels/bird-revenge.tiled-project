@@ -50,6 +50,11 @@
                     "value": 0
                 },
                 {
+                    "name": "frozen",
+                    "type": "bool",
+                    "value": false
+                },
+                {
                     "name": "material",
                     "propertyType": "Material",
                     "type": "string",
@@ -265,7 +270,8 @@
             "type": "enum",
             "values": [
                 "open",
-                "close"
+                "close",
+                "unfreeze"
             ],
             "valuesAsFlags": false
         },

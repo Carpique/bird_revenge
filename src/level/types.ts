@@ -39,6 +39,8 @@ export interface MovableDef extends BodyBase {
   density: number;
   /** starts at rest until something touches it (keeps stacks from jittering apart at the start) */
   sleeping: boolean;
+  /** held still where it is, out of the physics (as terrain), until an "unfreeze" button lets it go */
+  frozen: boolean;
 }
 
 export type BodyDef = TerrainDef | MovableDef;
@@ -130,11 +132,11 @@ export interface DragonDef {
   flameDuration: number;
 }
 
-export type ButtonAction = 'open' | 'close';
+export type ButtonAction = 'open' | 'close' | 'unfreeze';
 
 /**
  * A button on a surface: the bird standing on it, or a poo landing on it, switches `target` (a Terrain: a door, a trapdoor)
- * while it's pressed and for `duration` after.
+ * while it's pressed and for `duration` after; or, `action` unfreeze, lets `target` (a frozen Body) go for good.
  */
 export interface ButtonDef {
   id: number;
@@ -143,11 +145,14 @@ export interface ButtonDef {
   x1: number;
   y0: number;
   y1: number;
-  /** id of the Terrain it switches */
+  /** id of the Terrain it switches, or of the frozen Body it unfreezes */
   target: number;
-  /** open: the target is there until the button is pressed; close: it's there only while the button is in effect */
+  /**
+   * open: the target is there until the button is pressed; close: it's there only while the button is in effect;
+   * unfreeze: the first press starts the target's physics, for good
+   */
   action: ButtonAction;
-  /** s the target stays switched after the button is let go; 0 = for good */
+  /** s the target stays switched after the button is let go; 0 = for good (unfreeze: unused) */
   duration: number;
 }
 

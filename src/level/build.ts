@@ -1,5 +1,5 @@
 import decomp from 'poly-decomp';
-import { Bodies, Common, Constraint, CRATE, Vertices, type MBody, type MConstraint } from '../game/physics';
+import { Bodies, Body, Common, Constraint, CRATE, Vertices, type MBody, type MConstraint } from '../game/physics';
 import type { BodyDef, JointDef, LevelDef, Material } from './types';
 
 // lets Matter split concave polygons into convex parts
@@ -33,6 +33,8 @@ export interface BuiltLevel {
 /** Matter.js bodies and constraints for a level (not yet added to a world). */
 export function buildLevel(level: LevelDef): BuiltLevel {
   const bodies = level.bodies.map(buildBody);
+  // a frozen body is static until unfrozen; made static after it's built, so Matter keeps its mass etc. to give back then
+  for (const { def, body } of bodies) if (def.kind === 'body' && def.frozen) Body.setStatic(body, true);
   const byId = new Map(bodies.map((b) => [b.def.id, b.body]));
   const joints = level.joints.map((def) => ({ def, constraint: buildJoint(def, byId) }));
   return { bodies, joints };
