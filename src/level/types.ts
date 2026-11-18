@@ -91,8 +91,13 @@ export interface VillainDef {
   x: number;
   /** where his feet are: the ground, or the top of what he walks on */
   y: number;
-  /** the stretch of ground he walks back and forth (his centre stays within `x0`..`x1`) */
-  path: { x0: number; x1: number };
+  /**
+   * the stretch of ground he walks back and forth (his centre stays within `x0`..`x1`);
+   * null: he walks the whole level, turning only at obstacles (and the level's ends)
+   */
+  path: { x0: number; x1: number } | null;
+  /** the way he starts off; random when not given */
+  facing?: 'left' | 'right';
   /** average time between his throws (s); 0 = he never throws */
   throwDelay: number;
 }

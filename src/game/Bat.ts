@@ -119,6 +119,11 @@ export class Bat {
     return this.def.route.length === 0;
   }
 
+  /** the points it flies along; empty for a homing bat */
+  get route(): readonly (readonly [number, number])[] {
+    return this.def.route;
+  }
+
   /** a homing bat that has seen the bird, and is after it */
   get chasing() {
     return this.spotted;

@@ -16,6 +16,7 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  * | Hinge     | point                          | `body` pinned at the point                |
  * | Villain   | tile, `path` a polyline        | a villain walking the `path`'s x range, starting where the tile's feet are, on what's under them; `kind` his look (villain, ghost) |
  * |           | or a polyline                  | the same, the polyline being the path, starting on its first point |
+ * |           | tile, no `path`                | the same, walking to and fro between the nearest obstacles, starting off right (the tile flipped horizontally: left) |
  * | Bat       | tile, `path` a polyline or polygon | a bat flying along `path`: there and back (polyline), round and round (polygon), from its point nearest the tile's centre |
  * |           | or a polyline, polygon         | the same, from its first point            |
  * |           | tile or point, no `path`       | a homing bat: no route, it goes for the bird, from the tile's centre / the point |
@@ -263,8 +264,15 @@ function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup, objects: 
       if (!VILLAIN_KINDS.includes(kind)) throw new Error(`unknown villain kind "${kind}"`);
       const throwDelay = num(p.throwDelay);
       if (throwDelay < 0) throw new Error('"throwDelay" can\'t be negative (0 = never throws)');
+      if (tile && !num(p.path)) {
+        const [x, y] = tilePos();
+        // Tiled's horizontal flip (X) turns him round
+        const facing = o.gid! & FLIPPED_HORIZONTALLY ? 'left' : 'right';
+        level.villains.push({ kind, x, y, path: null, facing, throwDelay });
+        break;
+      }
       const pts = tile ? pathOf(objects, p.path, false).points : o.polyline && pointsOf(o, o.polyline);
-      if (!pts) throw new Error('a Villain must be a polyline (his path), or a tile with a "path"');
+      if (!pts) throw new Error('a Villain must be a polyline (his path), or a tile');
       const xs = pts.map(([x]) => x);
       const x0 = Math.min(...xs), x1 = Math.max(...xs);
       if (x0 === x1) throw new Error('a Villain path needs some width');

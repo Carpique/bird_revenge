@@ -253,6 +253,21 @@ describe('Tiled levels', () => {
       expect(level.birdStart).toEqual({ x: 300, y: 400 - bird.height * (1 - birdDef.anchor.y) });
     });
 
+    it('starts a villain without a path at his feet, facing right, or left when the tile is flipped', () => {
+      const level = parseTiledMap(
+        't',
+        actorMap([
+          { id: 1, ...villain, x: 250, y: 640 },
+          { id: 2, ...ghost, gid: 0x80000000 + ghost.gid, x: 600, y: 640 },
+        ]),
+        tilesets,
+      );
+      expect(level.villains).toEqual([
+        { kind: 'villain', x: 250, y: 640, path: null, facing: 'right', throwDelay: 4 },
+        { kind: 'ghost', x: 600, y: 640, path: null, facing: 'left', throwDelay: 4 },
+      ]);
+    });
+
     it('starts a villain at his feet, walking his path\'s x range', () => {
       const level = parseTiledMap(
         't',
@@ -264,7 +279,6 @@ describe('Tiled levels', () => {
         tilesets,
       );
       expect(level.villains).toEqual([{ kind: 'villain', x: 250, y: 640, path: { x0: 100, x1: 500 }, throwDelay: 0 }]);
-      expect(() => parseTiledMap('t', actorMap([{ ...villain }]), tilesets)).toThrow('its "path" must be a polyline');
       expect(() =>
         parseTiledMap('t', actorMap([{ id: 1, polygon: [{ x: 0, y: 0 }, { x: 9, y: 0 }, { x: 0, y: 9 }] }, { id: 2, ...villain, properties: [prop('path', 'object', 1)] }]), tilesets),
       ).toThrow('its "path" must be a polyline');

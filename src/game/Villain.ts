@@ -8,7 +8,7 @@ import { BIRD_POO, Bodies, Body, characterBody, circleTouches, type MBody } from
 type State = 'walking' | 'hit' | 'falling' | 'gone';
 type VillainAnim = keyof typeof villainDef.animations;
 
-/** his centre stays this far inside the level's ends, whatever his path */
+/** his centre stays this far inside the level's ends, whatever his path (or without one) */
 const EDGE = 60;
 const HEIGHT = villainDef.displayHeight;
 /** where the apple leaves his hand: in front of him (the way he walks), about halfway up him */
@@ -72,8 +72,9 @@ const ellipse = ({ width, height }: VillainHitbox) =>
 
 /**
  * Walks back and forth along his path (on the ground, or on a shelf), now and then stopping for a moment and walking on the same way.
- * He starts off a random way, and his stops and throws are random too, so villains don't move in step.
- * He turns only at the ends of the path, or at an obstacle (a poo splat, a crate, the edge of his shelf): about to walk into one,
+ * Without a path he walks the whole level (or shelf), so it's the obstacles that turn him.
+ * He starts off the way he's set to face, else a random way, and his stops and throws are random too, so villains don't move in step.
+ * He turns only at the ends of the path (the level's), or at an obstacle (a poo splat, a crate, the edge of his shelf): about to walk into one,
  * he stops as if for one of his usual stops, then turns back.
  * Every `throwDelay` seconds or so he stops and throws an apple at the bird, then walks on the way he was going.
  * He never turns to throw: only at a bird in front of him (the half of the world the way he walks); with the bird behind him
@@ -106,9 +107,11 @@ export class Villain {
   private scale = 1;
   /** the way he walks, and looks */
   private dir: 1 | -1 = 1;
-  /** his path: the stretch his centre stays within */
+  /** his path: the stretch his centre stays within (without one, the whole level) */
   private lo = 0;
   private hi = 0;
+  /** whether he has a path of his own */
+  private hasPath = true;
   private timer = 0;
   /** average s between throws, 0 = never throws */
   private throwDelay = 0;
@@ -294,6 +297,11 @@ export class Villain {
     return this.dir > 0 ? o.x0 - this.x : this.x - o.x1;
   }
 
+  /** the stretch his centre stays within (kept in the level), or null when he has no path */
+  get path(): Span | null {
+    return this.hasPath ? { x0: this.lo, x1: this.hi } : null;
+  }
+
   /** x of his centre */
   get centreX() {
     return this.x;
@@ -304,15 +312,17 @@ export class Villain {
     return this.feetY;
   }
 
-  /** Puts him at his start on his path (kept in the level, his feet not below the ground), facing a random way. */
-  private place({ x, y, path, throwDelay }: VillainDef) {
+  /** Puts him at his start on his path (kept in the level, his feet not below the ground), facing his way or a random one. */
+  private place({ x, y, path, facing, throwDelay }: VillainDef) {
     this.throwDelay = throwDelay;
     this.feetY = Math.min(y, WORLD.groundY);
-    this.lo = this.levelWidth === null ? path.x0 : Math.max(path.x0, EDGE);
-    this.hi = this.levelWidth === null ? path.x1 : Math.min(path.x1, this.levelWidth - EDGE);
+    this.hasPath = path !== null;
+    const { x0, x1 } = path ?? { x0: -Infinity, x1: Infinity };
+    this.lo = this.levelWidth === null ? x0 : Math.max(x0, EDGE);
+    this.hi = this.levelWidth === null ? x1 : Math.min(x1, this.levelWidth - EDGE);
     if (this.lo > this.hi) this.lo = this.hi = (this.lo + this.hi) / 2;
     this.x = Math.max(this.lo, Math.min(x, this.hi));
-    this.dir = Math.random() < 0.5 ? -1 : 1;
+    this.dir = facing ? (facing === 'left' ? -1 : 1) : Math.random() < 0.5 ? -1 : 1;
     this.enter('walking');
   }
 

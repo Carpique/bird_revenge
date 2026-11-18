@@ -51,6 +51,27 @@ describe('a villain', () => {
     expect(v.feet).toBe(WORLD.groundY);
   });
 
+  it('without a path, starts off the way he faces and turns only at obstacles', () => {
+    for (const facing of ['left', 'right'] as const) {
+      const v = new Villain({ kind: 'ghost', x: 600, y: 640, path: null, facing, throwDelay: 0 }, 2000);
+      for (let s = 0; s < 5; s++) v.step(STEP_MS, { bird: null, obstacles: [] });
+      expect(Math.sign(xOf(v) - 600)).toBe(facing === 'left' ? -1 : 1);
+    }
+    const v = new Villain({ kind: 'villain', x: 600, y: 640, path: null, facing: 'right', throwDelay: 0 }, 2000);
+    const walls = [{ x0: 200, x1: 300 }, { x0: 1200, x1: 1300 }];
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < 60 * 120; i++) {
+      v.step(STEP_MS, { bird: null, obstacles: walls });
+      lo = Math.min(lo, xOf(v));
+      hi = Math.max(hi, xOf(v));
+    }
+    const halfW = v.hitbox.width / 2;
+    expect(lo).toBeGreaterThanOrEqual(300 + halfW - 2);
+    expect(hi).toBeLessThanOrEqual(1200 - halfW + 2);
+    expect(lo).toBeLessThan(300 + halfW + 5);
+    expect(hi).toBeGreaterThan(1200 - halfW - 5);
+  });
+
   it('starts off a random way', () => {
     const dirs = new Set<number>();
     for (let i = 0; i < 40; i++) {

@@ -95,7 +95,7 @@ export class Game {
   private bounds: MBody[] = [];
   /**
    * a scrolling level's villains, bats and dragons not seen yet: each stands by, unstepped, until it first comes
-   * onto the screen (a dragon: it or any of its fire route), and is in play from then on. Empty in a level that doesn't scroll
+   * onto the screen (it or any of its path, a bat's route, a dragon's fire route), and is in play from then on. Empty in a level that doesn't scroll
    */
   private asleep = new Set<Villain | Bat | Dragon>();
   /** the walking villains, and the bats in front of them */
@@ -389,20 +389,29 @@ export class Game {
     return x + halfWidth > this.scrollX + view.left && x - halfWidth < this.scrollX + view.right;
   }
 
-  /** Whether any of a dragon's fire route (its whole length, thickness and all) is on the screen. */
-  private routeOnScreen(d: Dragon) {
-    const xs = d.route.points.map((p) => p[0]);
+  /** Whether any of a route (its x range, widened by `margin` each side) is on the screen; false for no route. */
+  private routeOnScreen(points: readonly (readonly [number, number])[], margin: number) {
+    if (!points.length) return false;
+    const xs = points.map((p) => p[0]);
     const x0 = Math.min(...xs), x1 = Math.max(...xs);
-    return this.onScreen((x0 + x1) / 2, (x1 - x0) / 2 + dragonConfig.fire.halfThickness);
+    return this.onScreen((x0 + x1) / 2, (x1 - x0) / 2 + margin);
   }
 
-  /** The villains, bats and dragons (they or their fire route) that have come onto the screen are in play from now on. */
+  /**
+   * The villains, bats and dragons that have come onto the screen are in play from now on: they, or any of where they go
+   * (a villain's path, a bat's route, a dragon's fire route).
+   */
   private wake() {
     for (const a of this.asleep) {
-      const seen =
-        a instanceof Villain ? this.onScreen(a.centreX, villainDef.displayHeight / 2)
-        : a instanceof Bat ? this.onScreen(a.position.x, batOutline.halfWidth)
-        : this.onScreen(a.def.x, dragonDef.displayHeight / 2) || this.routeOnScreen(a);
+      let seen;
+      if (a instanceof Villain) {
+        const path = a.path, half = villainDef.displayHeight / 2;
+        seen = this.onScreen(a.centreX, half) || (path !== null && this.routeOnScreen([[path.x0, 0], [path.x1, 0]], half));
+      } else if (a instanceof Bat) {
+        seen = this.onScreen(a.position.x, batOutline.halfWidth) || this.routeOnScreen(a.route, batOutline.halfWidth);
+      } else {
+        seen = this.onScreen(a.def.x, dragonDef.displayHeight / 2) || this.routeOnScreen(a.route.points, dragonConfig.fire.halfThickness);
+      }
       if (seen) this.asleep.delete(a);
     }
   }
