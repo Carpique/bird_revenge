@@ -7,7 +7,7 @@ import { splatHalfWidth } from '../characters/poo';
 import { villainDef } from '../characters/villain';
 import { config, WORLD } from '../config';
 import { noControls, type Controls } from '../input/controls';
-import { buildLevel, type BuiltLevel } from '../level/build';
+import { buildLevel, type BuiltLevel, type LevelJoint } from '../level/build';
 import { LevelView } from '../level/LevelView';
 import type { Branch, LevelDef, VillainKind } from '../level/types';
 import { tex } from '../render/assets';
@@ -143,6 +143,8 @@ export class Game {
   private dragons: Dragon[] = [];
   /** the sound of each dragon's fire while it's out */
   private flameSounds = new Map<Dragon, FlameSound>();
+  /** each hinge's angle (of its body, relative to what it's pinned to) at the last step, and whether its squeak is playing */
+  private hinges: { joint: LevelJoint; angle: number; squeaking: boolean }[] = [];
   private coins: Coin[] = [];
   private popups: Popup[] = [];
   private pending: (() => void)[] = [];
@@ -450,6 +452,7 @@ export class Game {
     this.homingField = new HomingField(width);
     this.levelView?.destroy();
     this.built = buildLevel(this.level);
+    this.hinges = this.built.joints.filter((j) => j.def.kind === 'hinge').map((joint) => ({ joint, angle: hingeAngle(joint), squeaking: false }));
     const timeOfDay = this.level.timeOfDay ?? 'afternoon';
     this.background.timeOfDay = timeOfDay;
     showBackingsFor(timeOfDay);
@@ -533,6 +536,7 @@ export class Game {
     const pooYs = new Map(this.poos.map((p) => [p, p.body.position.y]));
     this.keepAwake();
     Engine.update(this.engine, STEP_MS);
+    this.stepHingeSounds();
     this.bird.perchOn(this.branches, birdY);
     this.bird.standOn(this.levelBodies);
     this.landPoosOnBranches(pooYs);
@@ -748,6 +752,20 @@ export class Game {
         f.stop();
         this.flameSounds.delete(d);
       }
+    }
+  }
+
+  /** A body turning on its hinge squeaks, while on the screen; a new squeak only once the last one has ended. */
+  private stepHingeSounds() {
+    for (const h of this.hinges) {
+      const angle = hingeAngle(h.joint);
+      const degPerSec = (Math.abs(angle - h.angle) * 180) / Math.PI / (STEP_MS / 1000);
+      h.angle = angle;
+      if (!this.live || h.squeaking || degPerSec < config.audio.squeakMinTurn) continue;
+      const { min, max } = h.joint.constraint.bodyA!.bounds;
+      if (!this.onScreen((min.x + max.x) / 2, (max.x - min.x) / 2)) continue;
+      h.squeaking = true;
+      audio.play('squeak', () => (h.squeaking = false));
     }
   }
 
@@ -1160,3 +1178,8 @@ const BACK = 1.4;
 const easeOutBack = (x: number) => 1 + (BACK + 1) * (x - 1) ** 3 + BACK * (x - 1) ** 2;
 /** pulls back a little, then speeds away */
 const easeInBack = (x: number) => (BACK + 1) * x ** 3 - BACK * x ** 2;
+
+/** How far a hinged body has turned: its angle, less that of the body it's pinned to (if any). */
+function hingeAngle({ constraint }: LevelJoint) {
+  return constraint.bodyA!.angle - (constraint.bodyB?.angle ?? 0);
+}

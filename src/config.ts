@@ -595,6 +595,8 @@ export const config = {
     flame: 0.12,
     /** a poo hissing away in a dragon's fire, synthesised */
     hiss: 0.5,
+    /** a body on a hinge squeaks while it turns at least this fast (deg/s) round it; one squeak at a time per hinge, played to its end */
+    squeakMinTurn: 30,
   },
 
   score: { villain: 1, bat: 1, pedestrian: -1 },
