@@ -18,8 +18,8 @@ export const villainDef = {
       loop: true,
     },
     hit: { frames: ['assets/villain/hit.svg'], fps: 1 },
-    /** knocked out by a falling body (a crate), not a poo: seeing stars */
-    hitCollision: { frames: ['assets/villain/hit-collision.svg'], fps: 1 },
+    /** knocked out by a falling body (a crate), not a poo: seeing stars, going round his head */
+    hitCollision: { frames: Array.from({ length: 3 }, (_, i) => `assets/villain/hit-collision_${i}.svg`), fps: 12, loop: true },
   },
   defaultAnimation: 'walk',
   backing: true,
@@ -51,7 +51,7 @@ export const ghostDef = {
       loop: true,
     },
     hit: { frames: ['assets/ghost/hit.svg'], fps: 1 },
-    hitCollision: { frames: ['assets/ghost/hit-collision.svg'], fps: 1 },
+    hitCollision: { frames: Array.from({ length: 3 }, (_, i) => `assets/ghost/hit-collision_${i}.svg`), fps: 12, loop: true },
   },
 } satisfies CharacterDef<'walk' | 'hit' | 'hitCollision'>;
 

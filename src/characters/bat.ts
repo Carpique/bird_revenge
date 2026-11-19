@@ -16,8 +16,8 @@ export const batDef = {
       loop: true,
     },
     hit: { frames: ['assets/bat/hit.svg'], fps: 1 },
-    /** knocked out by a falling body (a crate), not a poo: seeing stars */
-    hitCollision: { frames: ['assets/bat/hit-collision.svg'], fps: 1 },
+    /** knocked out by a falling body (a crate), not a poo: seeing stars, going round its head */
+    hitCollision: { frames: Array.from({ length: 3 }, (_, i) => `assets/bat/hit-collision_${i}.svg`), fps: 12, loop: true },
   },
   defaultAnimation: 'fly',
   backing: true,
@@ -30,7 +30,7 @@ export const homingBatDef = {
   animations: {
     fly: { ...batDef.animations.fly, frames: batDef.animations.fly.frames.map((f) => f.replace('assets/bat/', 'assets/bat/homing/')) },
     hit: { ...batDef.animations.hit, frames: ['assets/bat/homing/hit.svg'] },
-    hitCollision: { ...batDef.animations.hitCollision, frames: ['assets/bat/homing/hit-collision.svg'] },
+    hitCollision: { ...batDef.animations.hitCollision, frames: batDef.animations.hitCollision.frames.map((f) => f.replace('assets/bat/', 'assets/bat/homing/')) },
   },
 } satisfies CharacterDef<'fly' | 'hit' | 'hitCollision'>;
 

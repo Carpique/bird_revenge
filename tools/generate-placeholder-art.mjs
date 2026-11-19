@@ -43,16 +43,17 @@ const rot = (pts, deg, [cx, cy]) => {
 
 /**
  * Cartoon "seeing stars": a ring of little yellow stars round the head, (cx, cy) its centre, rx × ry its radii; the ones at
- * the front of the ring bigger than those at the back, `size` (px) the outer radius of one in the middle. What a character knocked out by a falling crate shows instead of a poo.
+ * the front of the ring bigger than those at the back, `size` (px) the outer radius of one in the middle. `turn` 0..1: how far
+ * the ring has turned from one star's place to the next one's (the stars are all alike, so 1 looks just like 0: a loop). What a character knocked out by a falling crate shows instead of a poo.
  */
-function starRing(cx, cy, rx, ry, seed, stroke = INK, size = 5.5) {
+function starRing(cx, cy, rx, ry, seed, { stroke = INK, size = 5.5, turn = 0 } = {}) {
   const d = [gen.ellipse(cx, cy, rx * 2, ry * 2, o(seed, { stroke, strokeWidth: 1.2, roughness: 0.8 }))];
   const N = 5;
   for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2 + 0.35;
+    const a = ((i + turn) / N) * Math.PI * 2 + 0.35;
     const x = cx + Math.cos(a) * rx, y = cy + Math.sin(a) * ry;
     // sin(a) > 0: the front of the ring, nearer the viewer
-    const r = size * (1 + Math.sin(a) * 0.33), spin = i * 0.6;
+    const r = size * (1 + Math.sin(a) * 0.33), spin = a * 0.6;
     const pts = Array.from({ length: 10 }, (_, k) => {
       const t = spin - Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r * 0.45 : r;
       return [x + Math.cos(t) * rr, y + Math.sin(t) * rr];
@@ -105,8 +106,8 @@ write('bird/idle.svg', bird({ wing: 4, legs: 'standing', seed: 10 }));
 const V_W = 96, V_H = 156;
 const coat = '#6a5a7d', skin = '#f1c9a5';
 
-/** `splat`: hit, mouth open in shock, with a poo on his head (true or 'poo') or seeing stars ('stars') */
-function villain({ legA, legB, armA, armB, seed, splat = false }) {
+/** `splat`: hit, mouth open in shock, with a poo on his head (true or 'poo') or seeing stars ('stars', the ring turned by `turn`) */
+function villain({ legA, legB, armA, armB, seed, splat = false, turn = 0 }) {
   const d = [];
   const hip = [48, 104];
   const leg = (ang, s) => {
@@ -143,7 +144,7 @@ function villain({ legA, legB, armA, armB, seed, splat = false }) {
   d.push(gen.rectangle(34, 6, 32, 18, o(seed + 14, { fill: INK, fillStyle: 'hachure', hachureGap: 2.5 })));
   d.push(gen.line(26, 24, 74, 24, o(seed + 15, { strokeWidth: 4 })));
   arm(armB, seed + 16);
-  if (splat === 'stars') d.push(...starRing(50, 14, 32, 7, seed + 30, INK, 7.5));
+  if (splat === 'stars') d.push(...starRing(50, 14, 32, 7, seed + 30, { size: 7.5, turn }));
   else if (splat) {
     const poo = '#7a5230';
     d.push(gen.ellipse(52, 10, 40, 16, o(seed + 20, { fill: poo, fillStyle: 'solid' })));
@@ -165,14 +166,18 @@ const walk = [
 ];
 walk.forEach((p, i) => write(`villain/walk_${i}.svg`, villain({ ...p, seed: 100 + i * 31 })));
 write('villain/hit.svg', villain({ legA: 10, legB: -10, armA: 150, armB: -150, seed: 300, splat: true }));
-write('villain/hit-collision.svg', villain({ legA: 10, legB: -10, armA: 150, armB: -150, seed: 300, splat: 'stars' }));
+// knocked out by a falling crate: the stars go round his head (STAR_FRAMES frames, looping)
+const STAR_FRAMES = 3;
+for (let i = 0; i < STAR_FRAMES; i++) {
+  write(`villain/hit-collision_${i}.svg`, villain({ legA: 10, legB: -10, armA: 150, armB: -150, seed: 300, splat: 'stars', turn: i / STAR_FRAMES }));
+}
 
 // ---------------------------------------------------------------- ghost (the villain's other look: same frame, faces right)
 // a ball under a bed sheet, floating a little above its feet (the bottom of the frame); the hem waves as it goes
 const sheet = '#f6f8fc', sheetFold = '#aab6cc', GHOST_INK = '#3a4256';
 
-/** `phase` 0..1: where the hem's wave (and the bob up and down) is; `hit`: mouth open in shock, a poo on its head (true or 'poo') or seeing stars ('stars') */
-function ghost({ phase, seed, hit = false }) {
+/** `phase` 0..1: where the hem's wave (and the bob up and down) is; `hit`: mouth open in shock, a poo on its head (true or 'poo') or seeing stars ('stars', the ring turned by `turn`) */
+function ghost({ phase, seed, hit = false, turn = 0 }) {
   const d = [];
   const go = (s, extra = {}) => o(s, { stroke: GHOST_INK, roughness: 0.9, bowing: 0.8, ...extra });
   const t = phase * Math.PI * 2;
@@ -206,7 +211,7 @@ function ghost({ phase, seed, hit = false }) {
   // eyes: two black holes, looking the way it goes
   d.push(gen.ellipse(cx + 2, headY - 2, 11, 17, go(seed + 6, { fill: '#111', fillStyle: 'solid', strokeWidth: 1 })));
   d.push(gen.ellipse(cx + 18, headY - 2, 11, 17, go(seed + 7, { fill: '#111', fillStyle: 'solid', strokeWidth: 1 })));
-  if (hit === 'stars') d.push(...starRing(cx + 2, headY - R - 3, 36, 8, seed + 30, GHOST_INK, 7.5));
+  if (hit === 'stars') d.push(...starRing(cx + 2, headY - R - 3, 36, 8, seed + 30, { stroke: GHOST_INK, size: 7.5, turn }));
   else if (hit) {
     const poo = '#7a5230';
     d.push(gen.ellipse(cx + 2, headY - R + 2, 40, 16, o(seed + 20, { fill: poo, fillStyle: 'solid' })));
@@ -224,7 +229,7 @@ function ghost({ phase, seed, hit = false }) {
 const GHOST_FRAMES = 6;
 for (let i = 0; i < GHOST_FRAMES; i++) write(`ghost/float_${i}.svg`, ghost({ phase: i / GHOST_FRAMES, seed: 1200 }));
 write('ghost/hit.svg', ghost({ phase: 0.25, seed: 1300, hit: true }));
-write('ghost/hit-collision.svg', ghost({ phase: 0.25, seed: 1300, hit: 'stars' }));
+for (let i = 0; i < STAR_FRAMES; i++) write(`ghost/hit-collision_${i}.svg`, ghost({ phase: 0.25, seed: 1300, hit: 'stars', turn: i / STAR_FRAMES }));
 
 // ---------------------------------------------------------------- glue (what the ghost throws: a glowing green blob)
 {
@@ -281,9 +286,9 @@ const BAT_HOMING = { fur: '#4b1d73', wing: '#7a3fb0', ink: '#2a0f45' };
 
 /**
  * `wing`: how far the wings are raised (deg, + = up); `hit`: wings folded, dazed, with a poo on its head (true or 'poo') or
- * seeing stars ('stars'); `colours`: BAT_PLAIN or BAT_HOMING
+ * seeing stars ('stars', the ring turned by `turn`); `colours`: BAT_PLAIN or BAT_HOMING
  */
-function bat({ wing, seed, hit = false, colours = BAT_PLAIN }) {
+function bat({ wing, seed, hit = false, turn = 0, colours = BAT_PLAIN }) {
   const d = [];
   const { fur: batFur, wing: batWing } = colours;
   const o = (seed, extra = {}) => ink(seed, { stroke: colours.ink, ...extra });
@@ -306,7 +311,7 @@ function bat({ wing, seed, hit = false, colours = BAT_PLAIN }) {
       d.push(gen.line(ex + 3, cy - 23, ex - 3, cy - 17, o(seed + 8, { stroke: '#fff', strokeWidth: 2 })));
     }
     d.push(gen.circle(cx, cy - 9, 5, o(seed + 9, { fill: '#c0392b', fillStyle: 'solid', strokeWidth: 1 })));
-    if (hit === 'stars') d.push(...starRing(cx, cy - 36, 30, 6, seed + 30, colours.ink));
+    if (hit === 'stars') d.push(...starRing(cx, cy - 36, 30, 6, seed + 30, { stroke: colours.ink, turn }));
     else {
       const poo = '#7a5230';
       d.push(gen.ellipse(cx, cy - 32, 30, 12, o(seed + 10, { fill: poo, fillStyle: 'solid' })));
@@ -325,11 +330,13 @@ function bat({ wing, seed, hit = false, colours = BAT_PLAIN }) {
 // fly frames: a full wingbeat, wings up -> down -> back up (the animation loops)
 [30, 5, -25, 5].forEach((wing, i) => write(`bat/fly_${i}.svg`, bat({ wing, seed: 900 + i * 17 })));
 write('bat/hit.svg', bat({ wing: 60, seed: 980, hit: true }));
-write('bat/hit-collision.svg', bat({ wing: 60, seed: 980, hit: 'stars' }));
+for (let i = 0; i < STAR_FRAMES; i++) write(`bat/hit-collision_${i}.svg`, bat({ wing: 60, seed: 980, hit: 'stars', turn: i / STAR_FRAMES }));
 // the homing bat: the same drawings, in its own colours
 [30, 5, -25, 5].forEach((wing, i) => write(`bat/homing/fly_${i}.svg`, bat({ wing, seed: 900 + i * 17, colours: BAT_HOMING })));
 write('bat/homing/hit.svg', bat({ wing: 60, seed: 980, hit: true, colours: BAT_HOMING }));
-write('bat/homing/hit-collision.svg', bat({ wing: 60, seed: 980, hit: 'stars', colours: BAT_HOMING }));
+for (let i = 0; i < STAR_FRAMES; i++) {
+  write(`bat/homing/hit-collision_${i}.svg`, bat({ wing: 60, seed: 980, hit: 'stars', turn: i / STAR_FRAMES, colours: BAT_HOMING }));
+}
 
 // ---------------------------------------------------------------- dragon (side on, faces right, feet at the bottom)
 // Sits still and spits fire from its jaw (the fire is drawn by the game, from the puffs below).

@@ -944,6 +944,7 @@ export class Game {
     if (!c.hit(cause)) return;
     // one standing by is in play from now on, to fall off
     this.asleep.delete(c);
+    if (cause === 'collision') audio.play('collision');
     if (c instanceof Bat) {
       this.addScore(config.score.bat, x, y);
       audio.play('bat-dies');

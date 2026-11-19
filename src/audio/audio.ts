@@ -3,7 +3,7 @@ import files from 'virtual:audio-files';
 import { config } from '../config';
 
 /** Sound effect groups; each plays a random file of public/assets/audio/<group>-N.mp3 */
-export type SfxGroup = 'shot' | 'splat' | 'bad-guy-dies' | 'ghost-dies' | 'bat-dies' | 'score' | 'player-hit' | 'boing' | 'sad-audience' | 'friend' | 'coin' | 'button' | 'fanfare' | 'dragon-roar';
+export type SfxGroup = 'shot' | 'splat' | 'bad-guy-dies' | 'ghost-dies' | 'bat-dies' | 'score' | 'player-hit' | 'boing' | 'sad-audience' | 'friend' | 'coin' | 'button' | 'fanfare' | 'dragon-roar' | 'collision';
 
 const DIR = 'assets/audio/';
 const STORAGE_KEY = 'bird-revenge-volume';
@@ -11,6 +11,22 @@ const STORAGE_KEY = 'bird-revenge-volume';
 /** "splat-2.mp3" → "splat"; every "music-*" file is in the "music" group, every "main-theme-*" in "main-theme" */
 const groupOf = (file: string) => file.replace(/\.[^.]+$/, '').replace(/-\d+$/, '');
 const url = (file: string) => import.meta.env.BASE_URL + DIR + file;
+
+/**
+ * Per-sound volume, in percent of the file's own level, from the optional src/audio/volumes.json, e.g.
+ * `{ "collision-1": 150, "splat-2": 80 }`. A key is a file name, with or without its extension. No entry: 100%. The file may be missing,
+ * and entries naming no file, or that aren't numbers, are ignored. Music and the title theme play
+ * through <audio>, which can't go above 100%.
+ */
+const volumeTable: Record<string, unknown> =
+  Object.values(import.meta.glob<Record<string, unknown>>('./volumes.json', { import: 'default', eager: true }))[0] ?? {};
+const fileVolume = (file: string): number => {
+  for (const key of [file, file.replace(/\.[^.]+$/, '')]) {
+    const pct = volumeTable[key];
+    if (typeof pct === 'number' && Number.isFinite(pct) && pct >= 0) return pct / 100;
+  }
+  return 1;
+};
 
 /**
  * All game audio. Effects are decoded into memory by @pixi/sound so they play instantly; music is
@@ -81,7 +97,7 @@ class GameAudio {
         (g === 'music' ? this.tracks : this.themes).push(f);
         continue;
       }
-      sound.add(f, { url: url(f), preload: true });
+      sound.add(f, { url: url(f), preload: true, volume: fileVolume(f) });
       this.groups.set(g, [...(this.groups.get(g) ?? []), f]);
     }
 
@@ -317,8 +333,8 @@ class GameAudio {
   update() {
     const v = this.muted ? 0 : this.volume;
     const effects = v * config.audio.effects;
-    const music = v * config.audio.music * this.musicFade();
-    const theme = v * config.audio.music * this.themeFade();
+    const music = v * config.audio.music * this.musicFade() * (this.track ? fileVolume(this.track) : 1);
+    const theme = v * config.audio.music * this.themeFade() * (this.themes.length ? fileVolume(this.themes[0]) : 1);
     const fall = v * config.audio.fall;
     const flame = v * config.audio.flame;
     if (effects !== this.applied.effects) sound.volumeAll = effects;
