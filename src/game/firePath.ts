@@ -67,6 +67,18 @@ export class FirePath {
     return spans;
   }
 
+  /** The x range the path's first `reach` px cover; null for none. */
+  xRange(reach: number): { x0: number; x1: number } | null {
+    if (reach <= 0) return null;
+    let x0 = this.points[0][0], x1 = x0;
+    for (let i = 1; i < this.points.length && this.dist[i - 1] < reach; i++) {
+      const x = this.dist[i] <= reach ? this.points[i][0] : this.pointAt(reach).x;
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+    }
+    return { x0, x1 };
+  }
+
   /** How far (x, y) is from the path's first `reach` px. */
   distanceTo(x: number, y: number, reach: number): number {
     let best = Infinity;

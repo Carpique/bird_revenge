@@ -361,7 +361,10 @@ export class Game {
     this.flameSounds.clear();
     this.dragons = this.level.dragons.map((def) => new Dragon(def));
     for (const d of this.dragons) {
-      d.onSpit = () => audio.play('dragon-roar');
+      // it roars only where it can be seen, at least in part
+      d.onSpit = () => {
+        if (this.onScreen(d.def.x, dragonDef.displayHeight / 2)) audio.play('dragon-roar');
+      };
       Composite.add(this.engine.world, d.body);
       this.dragonLayer.addChild(d.view);
     }
@@ -726,13 +729,19 @@ export class Game {
     }
   }
 
-  /** Each dragon's fire roars, as loud as it's far out, from rolling out until it's back in. */
+  /** Whether any of a dragon's fire that's out (thickness and all) is on the screen. */
+  private fireOnScreen(d: Dragon) {
+    const r = d.route.xRange(d.reach);
+    return r !== null && this.onScreen((r.x0 + r.x1) / 2, (r.x1 - r.x0) / 2 + dragonConfig.fire.halfThickness);
+  }
+
+  /** Each dragon's fire roars, as loud as it's far out, from rolling out until it's back in, while any of it is on the screen. */
   private stepFlameSounds() {
     if (!this.live) return;
     for (const d of this.dragons) {
       const out = d.out;
       let f = this.flameSounds.get(d);
-      if (out > 0) {
+      if (out > 0 && this.fireOnScreen(d)) {
         if (!f || f.ended) this.flameSounds.set(d, (f = audio.startFlame()));
         f.set(out);
       } else if (f) {
