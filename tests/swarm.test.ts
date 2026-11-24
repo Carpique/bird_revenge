@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { config, WORLD } from '../src/config';
-import { Bodies, Query, STEP_MS, type MBody } from '../src/game/physics';
+import { Bodies, Body, Composite, CRATE, Engine, Query, STEP_MS, type MBody } from '../src/game/physics';
 import { stepSwarms, Swarm, type SwarmPoo, type SwarmSenses } from '../src/game/Swarm';
 
 const R = config.swarm.diameter / 2;
@@ -119,6 +119,95 @@ describe('a fly swarm', () => {
     for (let i = 0; i < 900; i++) stepSwarms([a, b], STEP_MS, () => sensesOf([], bird, true, [near, far]));
     expect(new Set([a.pooId, b.pooId])).toEqual(new Set([near.id, far.id]));
     expect(a.isFeeding && b.isFeeding).toBe(true);
+  });
+
+  it('gets out of the way of a crate sliding at it, never letting it through its middle, and stops when it stops', () => {
+    const s = new Swarm({ x: 400, y: 300 }, WORLD.width);
+    const crate = Bodies.rectangle(150, 300, 60, 60);
+    const bird = { x: 1000, y: 100 };
+    for (let i = 0; i < 120; i++) {
+      Body.setVelocity(crate, { x: 5, y: 0 });
+      Body.translate(crate, { x: 5, y: 0 });
+      s.step(STEP_MS, sensesOf([crate], bird, false));
+      expect(Query.point([crate], s.position)).toHaveLength(0);
+    }
+    // it went on unhindered: nothing behind the swarm to pin it, so it never held
+    expect(crate.position.x).toBeCloseTo(750);
+    // stopped: so does the swarm's shove, at once (back to drifting slowly)
+    Body.setVelocity(crate, { x: 0, y: 0 });
+    run(s, 5, () => sensesOf([crate], bird, false));
+    const at = s.position;
+    run(s, 10, () => sensesOf([crate], bird, false));
+    expect(Math.hypot(s.position.x - at.x, s.position.y - at.y)).toBeLessThan(config.swarm.chaseSpeed * 0.2 * 10 + 2);
+  });
+
+  /** A shaft down to the ground at x = 400, a little wider than a squeezed swarm, a crate (narrower) falling into it, a swarm at the bottom: all in a physics world. */
+  const shaft = () => {
+    const engine = Engine.create();
+    const ground = Bodies.rectangle(WORLD.width / 2, WORLD.groundY + 50, WORLD.width, 100, { isStatic: true });
+    const half = R * config.swarm.minScale + 15;
+    const walls = [400 - half - 30, 400 + half + 30].map((x) => Bodies.rectangle(x, WORLD.groundY - 200, 60, 400, { isStatic: true }));
+    const crate = Bodies.rectangle(400, WORLD.groundY - 330, 2 * half - 10, 40, { collisionFilter: { category: CRATE } });
+    Composite.add(engine.world, [ground, ...walls, crate]);
+    const s = new Swarm({ x: 400, y: WORLD.groundY - R }, WORLD.width);
+    Composite.add(engine.world, s.body);
+    return { engine, ground, walls, crate, s };
+  };
+
+  it('pinned with nowhere to go by a falling crate, holds it up as anything fixed would', () => {
+    const { engine, ground, walls, crate, s } = shaft();
+    for (let i = 0; i < 240; i++) {
+      Engine.update(engine, STEP_MS);
+      s.step(STEP_MS, sensesOf([ground, ...walls, crate], { x: 1000, y: 100 }, false));
+      expect(Query.point([crate], s.position)).toHaveLength(0);
+    }
+    // the crate rests on it, off the ground by about its squeezed size
+    expect(s.isHolding).toBe(true);
+    expect(crate.bounds.max.y).toBeLessThan(WORLD.groundY - s.minRadius);
+    expect(Math.hypot(crate.velocity.x, crate.velocity.y)).toBeLessThan(0.1);
+  });
+
+  it('holding a crate up, stays put while it rests on it, and goes its way once it is gone', () => {
+    const { engine, ground, walls, crate, s } = shaft();
+    let bodies = [ground, ...walls, crate];
+    const bird = { x: 1000, y: 100 };
+    const step = () => {
+      Engine.update(engine, STEP_MS);
+      s.step(STEP_MS, sensesOf(bodies, bird, true));
+    };
+    for (let i = 0; i < 120; i++) step();
+    expect(s.isHolding).toBe(true);
+    // the bird in sight makes no odds while the crate rests on it
+    const at = s.position;
+    for (let i = 0; i < 300; i++) step();
+    expect(s.isHolding).toBe(true);
+    expect(s.position).toEqual(at);
+    // the crate gone: up and out it goes, its body solid to nothing again
+    Composite.remove(engine.world, crate);
+    bodies = [ground, ...walls];
+    for (let i = 0; i < 60; i++) step();
+    expect(s.isHolding).toBe(false);
+    expect(s.body.collisionFilter.mask).toBe(0);
+    expect(s.position.y).toBeLessThan(at.y - 20);
+  });
+
+  it('slips out sideways from under a falling crate when it can, holding nothing', () => {
+    const engine = Engine.create();
+    const ground = Bodies.rectangle(WORLD.width / 2, WORLD.groundY + 50, WORLD.width, 100, { isStatic: true });
+    const crate = Bodies.rectangle(400, WORLD.groundY - 300, 160, 40, { collisionFilter: { category: CRATE } });
+    Composite.add(engine.world, [ground, crate]);
+    const s = new Swarm({ x: 400, y: WORLD.groundY - R }, WORLD.width);
+    Composite.add(engine.world, s.body);
+    let held = false;
+    for (let i = 0; i < 400; i++) {
+      Engine.update(engine, STEP_MS);
+      s.step(STEP_MS, sensesOf([ground, crate], { x: 1000, y: 100 }, false));
+      held ||= s.isHolding;
+    }
+    // it never held: the crate came down to the ground, and the swarm is clear of it (back over it, where it started)
+    expect(held).toBe(false);
+    expect(crate.bounds.max.y).toBeGreaterThan(WORLD.groundY - 3);
+    expect(Query.point([crate], s.position)).toHaveLength(0);
   });
 
   it("stays put, frozen, though its flies don't", () => {

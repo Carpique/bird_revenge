@@ -601,6 +601,19 @@ export const config = {
     feedReach: 24,
     /** how often (ms) the way to its target is worked out again */
     replanMs: 300,
+    // shoved by a moving body (a falling or tumbling crate): out of its way at once, no drift on after
+    /** it feels a moving body this far (share of its rest radius) from its centre: the flies further out just dodge */
+    shoveReach: 0.75,
+    /** ...or where it will be this many physics steps on, so it's off a little before it's hit */
+    shoveLead: 6,
+    /** ...moving at least this fast (px per physics step); slower, it's a wall to it like any other */
+    shoveMinSpeed: 0.2,
+    /** it gets out of the way this many times as fast as the body comes on... */
+    shoveOvershoot: 1.3,
+    /** ...and faster the deeper it's in (per step, times how far in, px) */
+    shoveStiffness: 0.12,
+    /** once nothing's pushing, its shove keeps this share of itself each step: low, it stops at once */
+    shoveDecay: 0.5,
     /** size (px) of the grid cells it finds its way on: finer than a bat's, for narrow gaps (takes a reload) */
     cell: 8,
     /** how far (px) beyond its squeezed size it keeps from things where it can */

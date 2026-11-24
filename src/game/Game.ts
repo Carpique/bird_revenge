@@ -343,7 +343,10 @@ export class Game {
       return b;
     });
     this.replanIn = 0;
-    for (const sw of this.swarms) sw.destroy();
+    for (const sw of this.swarms) {
+      Composite.remove(this.engine.world, sw.body);
+      sw.destroy();
+    }
     for (const b of this.buzzSounds.values()) b.stop();
     this.buzzSounds.clear();
     const timeOfDay = this.level.timeOfDay ?? 'afternoon';
@@ -351,6 +354,7 @@ export class Game {
     this.swarms = this.level.swarms.map((def) => {
       const sw = new Swarm(def, this.level.width);
       sw.setNight(night);
+      Composite.add(this.engine.world, sw.body);
       this.actors.addChild(sw.view);
       return sw;
     });

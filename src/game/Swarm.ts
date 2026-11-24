@@ -4,7 +4,7 @@ import { config } from '../config';
 import type { SwarmDef } from '../level/types';
 import { HomingField } from './homing';
 import type { FireGap } from './Bat';
-import type { MBody } from './physics';
+import { Bodies, Body, CRATE, Query, SWARM, type MBody } from './physics';
 
 type Point = { x: number; y: number };
 
@@ -36,14 +36,23 @@ export interface SwarmSenses {
 const PROBE_STEP = 3;
 /** how many points round its squeezed outline are tested for room, besides its centre */
 const FIT_POINTS = 10;
+/** where it feels for a moving body: rings round its centre (share of `shoveReach`, points round it), and its centre */
+/** holding, it counts a body as resting on it this near (px) its `body` */
+const HOLD_SLACK = 4;
+const FEEL_RINGS: [number, number][] = [[1, 16], [0.66, 12], [0.33, 8], [0, 1]];
 
 const randomBetween = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
 /** about normally distributed, mean 0, standard deviation 1 (Irwin–Hall, 3 terms): cheap */
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2;
 
 /**
- * A fly swarm: a cloud of `config.swarm.flyCount` tiny flies, `diameter` across. It can't be killed: poos and crates go
+ * A fly swarm: a cloud of `config.swarm.flyCount` tiny flies, `diameter` across. It can't be killed: poos go
  * straight through it. Touching any of its flies costs the bird a life.
+ *
+ * A body moving at it (a crate falling or tumbling) shoves it aside: it gets out of the way at once, as fast as the body
+ * comes on, and stops as soon as nothing's pushing (no drift on). Pinned (a wall behind it) it slips out sideways; with
+ * nowhere at all to go it holds: its `body` turns solid to crates, and they come to rest on it as on anything fixed.
+ * It stays put while anything rests on it, and goes its way again once nothing does.
  *
  * The swarm as a whole is a point (its centre) that steers like a homing bat, only more erratically: it drifts about
  * where it started till it sees the bird (nothing of the level's in between), then goes for it round the level's bodies,
@@ -61,6 +70,13 @@ const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2;
 export class Swarm {
   /** the flies, drawn as dots (and their glow) */
   readonly view = new Container();
+  /**
+   * What crates rest on while it holds (pinned, with nowhere to go): a fixed block of its squeezed size, in the physics
+   * world (the game adds it), solid to crates only then and to nothing else ever.
+   */
+  readonly body: MBody;
+  /** pinned with nowhere to go: it stays put, its `body` solid to crates, while anything rests on it */
+  private holding = false;
   /** hangs where it is (the level is won); its flies still buzz about */
   frozen = false;
   private dots = new Graphics();
@@ -72,6 +88,8 @@ export class Swarm {
   private y: number;
   /** its centre's velocity (px per step) */
   private v = { x: 0, y: 0 };
+  /** a moving body's shove (px per step), on top of its own flying; dies away fast once nothing's pushing */
+  private push = { x: 0, y: 0 };
   /** half its size each way now, and its oval's offset from the centre (squeezed into a gap off to one side) */
   private rx: number;
   private ry: number;
@@ -123,6 +141,13 @@ export class Swarm {
     const min = this.minRadius;
     this.field = new HomingField(levelWidth, { outline: { halfWidth: min, halfHeight: min }, clearance: s.clearance, cell: s.cell });
     this.view.addChild(this.glow, this.dots);
+    // square, its corners rounded: flat on top, so what comes to rest on it stays there as on a crate
+    this.body = Bodies.rectangle(this.x, this.y, 2 * min, 2 * min, {
+      isStatic: true,
+      label: 'swarm',
+      chamfer: { radius: min * 0.3 },
+      collisionFilter: { category: SWARM, mask: 0 },
+    });
   }
 
   /** its radius at rest (px) */
@@ -143,6 +168,11 @@ export class Swarm {
   /** has seen the bird, and goes for it (unless a poo draws it off) */
   get chasing() {
     return this.spotted;
+  }
+
+  /** pinned with nowhere to go, holding up what's coming at it */
+  get isHolding() {
+    return this.holding;
   }
 
   /** settled on a poo, feeding */
@@ -240,6 +270,14 @@ export class Swarm {
   /** Moves its centre: towards its target round obstacles, wandering and lurching; feeding, it hovers over the poo. */
   private steer(senses: SwarmSenses) {
     const s = config.swarm;
+    if (this.holding) {
+      if (this.weighedDown(senses.bodies)) {
+        this.v = { x: 0, y: 0 };
+        this.push = { x: 0, y: 0 };
+        return;
+      }
+      this.hold(false);
+    }
     const swing = this.wanderSeed.reduce((a, w) => a + w.weight * Math.sin(2 * Math.PI * s.wanderHz * w.f * this.age + w.phase), 0);
     let wx = 0, wy = 0, speed = s.chaseSpeed;
     const poo = this.poo;
@@ -276,14 +314,111 @@ export class Swarm {
     this.v.y += (want.y - this.v.y) * turn + (Math.random() * 2 - 1) * s.jitter;
     const v = Math.hypot(this.v.x, this.v.y), top = speed * 1.25;
     if (v > top) (this.v.x *= top / v), (this.v.y *= top / v);
-    // never where it wouldn't fit, squeezed as far as it goes; one already stuck may move only to get out
-    const fitsNow = this.fits(this.x, this.y, senses);
-    const free = (x: number, y: number) => !fitsNow || this.fits(x, y, senses);
-    const nx = this.x + this.v.x, ny = this.y + this.v.y;
+    // a body coming at it: out of its way at once, its own flying into it given up; nothing: the shove dies away
+    const shove = this.shoveFrom(senses.bodies);
+    if (shove) {
+      const { n, speed } = shove;
+      this.push = { x: n.x * speed, y: n.y * speed };
+      const into = this.v.x * n.x + this.v.y * n.y;
+      if (into < 0) (this.v.x -= n.x * into), (this.v.y -= n.y * into);
+    } else {
+      this.push.x *= s.shoveDecay;
+      this.push.y *= s.shoveDecay;
+    }
+    // never where it wouldn't fit, squeezed as far as it goes (the bodies shoving it aside aside); one already stuck may
+    // move only to get out
+    const ignore = shove?.by ?? [];
+    const fitsNow = this.fits(this.x, this.y, senses, ignore);
+    const free = (x: number, y: number) => !fitsNow || this.fits(x, y, senses, ignore);
+    const x0 = this.x, y0 = this.y;
+    const nx = this.x + this.v.x + this.push.x, ny = this.y + this.v.y + this.push.y;
     if (free(nx, ny)) [this.x, this.y] = [nx, ny];
     else if (free(nx, this.y)) [this.x, this.v.y] = [nx, 0];
     else if (free(this.x, ny)) [this.y, this.v.x] = [ny, 0];
     else this.v = { x: 0, y: 0 };
+    if (shove) this.giveWay(shove, (this.x - x0) * shove.n.x + (this.y - y0) * shove.n.y, (x, y) => this.fits(x, y, senses));
+  }
+
+  /**
+   * The push of the moving bodies coming at it (within `shoveReach` of its centre now, or in `shoveLead` steps): the way
+   * out (away from them), how fast it must go that way (as fast as they come on, more the deeper they're in), and who.
+   */
+  private shoveFrom(bodies: MBody[]): { by: MBody[]; n: Point; speed: number } | null {
+    const s = config.swarm;
+    const r = this.radius * s.shoveReach;
+    const by: MBody[] = [];
+    let px = 0, py = 0;
+    for (const b of bodies) {
+      if (b.isStatic) continue;
+      const vb = b.velocity;
+      if (Math.hypot(vb.x, vb.y) < s.shoveMinSpeed) continue;
+      const lx = vb.x * s.shoveLead, ly = vb.y * s.shoveLead;
+      // nowhere near, now or in `shoveLead` steps
+      const bb = b.bounds;
+      if (Math.min(bb.min.x, bb.min.x + lx) > this.x + r || Math.max(bb.max.x, bb.max.x + lx) < this.x - r) continue;
+      if (Math.min(bb.min.y, bb.min.y + ly) > this.y + r || Math.max(bb.max.y, bb.max.y + ly) < this.y - r) continue;
+      // where it is in it, or in its way: which side, and how far in
+      let sx = 0, sy = 0, deepest = Infinity;
+      for (const [k, count] of FEEL_RINGS) {
+        for (let i = 0; i < count; i++) {
+          const a = (i / count) * 2 * Math.PI, dx = Math.cos(a) * r * k, dy = Math.sin(a) * r * k;
+          const x = this.x + dx, y = this.y + dy;
+          if (!Query.point([b], { x, y }).length && !Query.point([b], { x: x - lx, y: y - ly }).length) continue;
+          sx += dx;
+          sy += dy;
+          deepest = Math.min(deepest, k);
+        }
+      }
+      if (deepest === Infinity) continue;
+      // the way out: away from where it's touched (straight on: the way the body's going)
+      const n = unit(-sx, -sy) ?? unit(vb.x, vb.y)!;
+      const coming = vb.x * n.x + vb.y * n.y;
+      if (coming <= 0) continue;
+      const speed = coming * s.shoveOvershoot + s.shoveStiffness * r * (1.1 - deepest);
+      px += n.x * speed;
+      py += n.y * speed;
+      by.push(b);
+    }
+    const n = unit(px, py);
+    return n ? { by, n, speed: Math.hypot(px, py) } : null;
+  }
+
+  /**
+   * Shoved but got less than half as far as it must out of the way (`got`, px): pinned. Out sideways if it can (towards
+   * the nearer edge of what's pushing) to where it fits clear of everything, them too; else it holds (see `hold`).
+   */
+  private giveWay(shove: { by: MBody[]; n: Point; speed: number }, got: number, free: (x: number, y: number) => boolean) {
+    const { n, speed } = shove;
+    if (got >= speed * 0.5) return;
+    // towards the nearer edge of what's pushing: the side it's off its middle, sideways to the push
+    let ax = 0, ay = 0;
+    for (const b of shove.by) (ax += this.x - b.position.x), (ay += this.y - b.position.y);
+    const side = Math.sign(ay * n.x - ax * n.y) || (Math.random() < 0.5 ? 1 : -1);
+    for (const k of [side, -side]) {
+      const tx = -n.y * k * speed, ty = n.x * k * speed;
+      if (free(this.x + tx, this.y + ty)) {
+        this.x += tx;
+        this.y += ty;
+        this.push = { x: tx, y: ty };
+        return;
+      }
+    }
+    this.push = { x: 0, y: 0 };
+    this.hold(true);
+  }
+
+  /** Is anything movable resting on its `body` (or pressing on it): within `HOLD_SLACK` of it? */
+  private weighedDown(bodies: MBody[]) {
+    const { min, max } = this.body.bounds, d = HOLD_SLACK;
+    const near = { min: { x: min.x - d, y: min.y - d }, max: { x: max.x + d, y: max.y + d } };
+    return bodies.some((b) => !b.isStatic && Query.region([b], near).length > 0);
+  }
+
+  /** Holds (its `body` where it is, solid to crates) or lets go (its `body` solid to nothing). */
+  private hold(on: boolean) {
+    this.holding = on;
+    this.body.collisionFilter.mask = on ? CRATE : 0;
+    if (on) Body.setPosition(this.body, { x: this.x, y: this.y });
   }
 
   /** The way towards `to` (a unit vector) round the level's bodies, its heading swung `swing` (× `wander`) either way. */
@@ -294,13 +429,17 @@ export class Swarm {
     return [way.x * cos - way.y * sin, way.x * sin + way.y * cos];
   }
 
-  /** Would it fit at (x, y), squeezed as far as it goes: nothing solid in its smallest circle, and out of the fire? */
-  private fits(x: number, y: number, senses: SwarmSenses) {
+  /**
+   * Would it fit at (x, y), squeezed as far as it goes: nothing solid in its smallest circle (but for `ignore`: the
+   * bodies shoving it aside), and out of the fire?
+   */
+  private fits(x: number, y: number, senses: SwarmSenses, ignore: MBody[] = []) {
     const r = this.minRadius * 0.95;
-    if (senses.solid(x, y)) return false;
+    const solid = (px: number, py: number) => senses.solid(px, py) && !(ignore.length && Query.point(ignore, { x: px, y: py }).length);
+    if (solid(x, y)) return false;
     for (let i = 0; i < FIT_POINTS; i++) {
       const a = (i / FIT_POINTS) * 2 * Math.PI;
-      if (senses.solid(x + Math.cos(a) * r, y + Math.sin(a) * r)) return false;
+      if (solid(x + Math.cos(a) * r, y + Math.sin(a) * r)) return false;
     }
     return !senses.fireGap || senses.fireGap({ x, y }) >= 0;
   }

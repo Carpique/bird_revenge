@@ -16,11 +16,14 @@ export const forceFor = (body: MBody, accelPxPerS2: number) => (body.mass * acce
 export const BIRD_GROUP = -1;
 
 /**
- * Collision categories. Everything is in Matter's default one (1) but the level's movable bodies (crates) and the poos.
+ * Collision categories. Everything is in Matter's default one (1) but the level's movable bodies (crates), the poos and
+ * the fly swarms.
  * The characters are solid only to what their mask names: crates bounce off a villain, bat, dragon or friend and the poos that
  * splat on it hit it, while the bird, terrain and (for villains and bats) a bat's poo go through.
  */
 export const CRATE = 0x0002, BIRD_POO = 0x0004, BAT_POO = 0x0008;
+/** A fly swarm's body: solid (to crates only) just while it's pinned with nowhere to go (see `Swarm.body`). */
+export const SWARM = 0x0010;
 
 /**
  * Makes the static `body` a character's: crates bounce off it (by `bounce`, a restitution) and `hitBy` (categories) hits it.
