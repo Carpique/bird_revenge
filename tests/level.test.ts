@@ -13,7 +13,7 @@ import { dragonDef } from '../src/characters/dragon';
 import { friendDefs } from '../src/characters/friend';
 import { villainDef, villainLooks } from '../src/characters/villain';
 
-const levelFiles = import.meta.glob<string>(['../src/levels/*.tmj', '../src/levels/*/*.tmj'], { query: '?raw', import: 'default', eager: true });
+const levelFiles = import.meta.glob<string>(['../src/levels/*.tmj', '../src/levels/sets/*/*.tmj'], { query: '?raw', import: 'default', eager: true });
 const tilesetFiles = import.meta.glob<string>('../src/levels/*.tsj', { query: '?raw', import: 'default', eager: true });
 const tilesets: Record<string, TiledTileset> = Object.fromEntries(
   Object.entries(tilesetFiles).map(([path, text]) => [path.replace(/^.*\//, ''), JSON.parse(text)]),
@@ -44,8 +44,8 @@ const prop = (name: string, type: string, value: unknown) => ({ name, type, valu
 describe('Tiled levels', () => {
   it('loads every level', () => {
     expect(Object.keys(levelFiles).length).toBeGreaterThan(0);
-    // a set's maps (in a subfolder) refer to the tilesets as `../icons.tsj`
-    const sourced = (path: string) => (/^\.\.\/src\/levels\/[^/]+\//.test(path) ? Object.fromEntries(Object.entries(tilesets).map(([n, t]) => [`../${n}`, t])) : tilesets);
+    // a set's maps (`sets/<set>/`) refer to the tilesets as `../../icons.tsj`
+    const sourced = (path: string) => (path.includes('/sets/') ? Object.fromEntries(Object.entries(tilesets).map(([n, t]) => [`../../${n}`, t])) : tilesets);
     for (const [path, text] of Object.entries(levelFiles)) expect(() => parseTiledMap(path, JSON.parse(text), sourced(path))).not.toThrow();
   });
 

@@ -68,12 +68,12 @@ To use real drawings, replace those files (SVG or PNG) and/or edit the paths in:
 
 ## Levels
 
-Levels are [Tiled](https://www.mapeditor.org/) maps in `src/levels/` (`*.tmj`). Open `src/levels/bird-revenge.tiled-project`
-in Tiled first: it defines the object classes the game understands (Terrain, Body, Branch, Rope, Hinge, Villain, Bat, Friend, Coin, BirdStart, Button —
+Levels are [Tiled](https://www.mapeditor.org/) maps (`*.tmj`) in level sets, `src/levels/sets/<set>/`. Open
+`src/levels/bird-revenge.tiled-project` in Tiled first (one project for all the sets and shared maps): it defines the object classes the game understands (Terrain, Body, Branch, Rope, Hinge, Villain, Bat, Friend, Coin, BirdStart, Button —
 see `src/level/tiled.ts`). Saving all the Friends (standing on the ground or a shelf) completes a level; the
 numbered levels (`001.tmj`, `002.tmj`, …) are played in number order, round and round. Levels come in **sets**, each a
-subfolder of `src/levels/`: the game plays `main/` unless the URL names another set (`?levelset=<name>`, e.g. a new folder
-`src/levels/kids/` is played with `?levelset=kids`); a set's maps refer to the shared tileset as `../icons.tsj`, and the maps
+folder in `src/levels/sets/`: the game plays `main` unless the URL names another set (`?levelset=<name>`, e.g. `?levelset=rosa`
+plays `src/levels/sets/rosa/`). A new set is just a folder of maps; its maps refer to the shared tileset as `../../icons.tsj`. The maps
 right in `src/levels/` (the instructions' `control-tutorial.tmj`, `training.tmj`) are in every set. `training.tmj` is the
 base of the title screen's "Training": it is played once per letter, `training-A` to `training-Z` (A to Z and round, until quit
 from the Esc menu), each with its letter spelled in coins (`src/level/letters.ts`) and completed by collecting them all. Coins are extra points, counted next to the score: place them

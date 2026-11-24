@@ -5,29 +5,29 @@ import { TUTORIAL_LEVEL } from '../tutorial/recording';
 
 /**
  * Tiled maps; a level's name is its file name without `.tmj`.
- * Levels come in sets, each a subfolder (`main/`, …): the game plays one set, `main` unless the URL asks for another
+ * Levels come in sets, each a folder in `sets/` (`sets/main/`, …): the game plays one set, `main` unless the URL asks for another
  * (`?levelset=<name>`). The maps right in this folder are in every set.
  * A set's numbered maps (`001.tmj`, `002.tmj`, …) are the game, played in number order (2 comes before 10 even unpadded),
  * back to the first after the last. The others are played on their own, over and over, except `training.tmj`: it is the base
  * of the training levels, `training-A` to `training-Z`, each spelling its letter in coins (see `letters.ts`), played A to Z and round.
  * The level select also lists the instructions' map (`control-tutorial.tmj`) first, as "Demo" (so the numbers stay as
  * they are): not a level to play, picking it opens the instructions page.
- * Maps in a set refer to the shared tilesets as `../icons.tsj`.
+ * Maps in a set refer to the shared tileset as `../../icons.tsj`.
  */
 /** the map the training levels are made from */
 const TRAINING_BASE = 'training';
 /** the level select's first card, before 1: the instructions page */
 export const DEMO = TUTORIAL_LEVEL;
 
-/** every map, by path from this folder (`./control-tutorial.tmj`, `./main/001.tmj`) */
-const files = import.meta.glob<string>(['./*.tmj', './*/*.tmj'], { query: '?raw', import: 'default', eager: true });
+/** every map, by path from this folder (`./control-tutorial.tmj`, `./sets/main/001.tmj`) */
+const files = import.meta.glob<string>(['./*.tmj', './sets/*/*.tmj'], { query: '?raw', import: 'default', eager: true });
 /** the tilesets the maps use (`icons.tsj`), by path; editing one reloads the levels too */
-const tilesetFiles = import.meta.glob<string>(['./*.tsj', './*/*.tsj'], { query: '?raw', import: 'default', eager: true });
+const tilesetFiles = import.meta.glob<string>(['./*.tsj', './sets/*/*.tsj'], { query: '?raw', import: 'default', eager: true });
 
 /** the set the game plays when the URL names none */
 export const MAIN_SET = 'main';
-/** The level sets there are (the subfolders with maps), by name. */
-export const levelSets = [...new Set(Object.keys(files).flatMap((path) => path.match(/^\.\/([^/]+)\//)?.[1] ?? []))].sort();
+/** The level sets there are (the folders in `sets/` with maps), by name. */
+export const levelSets = [...new Set(Object.keys(files).flatMap((path) => path.match(/^\.\/sets\/([^/]+)\//)?.[1] ?? []))].sort();
 
 /** The set the URL asks for (`?levelset=<name>`), else `main`; an unknown set: `main` (the console says so). */
 function chosenSet(): string {
@@ -41,7 +41,7 @@ function chosenSet(): string {
 /** The set the game plays. */
 export const levelSet = chosenSet();
 
-/** `path` (from this folder) made plain: `./main/../icons.tsj` → `./icons.tsj`. */
+/** `path` (from this folder) made plain: `./sets/main/../../icons.tsj` → `./icons.tsj`. */
 function normalize(path: string): string {
   const out: string[] = [];
   for (const part of path.split('/')) {
@@ -78,7 +78,7 @@ function tilesetsFor(path: string, map: TiledMap, all: Record<string, TiledTiles
 export function setLevels(set: string): Map<string, LevelDef> {
   const out = new Map<string, LevelDef>();
   const tilesets = parseTilesets();
-  const inSet = (path: string) => /^\.\/[^/]+\.tmj$/.test(path) || path.startsWith(`./${set}/`);
+  const inSet = (path: string) => /^\.\/[^/]+\.tmj$/.test(path) || path.startsWith(`./sets/${set}/`);
   const paths = Object.keys(files)
     .filter(inSet)
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -125,7 +125,7 @@ export const testLevelName = typeof location === 'undefined' ? null : new URLSea
 export function firstLevel(): LevelDef {
   const name = testLevelName;
   const level = name ? levels.get(name) : undefined;
-  if (name && !level && !(`./${name}.tmj` in files) && !(`./${levelSet}/${name}.tmj` in files)) console.error(`No level "${name}"; there are: ${[...levels.keys()].join(', ')}`);
+  if (name && !level && !(`./${name}.tmj` in files) && !(`./sets/${levelSet}/${name}.tmj` in files)) console.error(`No level "${name}"; there are: ${[...levels.keys()].join(', ')}`);
   return level ?? gameLevels(levels)[0] ?? EMPTY;
 }
 
