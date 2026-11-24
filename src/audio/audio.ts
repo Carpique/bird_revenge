@@ -384,8 +384,8 @@ class GameAudio {
     return buzz;
   }
 
-  /** A short "shhh": a poo evaporating in a fire (noise, its pitch and level falling away). */
-  playHiss() {
+  /** A short "shhh": a poo evaporating in a fire (noise, its pitch and level falling away); `slow`: this many times as long. */
+  playHiss(slow = 1) {
     const ctx = sound.context.audioContext;
     const level = (this.muted ? 0 : this.volume) * config.audio.hiss;
     if (ctx.state !== 'running' || this.suspended || level <= 0) return;
@@ -396,14 +396,15 @@ class GameAudio {
     band.type = 'bandpass';
     band.Q.value = 0.9;
     band.frequency.setValueAtTime(6000 + Math.random() * 1500, t);
-    band.frequency.exponentialRampToValueAtTime(2500, t + 0.35);
+    band.frequency.exponentialRampToValueAtTime(2500, t + 0.35 * slow);
     const env = ctx.createGain();
     env.gain.setValueAtTime(0, t);
     env.gain.linearRampToValueAtTime(level, t + 0.02);
-    env.gain.setTargetAtTime(0, t + 0.08, 0.09);
+    env.gain.setTargetAtTime(0, t + 0.08 * slow, 0.09 * slow);
     src.connect(band).connect(env).connect((sound.context as webaudio.WebAudioContext).destination);
-    src.start(t, Math.random() * (src.buffer.duration - 0.6));
-    src.stop(t + 0.6);
+    const len = Math.min(0.6 * slow, src.buffer.duration);
+    src.start(t, Math.random() * (src.buffer.duration - len));
+    src.stop(t + len);
     src.addEventListener('ended', () => env.disconnect());
   }
 

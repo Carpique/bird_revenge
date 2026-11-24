@@ -18,22 +18,22 @@ const PUFFS = [
 export class Smoke extends Container {
   t = 0;
 
-  /** ms from the hit until the last cloud is gone */
-  static get ms() {
-    const e = config.evaporate;
-    return (e.clouds - 1) * e.staggerMs + e.cloudMs;
-  }
-
   private readonly clouds: { g: Graphics; fade: AlphaFilter; dx: number }[] = [];
+  /** how long each cloud lasts (ms) */
+  private readonly cloudMs: number;
 
-  /** `r`: the poo's radius; the clouds come out of its top */
-  constructor(private readonly r: number) {
+  /**
+   * `r`: the poo's radius; the clouds come out of its top. `outline`: each cloud drawn round in dark;
+   * `slow`: each cloud lasts this many times `cloudMs`.
+   */
+  constructor(private readonly r: number, { outline = true, slow = 1 } = {}) {
     super();
     const e = config.evaporate;
+    this.cloudMs = e.cloudMs * slow;
     for (let i = 0; i < e.clouds; i++) {
       const g = new Graphics();
       // the puffs' outlines first, then their fills over them: one outline round the whole cloud
-      for (const [x, y, pr] of PUFFS) g.circle(x * e.size, y * e.size, pr * e.size).stroke({ width: 2, color: '#2b2b2b' });
+      if (outline) for (const [x, y, pr] of PUFFS) g.circle(x * e.size, y * e.size, pr * e.size).stroke({ width: 2, color: '#2b2b2b' });
       for (const [x, y, pr] of PUFFS) g.circle(x * e.size, y * e.size, pr * e.size).fill('#e4e4e4');
       g.rotation = (Math.random() - 0.5) * 0.6;
       const fade = new AlphaFilter({ alpha: 0 });
@@ -44,10 +44,16 @@ export class Smoke extends Container {
     }
   }
 
+  /** ms from the hit until the last cloud is gone */
+  get ms() {
+    const e = config.evaporate;
+    return (e.clouds - 1) * e.staggerMs + this.cloudMs;
+  }
+
   sync() {
     const e = config.evaporate;
     this.clouds.forEach(({ g, fade, dx }, i) => {
-      const k = (this.t - i * e.staggerMs) / e.cloudMs;
+      const k = (this.t - i * e.staggerMs) / this.cloudMs;
       g.visible = k >= 0 && k < 1;
       if (!g.visible) return;
       const ease = 1 - (1 - k) ** 2;

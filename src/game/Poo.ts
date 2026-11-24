@@ -97,7 +97,7 @@ export class Poo {
     if (this.state === 'evaporating') {
       this.evaporateT += stepMs;
       if (this.smoke) this.smoke.t = this.evaporateT;
-      if (this.evaporateT >= Math.max(config.evaporate.shrinkMs, Smoke.ms)) this.state = 'done';
+      if (this.evaporateT >= Math.max(config.evaporate.shrinkMs, this.smoke?.ms ?? 0)) this.state = 'done';
       return;
     }
     if (this.knockout) {

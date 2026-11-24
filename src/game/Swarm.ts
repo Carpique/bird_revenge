@@ -1,9 +1,10 @@
 import { Container, Graphics } from 'pixi.js';
+import { Smoke } from '../render/Smoke';
 import { splatHalfWidth } from '../characters/poo';
 import { config } from '../config';
 import type { SwarmDef } from '../level/types';
 import { HomingField } from './homing';
-import type { FireGap } from './Bat';
+import { outOfFire, type FireGap } from './Bat';
 import { Bodies, Body, CRATE, Query, SWARM, type MBody } from './physics';
 
 type Point = { x: number; y: number };
@@ -66,6 +67,11 @@ const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2;
  *
  * It needs room: a gap at least `minScale` of its diameter each way. In a narrower space than its diameter it squeezes
  * to fit (its oval narrower or flatter, shifted to fit between what's either side), so its flies crowd closer.
+ *
+ * A dragon's fire is a wall to it while it's out, as to a homing bat: it slides along it, or stops; one caught in it
+ * may move only so as not to go in deeper. But fire that comes at it (spat at it, or rolling out over it) burns it
+ * once it reaches its core (`burnCore` of its radius): its flies fade away and it smokes (a poo's smoke, bigger and
+ * slower), gone for good (see `burnt`).
  */
 export class Swarm {
   /** the flies, drawn as dots (and their glow) */
@@ -79,6 +85,10 @@ export class Swarm {
   private holding = false;
   /** hangs where it is (the level is won); its flies still buzz about */
   frozen = false;
+  /** ms since the fire burnt it; null: not burnt */
+  private burnT: number | null = null;
+  /** its smoke while it burns away */
+  private smoke: Smoke | null = null;
   private dots = new Graphics();
   private glow = new Graphics();
   /** glowing flies (evening, night) or dark ones (morning, afternoon) */
@@ -207,6 +217,7 @@ export class Swarm {
 
   /** Does a circle (the bird) touch any of its flies? */
   touches(cx: number, cy: number, r: number): boolean {
+    if (this.burnT !== null) return false;
     const o = this.outline;
     // nowhere near its oval: no fly can be touching
     if (Math.abs(cx - o.x) > o.rx + r || Math.abs(cy - o.y) > o.ry + r) return false;
@@ -215,7 +226,41 @@ export class Swarm {
     return false;
   }
 
+  /** burnt by a dragon's fire, smoking away */
+  get burning() {
+    return this.burnT !== null;
+  }
+
+  /** burnt, and its smoke gone: the game removes it */
+  get burnt() {
+    return this.burnT !== null && this.burnT >= Math.max(config.evaporate.shrinkMs * config.swarm.burnSlow, this.smoke?.ms ?? 0);
+  }
+
+  /** the circle round its centre that a dragon's fire burns it by touching (px) */
+  get coreRadius() {
+    return this.radius * config.swarm.burnCore;
+  }
+
+  /** Caught by a dragon's fire: its flies fade away where they are and it smokes. */
+  burn() {
+    if (this.burnT !== null) return;
+    const s = config.swarm;
+    this.burnT = 0;
+    this.poo = null;
+    this.feeding = false;
+    this.hold(false);
+    this.smoke = new Smoke(0, { outline: false, slow: s.burnSlow });
+    this.smoke.scale.set(s.burnSmokeScale);
+    this.smoke.position.set(this.x, this.y);
+    this.view.addChild(this.smoke);
+  }
+
   step(stepMs: number, senses: SwarmSenses) {
+    if (this.burnT !== null) {
+      this.burnT += stepMs;
+      if (this.smoke) this.smoke.t = this.burnT;
+      return;
+    }
     this.age += stepMs / 1000;
     if (senses.seesBird) this.spotted = true;
     // on standby till it has seen the bird: poos don't draw it yet
@@ -328,15 +373,16 @@ export class Swarm {
     // never where it wouldn't fit, squeezed as far as it goes (the bodies shoving it aside aside); one already stuck may
     // move only to get out
     const ignore = shove?.by ?? [];
+    // the fire, as for a bat: one already in it may move only so as not to go in deeper
     const fitsNow = this.fits(this.x, this.y, senses, ignore);
-    const free = (x: number, y: number) => !fitsNow || this.fits(x, y, senses, ignore);
+    const free = (x: number, y: number) => (!fitsNow || this.fits(x, y, senses, ignore)) && this.clearOfFire(x, y, senses);
     const x0 = this.x, y0 = this.y;
     const nx = this.x + this.v.x + this.push.x, ny = this.y + this.v.y + this.push.y;
     if (free(nx, ny)) [this.x, this.y] = [nx, ny];
     else if (free(nx, this.y)) [this.x, this.v.y] = [nx, 0];
     else if (free(this.x, ny)) [this.y, this.v.x] = [ny, 0];
     else this.v = { x: 0, y: 0 };
-    if (shove) this.giveWay(shove, (this.x - x0) * shove.n.x + (this.y - y0) * shove.n.y, (x, y) => this.fits(x, y, senses));
+    if (shove) this.giveWay(shove, (this.x - x0) * shove.n.x + (this.y - y0) * shove.n.y, (x, y) => this.fits(x, y, senses) && this.clearOfFire(x, y, senses));
   }
 
   /**
@@ -431,7 +477,7 @@ export class Swarm {
 
   /**
    * Would it fit at (x, y), squeezed as far as it goes: nothing solid in its smallest circle (but for `ignore`: the
-   * bodies shoving it aside), and out of the fire?
+   * bodies shoving it aside)?
    */
   private fits(x: number, y: number, senses: SwarmSenses, ignore: MBody[] = []) {
     const r = this.minRadius * 0.95;
@@ -441,7 +487,12 @@ export class Swarm {
       const a = (i / FIT_POINTS) * 2 * Math.PI;
       if (solid(x + Math.cos(a) * r, y + Math.sin(a) * r)) return false;
     }
-    return !senses.fireGap || senses.fireGap({ x, y }) >= 0;
+    return true;
+  }
+
+  /** Does going to (x, y) keep it out of the dragons' fire, or (already in it) at least go no deeper, as for a bat? */
+  private clearOfFire(x: number, y: number, senses: SwarmSenses) {
+    return !senses.fireGap || outOfFire(senses.fireGap, this.position, { x, y });
   }
 
   /**
@@ -545,6 +596,13 @@ export class Swarm {
     const s = config.swarm;
     const size = s.flySize;
     const color = this.night ? s.nightColor : s.dayColor;
+    if (this.burnT !== null) {
+      // burning: the flies fade away where they are, the smoke rising
+      const fade = Math.max(0, 1 - this.burnT / (config.evaporate.shrinkMs * s.burnSlow));
+      this.dots.alpha = this.glow.alpha = fade;
+      this.smoke?.sync();
+      return;
+    }
     this.dots.clear();
     this.glow.clear();
     if (!this.fx.length) return;

@@ -637,6 +637,13 @@ export const config = {
     feedRise: 0.9,
     /** ...over a patch this many times the splat's width */
     feedSpread: 1.6,
+    // burnt by a dragon's fire it steers clear of, caught out (the fire comes at it): it smokes away (as a poo does), gone for good
+    /** the fire burns it once it touches this share of its rest radius round its centre */
+    burnCore: 0.5,
+    /** its smoke is this many times a poo's, without the outlines... */
+    burnSmokeScale: 3,
+    /** ...each cloud lasting this many times as long; its hiss too */
+    burnSlow: 2,
   },
 
   player: {

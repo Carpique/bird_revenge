@@ -618,6 +618,22 @@ export class Game {
       a.hit();
       audio.play('splat');
     }
+    // a fly swarm the fire comes at, reaching its core, burns away (it keeps out of the fire otherwise), and is gone once its smoke is
+    for (const sw of this.swarms) {
+      if (sw.burning || this.asleep.has(sw)) continue;
+      const { x, y } = sw.position;
+      if (!this.dragons.some((d) => d.touches(x, y, sw.coreRadius))) continue;
+      sw.burn();
+      audio.playHiss(config.swarm.burnSlow);
+    }
+    this.swarms = this.swarms.filter((sw) => {
+      if (!sw.burnt) return true;
+      Composite.remove(this.engine.world, sw.body);
+      this.buzzSounds.get(sw)?.stop();
+      this.buzzSounds.delete(sw);
+      sw.destroy();
+      return false;
+    });
     // a falling poo, anyone's, that flies into a dragon's fire hisses away
     for (const p of this.poos) {
       if (p.state !== 'falling') continue;
@@ -905,7 +921,7 @@ export class Game {
     if (!this.live) return;
     for (const sw of this.swarms) {
       let b = this.buzzSounds.get(sw);
-      if (!this.asleep.has(sw) && this.onScreen(sw.position.x, sw.radius)) {
+      if (!this.asleep.has(sw) && !sw.burning && this.onScreen(sw.position.x, sw.radius)) {
         if (!b || b.ended) this.buzzSounds.set(sw, (b = audio.startBuzz()));
         b.set(1, sw.isFeeding ? 1 : sw.afterPoo ? 0.8 : sw.chasing ? 0.5 : 0.15);
       } else if (b) {

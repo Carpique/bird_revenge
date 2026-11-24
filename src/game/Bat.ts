@@ -17,7 +17,7 @@ const LEAN = 0.04, MAX_LEAN = 0.3;
 const randomBetween = (lo: number, hi: number) => lo + Math.random() * Math.max(0, hi - lo);
 
 /** Whether going from `from` to `to` keeps out of the fire, or (already in it) at least goes no deeper. */
-const outOfFire = (fireGap: FireGap, from: { x: number; y: number }, to: { x: number; y: number }) => {
+export const outOfFire = (fireGap: FireGap, from: { x: number; y: number }, to: { x: number; y: number }) => {
   const gap = fireGap(to);
   return gap >= 0 || gap >= fireGap(from);
 };
