@@ -26,7 +26,7 @@ const outOfFire = (fireGap: FireGap, from: { x: number; y: number }, to: { x: nu
 export interface Homing {
   field: HomingField;
   others: { x: number; y: number }[];
-  /** nothing static between it and the bird, centre to centre (see `inSight`) */
+  /** nothing of the level's (terrain, crates) between it and the bird, centre to centre (see `inSight`) */
   seesBird: boolean;
 }
 
@@ -37,8 +37,8 @@ export type FireGap = (p: { x: number; y: number }) => number;
  * Flies along its route at a steady speed, from its start: there and back again along an open polyline,
  * round and round a closed one. Every `pooDelay` seconds or so (± `bat.intervalSpread`) it poos straight down,
  * wherever it is; its poo hurts only the bird (see Game).
- * A bat without a route homes in on the bird instead, at the same steady speed, once it has seen it (nothing static in
- * between): round the level's bodies (see `HomingField`), keeping apart from the other bats, turning smoothly; till then it
+ * A bat without a route homes in on the bird instead, at the same steady speed, once it has seen it (nothing of the
+ * level's in between: terrain, a crate): round the level's bodies (see `HomingField`), keeping apart from the other bats, turning smoothly; till then it
  * flutters about where it started.
  * Hit by the bird's poo (or a falling crate), it hangs in the air for a moment in its "hit" pose (seeing stars, for a crate), then tumbles off the bottom of the screen,
  * gone for good. Touching a flying bat costs the bird a life, as a walking villain does.

@@ -227,11 +227,11 @@ describe('a homing bat (no route)', () => {
 });
 
 describe('a homing bat\'s sight', () => {
-  it('is blocked by static bodies only', () => {
+  it('is blocked by static and movable bodies', () => {
     const wall = Bodies.rectangle(500, 300, 40, 200, { isStatic: true });
     const crate = Bodies.rectangle(500, 300, 40, 200);
     expect(inSight([wall], { x: 300, y: 300 }, { x: 700, y: 300 })).toBe(false);
-    expect(inSight([crate], { x: 300, y: 300 }, { x: 700, y: 300 })).toBe(true);
+    expect(inSight([crate], { x: 300, y: 300 }, { x: 700, y: 300 })).toBe(false);
     // over the top of the wall
     expect(inSight([wall], { x: 300, y: 150 }, { x: 700, y: 150 })).toBe(true);
   });

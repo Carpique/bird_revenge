@@ -83,6 +83,29 @@ describe('a villain', () => {
   });
 });
 
+describe('a villain\'s throws', () => {
+  /** steps him with the bird ahead of him (right; he faces right) till he throws, or `steps` run out */
+  const throwsWithin = (v: Villain, steps: number, seesBird: (step: number) => boolean) => {
+    let thrown = false;
+    v.onThrow = () => (thrown = true);
+    for (let s = 0; s < steps && !thrown; s++) v.step(STEP_MS, { bird: { x: 1500, y: 400 }, seesBird: seesBird(s), obstacles: [] });
+    return thrown;
+  };
+  const villain = () => new Villain({ kind: 'villain', x: 600, y: 640, path: { x0: 600, x1: 600 }, facing: 'right', throwDelay: 0.5 }, 2000);
+
+  it('wait till he has spotted the bird', () => {
+    const v = villain();
+    expect(throwsWithin(v, 600, () => false)).toBe(false);
+    expect(v.spotted).toBe(false);
+  });
+
+  it('go on at a hidden bird once he has spotted it', () => {
+    const v = villain();
+    expect(throwsWithin(v, 600, (s) => s === 0)).toBe(true);
+    expect(v.spotted).toBe(true);
+  });
+});
+
 describe('spanInBand', () => {
   it('is the slice of a body at his height, not its bounding box', () => {
     // a roof sloping down at 45° from (576, 96) to the ground at (1120, 640)

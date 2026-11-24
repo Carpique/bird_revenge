@@ -22,11 +22,11 @@ const LOOKAHEAD = 8;
 type Point = { x: number; y: number };
 
 /**
- * Can `a` see `b`: is the line between them clear of the static ones of `bodies` (terrain, a closed door)?
- * Movable bodies, actors and coins don't get in the way.
+ * Can `a` see `b`: is the line between them clear of `bodies` (the level's: terrain, a closed door, crates)?
+ * Actors and coins don't get in the way.
  */
 export function inSight(bodies: MBody[], a: Point, b: Point): boolean {
-  return Query.ray(bodies.filter((body) => body.isStatic), a, b).length === 0;
+  return Query.ray(bodies, a, b).length === 0;
 }
 
 /**

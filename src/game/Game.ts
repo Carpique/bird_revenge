@@ -520,7 +520,9 @@ export class Game {
       if (this.asleep.has(v)) continue;
       // in a scrolling level he throws only at a bird he can see: from on the screen
       const target = scrolls(this.level.width) && !this.onScreen(v.centreX, villainDef.displayHeight / 2) ? null : bird;
-      v.step(STEP_MS, { bird: target, obstacles: this.villainObstacles(v.feet, v.top) });
+      // till he has spotted the bird, the level's bodies (terrain, crates) hide it from him
+      const seesBird = v.spotted || (target !== null && inSight(this.levelBodies, v.hand, target));
+      v.step(STEP_MS, { bird: target, seesBird, obstacles: this.villainObstacles(v.feet, v.top) });
     }
     this.stepBats(bird);
     for (const p of this.poos) p.step(STEP_MS);

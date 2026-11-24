@@ -27,6 +27,11 @@ export interface Surroundings {
   /** where the bird is, or null when there's nothing to throw at (bird dying) */
   bird: { x: number; y: number } | null;
   /**
+   * nothing of the level's (terrain, crates) between his hand and the bird; asked only till he has spotted it (`spotted`),
+   * left out where nothing can be in the way
+   */
+  seesBird?: boolean;
+  /**
    * what he won't walk into, one list per villain (they stand at different heights): poo splats, crates, terrain at his height,
    * and the stretches with nothing under his feet (past the edges of the shelf he walks on)
    */
@@ -81,6 +86,8 @@ const ellipse = ({ width, height }: VillainHitbox) =>
  * Every `throwDelay` seconds or so he stops and throws an apple at the bird, then walks on the way he was going.
  * He never turns to throw: only at a bird in front of him (the half of the world the way he walks); with the bird behind him
  * the throw waits until it's in front.
+ * He throws nothing until he has spotted the bird: in front of him, with nothing of the level's (terrain, a crate) in between.
+ * From then on he knows where it is, and throws at it wherever it hides.
  * A throw starts with the bird in front of him: for `apple.warnMs` he holds what he'll throw up in his hand (`held`), blinking,
  * as he walks on and then stops for the windup: the player's warning. He throws then even if the bird has got behind him.
  * A ghost (`kind`) is the same villain in another look, throwing glue instead of apples.
@@ -129,6 +136,8 @@ export class Villain {
   private aimT: number | null = null;
   /** holding up what he'll throw: the throw is due within `apple.warnMs` */
   private holding = false;
+  /** he has seen the bird, and throws at it from then on */
+  private spottedBird = false;
   /** ms he's been holding it, for its fade in */
   private heldMs = 0;
   /** called when an apple leaves his hand, with the hand position and the way he faces (the apple must fly that way, or straight up/down) */
@@ -183,7 +192,7 @@ export class Villain {
     return true;
   }
 
-  step(stepMs: number, { bird, obstacles }: Surroundings) {
+  step(stepMs: number, { bird, seesBird = true, obstacles }: Surroundings) {
     if (this.frozen && this.state === 'walking') return;
     const speed = config.villain.speed;
     this.timer += stepMs;
@@ -199,8 +208,10 @@ export class Villain {
           this.aimT += stepMs;
         } else if (bird) {
           // starts a throw (also in the middle of a stop) when it's due and there's a bird in front of him to throw at
+          const inFront = (bird.x - this.x) * this.dir >= 0;
+          if (inFront && seesBird) this.spottedBird = true;
           this.throwIn -= stepMs;
-          if (this.throwIn <= 0 && (bird.x - this.x) * this.dir >= 0) this.aimT = 0;
+          if (this.throwIn <= 0 && inFront && this.spottedBird) this.aimT = 0;
         }
         if (this.aimT !== null) {
           if (this.aimT >= throwMs()) {
@@ -305,6 +316,16 @@ export class Villain {
   /** the stretch his centre stays within (kept in the level), or null when he has no path */
   get path(): Span | null {
     return this.hasPath ? { x0: this.lo, x1: this.hi } : null;
+  }
+
+  /** he has seen the bird (see `Surroundings.seesBird`) */
+  get spotted() {
+    return this.spottedBird;
+  }
+
+  /** where an apple leaves his hand: what he sees from */
+  get hand() {
+    return { x: this.x + this.dir * HAND_DX, y: this.feetY - HAND_DY };
   }
 
   /** x of his centre */
