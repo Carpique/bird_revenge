@@ -16,7 +16,7 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  * | Hinge     | point                          | `body` pinned at the point                |
  * | Villain   | tile, `path` a polyline        | a villain walking the `path`'s x range, starting where the tile's feet are, on what's under them; `kind` his look (villain, ghost) |
  * |           | or a polyline                  | the same, the polyline being the path, starting on its first point |
- * |           | tile, no `path`                | the same, walking to and fro between the nearest obstacles, starting off right (the tile flipped horizontally: left) |
+ * |           | tile, no `path`                | the same, walking to and fro between the nearest obstacles, starting off a random way |
  * | Bat       | tile, `path` a polyline or polygon | a bat flying along `path`: there and back (polyline), round and round (polygon), from its point nearest the tile's centre |
  * |           | or a polyline, polygon         | the same, from its first point            |
  * |           | tile or point, no `path`       | a homing bat: no route, it goes for the bird, from the tile's centre / the point |
@@ -269,10 +269,9 @@ function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup, objects: 
       const throwDelay = num(p.throwDelay);
       if (throwDelay < 0) throw new Error('"throwDelay" can\'t be negative (0 = never throws)');
       if (tile && !num(p.path)) {
+        // no facing: he sets off a random way
         const [x, y] = tilePos();
-        // Tiled's horizontal flip (X) turns him round
-        const facing = o.gid! & FLIPPED_HORIZONTALLY ? 'left' : 'right';
-        level.villains.push({ kind, x, y, path: null, facing, throwDelay });
+        level.villains.push({ kind, x, y, path: null, throwDelay });
         break;
       }
       const pts = tile ? pathOf(objects, p.path, false).points : o.polyline && pointsOf(o, o.polyline);

@@ -263,7 +263,7 @@ describe('Tiled levels', () => {
       expect(level.birdStart).toEqual({ x: 300, y: 400 - bird.height * (1 - birdDef.anchor.y) });
     });
 
-    it('starts a villain without a path at his feet, facing right, or left when the tile is flipped', () => {
+    it('starts a villain without a path at his feet, setting off a random way (even with the tile flipped)', () => {
       const level = parseTiledMap(
         't',
         actorMap([
@@ -273,8 +273,8 @@ describe('Tiled levels', () => {
         tilesets,
       );
       expect(level.villains).toEqual([
-        { kind: 'villain', x: 250, y: 640, path: null, facing: 'right', throwDelay: 4 },
-        { kind: 'ghost', x: 600, y: 640, path: null, facing: 'left', throwDelay: 4 },
+        { kind: 'villain', x: 250, y: 640, path: null, throwDelay: 4 },
+        { kind: 'ghost', x: 600, y: 640, path: null, throwDelay: 4 },
       ]);
     });
 
