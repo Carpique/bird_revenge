@@ -1,5 +1,7 @@
-/** The numbered levels finished so far, by name, remembered in the browser. */
-const STORAGE_KEY = 'bird-revenge.completed';
+import { levelSet, MAIN_SET } from './index';
+
+/** The numbered levels finished so far, by name, remembered in the browser; each level set apart (`main` keeps the key it had before sets). */
+const STORAGE_KEY = levelSet === MAIN_SET ? 'bird-revenge.completed' : `bird-revenge.completed.${levelSet}`;
 
 function load(): Set<string> {
   try {

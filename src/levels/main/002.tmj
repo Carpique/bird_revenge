@@ -35,6 +35,19 @@
                 {
                  "gid":1,
                  "height":40,
+                 "id":8,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":84,
+                 "y":192
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
                  "id":9,
                  "name":"",
                  "opacity":1,
@@ -42,8 +55,8 @@
                  "type":"",
                  "visible":true,
                  "width":40,
-                 "x":260,
-                 "y":128
+                 "x":84,
+                 "y":272
                 }, 
                 {
                  "gid":1,
@@ -55,372 +68,21 @@
                  "type":"",
                  "visible":true,
                  "width":40,
-                 "x":68,
-                 "y":128
+                 "x":84,
+                 "y":112
                 }, 
                 {
-                 "gid":1,
-                 "height":40,
-                 "id":29,
-                 "name":"",
+                 "gid":4,
+                 "height":64,
+                 "id":28,
+                 "name":"bunny",
                  "opacity":1,
                  "rotation":0,
                  "type":"",
                  "visible":true,
-                 "width":40,
-                 "x":740,
-                 "y":128
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":30,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":548,
-                 "y":128
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":31,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":916,
-                 "y":128
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":32,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":1076,
-                 "y":128
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":34,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":148,
-                 "y":288
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":35,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":244,
-                 "y":288
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":36,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":52,
-                 "y":288
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":37,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":436,
-                 "y":288
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":38,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":532,
-                 "y":288
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":39,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":340,
-                 "y":288
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":40,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":724,
-                 "y":288
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":41,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":820,
-                 "y":288
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":42,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":628,
-                 "y":288
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":45,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":900,
-                 "y":288
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":49,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":244,
-                 "y":448
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":50,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":52,
-                 "y":448
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":51,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":436,
-                 "y":448
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":54,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":852,
-                 "y":448
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":56,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":628,
-                 "y":448
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":57,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":1028,
-                 "y":448
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":59,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":1204,
-                 "y":448
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":65,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":340,
-                 "y":624
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":66,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":148,
-                 "y":624
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":67,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":516,
-                 "y":624
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":71,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":836,
-                 "y":624
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":76,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":1012,
-                 "y":624
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":82,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":1172,
-                 "y":624
-                }, 
-                {
-                 "gid":1,
-                 "height":40,
-                 "id":86,
-                 "name":"",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":40,
-                 "x":1204,
-                 "y":288
+                 "width":48,
+                 "x":32,
+                 "y":640
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -441,69 +103,299 @@
                  "rotation":0,
                  "type":"Terrain",
                  "visible":true,
-                 "width":304,
+                 "width":320,
+                 "x":480,
+                 "y":176
+                }, 
+                {
+                 "height":16,
+                 "id":27,
+                 "name":"shelf",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"Terrain",
+                 "visible":true,
+                 "width":160,
                  "x":0,
-                 "y":144
+                 "y":432
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":30,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":1204,
+                 "y":192
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":31,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":1204,
+                 "y":272
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":32,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":1204,
+                 "y":112
                 }, 
                 {
                  "height":16,
-                 "id":24,
+                 "id":35,
                  "name":"shelf",
                  "opacity":1,
                  "rotation":0,
                  "type":"Terrain",
                  "visible":true,
-                 "width":784,
-                 "x":496,
-                 "y":144
+                 "width":160,
+                 "x":1120,
+                 "y":432
                 }, 
                 {
-                 "height":16,
-                 "id":25,
-                 "name":"shelf",
+                 "height":0,
+                 "id":36,
+                 "name":"villain on the shelf path",
+                 "opacity":1,
+                 "polyline":[
+                        {
+                         "x":0,
+                         "y":0
+                        }, 
+                        {
+                         "x":-160,
+                         "y":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":0,
+                 "x":1280,
+                 "y":432
+                }, 
+                {
+                 "gid":2,
+                 "height":127,
+                 "id":53,
+                 "name":"villain on the shelf",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"path",
+                         "type":"object",
+                         "value":36
+                        }, 
+                        {
+                         "name":"throwDelay",
+                         "type":"float",
+                         "value":0
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":80,
+                 "x":1200,
+                 "y":432
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":37,
+                 "name":"",
                  "opacity":1,
                  "rotation":0,
-                 "type":"Terrain",
+                 "type":"",
                  "visible":true,
-                 "width":944,
-                 "x":0,
-                 "y":304
+                 "width":40,
+                 "x":484,
+                 "y":592
                 }, 
                 {
-                 "height":16,
-                 "id":26,
-                 "name":"shelf",
+                 "gid":1,
+                 "height":40,
+                 "id":38,
+                 "name":"",
                  "opacity":1,
                  "rotation":0,
-                 "type":"Terrain",
+                 "type":"",
                  "visible":true,
-                 "width":144,
-                 "x":1136,
-                 "y":304
+                 "width":40,
+                 "x":724,
+                 "y":592
                 }, 
                 {
-                 "height":16,
+                 "gid":1,
+                 "height":40,
+                 "id":39,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":404,
+                 "y":592
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":40,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":564,
+                 "y":592
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":41,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":644,
+                 "y":592
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":44,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":884,
+                 "y":592
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":45,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":804,
+                 "y":592
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
                  "id":46,
-                 "name":"shelf",
+                 "name":"",
                  "opacity":1,
                  "rotation":0,
-                 "type":"Terrain",
+                 "type":"",
                  "visible":true,
-                 "width":624,
-                 "x":0,
-                 "y":464
+                 "width":40,
+                 "x":500,
+                 "y":432
                 }, 
                 {
-                 "height":16,
+                 "gid":1,
+                 "height":40,
                  "id":47,
-                 "name":"shelf",
+                 "name":"",
                  "opacity":1,
                  "rotation":0,
-                 "type":"Terrain",
+                 "type":"",
                  "visible":true,
-                 "width":464,
-                 "x":816,
-                 "y":464
+                 "width":40,
+                 "x":452,
+                 "y":512
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":48,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":564,
+                 "y":352
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":49,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":644,
+                 "y":272
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":50,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":724,
+                 "y":352
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":51,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":788,
+                 "y":432
+                }, 
+                {
+                 "gid":1,
+                 "height":40,
+                 "id":52,
+                 "name":"",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":40,
+                 "x":836,
+                 "y":512
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -559,8 +451,8 @@
                  "type":"",
                  "visible":true,
                  "width":98,
-                 "x":1200,
-                 "y":144
+                 "x":640,
+                 "y":168.5
                 }, 
                 {
                  "height":0,
@@ -573,7 +465,7 @@
                          "y":0
                         }, 
                         {
-                         "x":1264,
+                         "x":544,
                          "y":0
                         }],
                  "rotation":0,
@@ -586,7 +478,7 @@
                 {
                  "gid":2,
                  "height":127,
-                 "id":87,
+                 "id":54,
                  "name":"villain",
                  "opacity":1,
                  "properties":[
@@ -604,26 +496,13 @@
                  "type":"",
                  "visible":true,
                  "width":80,
-                 "x":400,
-                 "y":640
-                }, 
-                {
-                 "gid":4,
-                 "height":64,
-                 "id":6,
-                 "name":"bunny",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":48,
-                 "x":48,
+                 "x":240,
                  "y":640
                 }, 
                 {
                  "height":0,
                  "id":7,
-                 "name":"villain path",
+                 "name":"villain on the shelf path",
                  "opacity":1,
                  "polyline":[
                         {
@@ -631,21 +510,21 @@
                          "y":0
                         }, 
                         {
-                         "x":-480,
+                         "x":-160,
                          "y":0
                         }],
                  "rotation":0,
                  "type":"",
                  "visible":true,
                  "width":0,
-                 "x":640,
-                 "y":304
+                 "x":160,
+                 "y":432
                 }, 
                 {
                  "gid":2,
                  "height":127,
-                 "id":88,
-                 "name":"villain",
+                 "id":55,
+                 "name":"villain on the shelf",
                  "opacity":1,
                  "properties":[
                         {
@@ -656,18 +535,18 @@
                         {
                          "name":"throwDelay",
                          "type":"float",
-                         "value":20
+                         "value":0
                         }],
                  "rotation":0,
                  "type":"",
                  "visible":true,
                  "width":80,
-                 "x":512,
-                 "y":304
+                 "x":112,
+                 "y":432
                 }, 
                 {
                  "height":0,
-                 "id":61,
+                 "id":29,
                  "name":"villain path",
                  "opacity":1,
                  "polyline":[
@@ -676,27 +555,27 @@
                          "y":0
                         }, 
                         {
-                         "x":1280,
+                         "x":544,
                          "y":0
                         }],
                  "rotation":0,
                  "type":"",
                  "visible":true,
                  "width":0,
-                 "x":0,
+                 "x":736,
                  "y":640
                 }, 
                 {
                  "gid":2,
                  "height":127,
-                 "id":89,
+                 "id":56,
                  "name":"villain",
                  "opacity":1,
                  "properties":[
                         {
                          "name":"path",
                          "type":"object",
-                         "value":61
+                         "value":29
                         }, 
                         {
                          "name":"throwDelay",
@@ -707,65 +586,7 @@
                  "type":"",
                  "visible":true,
                  "width":80,
-                 "x":816,
-                 "y":640
-                }, 
-                {
-                 "height":0,
-                 "id":63,
-                 "name":"villain path",
-                 "opacity":1,
-                 "polyline":[
-                        {
-                         "x":0,
-                         "y":0
-                        }, 
-                        {
-                         "x":464,
-                         "y":0
-                        }],
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":0,
-                 "x":816,
-                 "y":464
-                }, 
-                {
-                 "gid":2,
-                 "height":127,
-                 "id":90,
-                 "name":"villain",
-                 "opacity":1,
-                 "properties":[
-                        {
-                         "name":"path",
-                         "type":"object",
-                         "value":63
-                        }, 
-                        {
-                         "name":"throwDelay",
-                         "type":"float",
-                         "value":0
-                        }],
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":80,
-                 "x":816,
-                 "y":464
-                }, 
-                {
-                 "gid":4,
-                 "height":64,
-                 "id":84,
-                 "name":"bunny",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"",
-                 "visible":true,
-                 "width":48,
-                 "x":1232,
+                 "x":976,
                  "y":640
                 }],
          "opacity":1,
@@ -775,22 +596,15 @@
          "y":0
         }],
  "nextlayerid":8,
- "nextobjectid":91,
+ "nextobjectid":57,
  "orientation":"orthogonal",
- "properties":[
-        {
-         "name":"timeOfDay",
-         "propertytype":"TimeOfDay",
-         "type":"string",
-         "value":"morning"
-        }],
  "renderorder":"right-down",
  "tiledversion":"1.12.2",
  "tileheight":16,
  "tilesets":[
         {
          "firstgid":1,
-         "source":"icons.tsj"
+         "source":"../icons.tsj"
         }],
  "tilewidth":16,
  "type":"map",

@@ -71,7 +71,10 @@ To use real drawings, replace those files (SVG or PNG) and/or edit the paths in:
 Levels are [Tiled](https://www.mapeditor.org/) maps in `src/levels/` (`*.tmj`). Open `src/levels/bird-revenge.tiled-project`
 in Tiled first: it defines the object classes the game understands (Terrain, Body, Branch, Rope, Hinge, Villain, Bat, Friend, Coin, BirdStart, Button —
 see `src/level/tiled.ts`). Saving all the Friends (standing on the ground or a shelf) completes a level; the
-numbered levels (`001.tmj`, `002.tmj`, …) are played in number order, round and round; `training.tmj` is the
+numbered levels (`001.tmj`, `002.tmj`, …) are played in number order, round and round. Levels come in **sets**, each a
+subfolder of `src/levels/`: the game plays `main/` unless the URL names another set (`?levelset=<name>`, e.g. a new folder
+`src/levels/kids/` is played with `?levelset=kids`); a set's maps refer to the shared tileset as `../icons.tsj`, and the maps
+right in `src/levels/` (the instructions' `control-tutorial.tmj`, `training.tmj`) are in every set. `training.tmj` is the
 base of the title screen's "Training": it is played once per letter, `training-A` to `training-Z` (A to Z and round, until quit
 from the Esc menu), each with its letter spelled in coins (`src/level/letters.ts`) and completed by collecting them all. Coins are extra points, counted next to the score: place them
 from the `icons` tileset (`icons.tsj`, in the Project view) with the Insert Tile tool (T) on an object layer, and they show

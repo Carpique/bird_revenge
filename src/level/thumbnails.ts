@@ -1,7 +1,11 @@
 import { Assets, type Application, type Texture } from 'pixi.js';
 import prebuilt from 'virtual:level-thumbnails';
+import { levelSet } from '../levels';
 import { Game } from '../game/Game';
 import type { LevelDef } from './types';
+
+/** A prebuilt thumbnail's name: its set and level, as `levels` of each set have names in common (`main/001`). */
+export const thumbnailKey = (set: string, name: string) => `${set}/${name}`;
 
 /** thumbnails' width in px (16:9, like the world) */
 export const THUMBNAIL_WIDTH = 640;
@@ -33,7 +37,7 @@ export class Thumbnails {
   get(level: LevelDef): Promise<Texture> {
     const hit = this.cache.get(level.name);
     if (hit?.level === level) return hit.texture;
-    const url = prebuilt?.[level.name];
+    const url = prebuilt?.[thumbnailKey(levelSet, level.name)];
     const texture = url ? Assets.load<Texture>(url).catch(() => this.renderer.render(level)) : Promise.resolve(this.renderer.render(level));
     this.cache.set(level.name, { level, texture });
     return texture;

@@ -31,7 +31,7 @@ export function levelThumbnails(): Plugin {
         refs = {};
         for (const [name, dataUrl] of Object.entries(images)) {
           const source = Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64');
-          refs[name] = this.emitFile({ type: 'asset', name: `level-${name}.webp`, source });
+          refs[name] = this.emitFile({ type: 'asset', name: `level-${name.replace(/\//g, '-')}.webp`, source });
         }
         config.logger.info(`level thumbnails: ${Object.keys(refs).length} drawn in ${((Date.now() - started) / 1000).toFixed(1)}s`);
       } catch (e) {
