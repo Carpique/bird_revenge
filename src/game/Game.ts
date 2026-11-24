@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Rectangle, Sprite, Text, type Texture } from 'pixi.js';
-import { audio, type FlameSound } from '../audio/audio';
+import { audio, type BuzzSound, type FlameSound } from '../audio/audio';
 import { batOutline, batRadius } from '../characters/bat';
 import { coinDef } from '../characters/coin';
 import { dragonConfig, dragonDef } from '../characters/dragon';
@@ -31,6 +31,7 @@ import { landingBranch } from './branches';
 import { Bodies, Body, Composite, Engine, Events, Query, Sleeping, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
 import { Poo } from './Poo';
 import { surfaceHit } from './surfaceHit';
+import { Swarm, type SwarmPoo } from './Swarm';
 import { spanInBand, Villain, type HitCause, type Span } from './Villain';
 
 /** how far (px) a surface may be from a villain's feet and still be what he walks on */
@@ -97,7 +98,7 @@ export class Game {
    * a scrolling level's villains, bats and dragons not seen yet: each stands by, unstepped, until it first comes
    * onto the screen (it or any of its path, a bat's route, a dragon's fire route), and is in play from then on. Empty in a level that doesn't scroll
    */
-  private asleep = new Set<Villain | Bat | Dragon>();
+  private asleep = new Set<Villain | Bat | Dragon | Swarm>();
   /** the walking villains, and the bats in front of them */
   private actors = new Container();
   /** the friends to save: behind the villain */
@@ -141,6 +142,10 @@ export class Game {
   private apples: Apple[] = [];
   private friends: Friend[] = [];
   private dragons: Dragon[] = [];
+  /** the level's fly swarms: they can't be killed */
+  private swarms: Swarm[] = [];
+  /** each swarm's buzz while it's on the screen */
+  private buzzSounds = new Map<Swarm, BuzzSound>();
   /** the sound of each dragon's fire while it's out */
   private flameSounds = new Map<Dragon, FlameSound>();
   /** each hinge's angle (of its body, relative to what it's pinned to) at the last step, and whether its squeak is playing */
@@ -338,6 +343,17 @@ export class Game {
       return b;
     });
     this.replanIn = 0;
+    for (const sw of this.swarms) sw.destroy();
+    for (const b of this.buzzSounds.values()) b.stop();
+    this.buzzSounds.clear();
+    const timeOfDay = this.level.timeOfDay ?? 'afternoon';
+    const night = timeOfDay === 'evening' || timeOfDay === 'night';
+    this.swarms = this.level.swarms.map((def) => {
+      const sw = new Swarm(def, this.level.width);
+      sw.setNight(night);
+      this.actors.addChild(sw.view);
+      return sw;
+    });
     for (const p of this.poos) {
       p.stopSound();
       Composite.remove(this.engine.world, p.body);
@@ -378,7 +394,7 @@ export class Game {
     this.pending = [];
     this.timers = [];
     this.acc = 0;
-    this.asleep = new Set(scrolls(this.level.width) ? [...this.villains, ...this.bats, ...this.dragons] : []);
+    this.asleep = new Set(scrolls(this.level.width) ? [...this.villains, ...this.bats, ...this.dragons, ...this.swarms] : []);
     this.lookAtBird();
     this.wake();
     this.sync();
@@ -414,6 +430,8 @@ export class Game {
         seen = this.onScreen(a.centreX, half) || (path !== null && this.routeOnScreen([[path.x0, 0], [path.x1, 0]], half));
       } else if (a instanceof Bat) {
         seen = this.onScreen(a.position.x, batOutline.halfWidth) || this.routeOnScreen(a.route, batOutline.halfWidth);
+      } else if (a instanceof Swarm) {
+        seen = this.onScreen(a.position.x, a.radius);
       } else {
         seen = this.onScreen(a.def.x, dragonDef.displayHeight / 2) || this.routeOnScreen(a.route.points, dragonConfig.fire.halfThickness);
       }
@@ -525,6 +543,8 @@ export class Game {
       v.step(STEP_MS, { bird: target, seesBird, obstacles: this.villainObstacles(v.feet, v.top) });
     }
     this.stepBats(bird);
+    this.stepSwarms(bird);
+    this.stepBuzzSounds();
     for (const p of this.poos) p.step(STEP_MS);
     for (const a of this.apples) a.step(STEP_MS);
     for (const f of this.friends) f.step(STEP_MS);
@@ -551,12 +571,13 @@ export class Game {
     this.saveFriends();
     this.collectCoins();
     if (this.allSavedT !== null && (this.allSavedT += STEP_MS) >= config.levelComplete.graceMs) this.completeLevel();
-    // bird touching a walking villain, a flying bat, a dragon or its fire costs a life
+    // bird touching a walking villain, a flying bat, a fly swarm, a dragon or its fire costs a life
     const b = this.bird.body;
     const birdR = config.physics.birdRadius;
     const touches = (a: Villain | Bat | Dragon) =>
       a.touches(b.position.x, b.position.y, birdR) || (a instanceof Dragon && a.touchesBody(b.position.x, b.position.y, birdR));
-    if (!this.bird.dying && !this.bird.invulnerable && (this.villains.some(touches) || this.bats.some(touches) || this.dragons.some(touches))) {
+    const stung = this.swarms.some((sw) => !this.asleep.has(sw) && sw.touches(b.position.x, b.position.y, birdR));
+    if (!this.bird.dying && !this.bird.invulnerable && (this.villains.some(touches) || this.bats.some(touches) || this.dragons.some(touches) || stung)) {
       this.loseLife();
     }
     // ...and so does a bat's poo falling on it
@@ -642,6 +663,7 @@ export class Game {
     this.bird.makeInvulnerable(config.levelComplete.graceMs);
     for (const v of this.villains) v.frozen = true;
     for (const b of this.bats) b.frozen = true;
+    for (const sw of this.swarms) sw.frozen = true;
     audio.duckMusic(config.levelComplete.graceMs);
   }
 
@@ -778,6 +800,7 @@ export class Game {
     this.pooQueued = false;
     for (const p of this.poos) p.stopSound();
     for (const f of this.flameSounds.values()) f.stop();
+    for (const b of this.buzzSounds.values()) b.stop();
     audio.playOverMusic('fanfare');
   }
 
@@ -846,6 +869,45 @@ export class Game {
       // one already after the bird needn't look again
       const seesBird = !b.chasing && b.hittable && bird !== null && inSight(this.levelBodies, b.position, bird);
       b.step(STEP_MS, { field: this.homingField, others: flying.filter((o) => o !== b).map((o) => o.position), seesBird }, fireGap);
+    }
+  }
+
+  /**
+   * Steps the fly swarms: each goes for `bird` once it has seen it (null: none to go for), and for the bird's poos,
+   * falling or lying; the level's bodies, the ground, the level's ends and the dragons' fire are walls to it.
+   */
+  private stepSwarms(bird: { x: number; y: number } | null) {
+    if (!this.swarms.length) return;
+    const bodies = this.levelBodies, width = this.level.width;
+    const solid = (x: number, y: number) => y >= WORLD.groundY || y < 0 || x < 0 || x > width || Query.point(bodies, { x, y }).length > 0;
+    const poos: SwarmPoo[] = [];
+    for (const p of this.poos) {
+      if (p.owner !== 'bird') continue;
+      if (p.state === 'falling') poos.push({ id: p, x: p.body.position.x, y: p.body.position.y, lying: false });
+      else if (p.state === 'splat') poos.push({ id: p, x: p.view.x, y: p.view.y, lying: true });
+    }
+    for (const sw of this.swarms) {
+      if (this.asleep.has(sw)) continue;
+      const r = sw.minRadius;
+      const fireGap = this.dragons.length ? (p: { x: number; y: number }) => Math.min(Infinity, ...this.dragons.map((d) => d.gap(p.x, p.y, r))) : undefined;
+      // one already after the bird needn't look again
+      const seesBird = !sw.chasing && bird !== null && inSight(bodies, sw.position, bird);
+      sw.step(STEP_MS, { bodies, bird, seesBird, poos, solid, fireGap });
+    }
+  }
+
+  /** Each swarm buzzes while it's on the screen: higher and busier chasing, more so going for a poo or feeding on it. */
+  private stepBuzzSounds() {
+    if (!this.live) return;
+    for (const sw of this.swarms) {
+      let b = this.buzzSounds.get(sw);
+      if (!this.asleep.has(sw) && this.onScreen(sw.position.x, sw.radius)) {
+        if (!b || b.ended) this.buzzSounds.set(sw, (b = audio.startBuzz()));
+        b.set(1, sw.isFeeding ? 1 : sw.afterPoo ? 0.8 : sw.chasing ? 0.5 : 0.15);
+      } else if (b) {
+        b.stop();
+        this.buzzSounds.delete(sw);
+      }
     }
   }
 
@@ -1136,6 +1198,7 @@ export class Game {
     for (const a of this.apples) a.sync();
     for (const f of this.friends) f.sync();
     for (const d of this.dragons) d.sync();
+    for (const sw of this.swarms) sw.sync();
     for (const c of this.coins) c.sync();
   }
 }

@@ -21,6 +21,7 @@ import type { Branch, ButtonAction, FriendKind, JointDef, LevelDef, Material, Sh
  * |           | or a polyline, polygon         | the same, from its first point            |
  * |           | tile or point, no `path`       | a homing bat: no route, it goes for the bird, from the tile's centre / the point |
  * | Dragon    | tile, `path` a polyline or none | a dragon sitting where the tile's feet are, spitting fire `initialDelay` s into the level, then exactly `throwDelay` s after each spit, for `flameDuration` s: from its mouth along `path`, or without one straight ahead `fireLength` px; the tile flipped horizontally: it faces left |
+ * | Swarm     | point, or a tile               | a fly swarm, centred on the point / the tile's image: it goes for the bird once it sees it, and for the bird's poos |
  * | Friend    | point, or a tile               | a friend to save, standing on the point / where the tile's feet are |
  * | Coin      | point, or a tile               | a coin to collect, centred on the point / the tile's image |
  * | BirdStart | point, or a tile               | where the bird starts: its centre / where the tile shows it |
@@ -113,6 +114,7 @@ export const CLASS_DEFAULTS = {
   Villain: { kind: 'villain', path: 0, throwDelay: 4 },
   Bat: { path: 0, speed: 2, pooDelay: 3 },
   Dragon: { path: 0, fireLength: 240, initialDelay: 0, throwDelay: 4, flameDuration: 1 },
+  Swarm: {},
   Friend: { kind: 'bunny' },
   BirdStart: {},
   Coin: {},
@@ -140,6 +142,7 @@ const TILE_POSITIONS: Partial<Record<ClassName, { x: number; y: number }>> = {
   Villain: { x: 0.5, y: 1 },
   Bat: batDef.anchor,
   Dragon: { x: 0.5, y: 1 },
+  Swarm: { x: 0.5, y: 0.5 },
   Friend: { x: 0.5, y: 1 },
   BirdStart: birdDef.anchor,
 };
@@ -168,6 +171,7 @@ export function parseTiledMap(name: string, map: TiledMap, tilesets: Record<stri
     villains: [],
     bats: [],
     dragons: [],
+    swarms: [],
     friends: [],
     coins: [],
     bodies: [],
@@ -297,6 +301,12 @@ function addObject(level: LevelDef, o: TiledObject, tiles: TileLookup, objects: 
       if (route.every(([x, y]) => x === route[0][0] && y === route[0][1])) throw new Error('a Bat route needs some length');
       const { start, target } = tile ? nearestOnRoute(route, path.loop, tilePos()) : { start: route[0], target: 1 };
       level.bats.push({ route, loop: path.loop, start, target, speed, pooDelay });
+      break;
+    }
+    case 'Swarm': {
+      if (!tile) requirePoint(o);
+      const [x, y] = tile ? tilePos() : [o.x, o.y];
+      level.swarms.push({ x, y });
       break;
     }
     case 'Dragon': {

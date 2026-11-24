@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="130" height="130" viewBox="0 0 130 130">
+  <!-- The fly swarm's icon in Tiled (not drawn in the game): its full size as a dashed circle, a cloud, and a fly on it. -->
+  <circle cx="65" cy="65" r="63" fill="none" stroke="#3d4a2e" stroke-width="2" stroke-dasharray="6 5" opacity="0.55"/>
+  <!-- the cloud -->
+  <g fill="#e9eef0" stroke="#4b5560" stroke-width="3" stroke-linejoin="round">
+    <path d="M30 86 C14 86 12 64 28 62 C26 46 46 38 56 48 C62 32 88 32 92 50 C108 46 118 62 108 72 C120 80 110 96 96 92 C90 100 74 100 68 94 C60 100 40 98 30 86 Z"/>
+  </g>
+  <!-- the fly, sitting on top of the cloud -->
+  <g transform="translate(66 64)">
+    <!-- wings -->
+    <ellipse cx="-9" cy="-9" rx="10" ry="6" transform="rotate(-35 -9 -9)" fill="#cfe6f5" stroke="#2b2b2b" stroke-width="2" opacity="0.95"/>
+    <ellipse cx="9" cy="-9" rx="10" ry="6" transform="rotate(35 9 -9)" fill="#cfe6f5" stroke="#2b2b2b" stroke-width="2" opacity="0.95"/>
+    <!-- legs -->
+    <g stroke="#2b2b2b" stroke-width="2" stroke-linecap="round" fill="none">
+      <path d="M-5 2 L-12 6 L-14 11"/>
+      <path d="M5 2 L12 6 L14 11"/>
+      <path d="M-5 6 L-10 12"/>
+      <path d="M5 6 L10 12"/>
+    </g>
+    <!-- body and head -->
+    <ellipse cx="0" cy="4" rx="7" ry="10" fill="#2f3a24" stroke="#1a1a1a" stroke-width="2"/>
+    <circle cx="0" cy="-8" r="6" fill="#2f3a24" stroke="#1a1a1a" stroke-width="2"/>
+    <circle cx="-3.5" cy="-9" r="2.6" fill="#b5352a"/>
+    <circle cx="3.5" cy="-9" r="2.6" fill="#b5352a"/>
+  </g>
+  <!-- a few more flies about it -->
+  <g fill="#1f1a14">
+    <circle cx="22" cy="40" r="2"/>
+    <circle cx="104" cy="34" r="2"/>
+    <circle cx="112" cy="98" r="2"/>
+    <circle cx="20" cy="104" r="2"/>
+    <circle cx="44" cy="20" r="1.6"/>
+    <circle cx="88" cy="114" r="1.6"/>
+  </g>
+</svg>

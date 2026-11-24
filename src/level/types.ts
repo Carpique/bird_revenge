@@ -118,6 +118,16 @@ export interface BatDef {
   pooDelay: number;
 }
 
+/**
+ * A fly swarm: a cloud of tiny flies that can't be killed. It drifts about where it starts till it sees the bird, then
+ * goes for it; a poo of the bird's draws it off to feed. Touching it costs the bird a life.
+ */
+export interface SwarmDef {
+  /** where it starts: its centre */
+  x: number;
+  y: number;
+}
+
 /** A dragon sitting still, spitting a stream of fire now and then; touching it or its fire costs the bird a life. It can't be hurt: a poo splats on it. */
 export interface DragonDef {
   /** where its feet are */
@@ -173,6 +183,7 @@ export interface LevelDef {
   villains: VillainDef[];
   bats: BatDef[];
   dragons: DragonDef[];
+  swarms: SwarmDef[];
   /** saving all of them completes the level (a level without any never ends) */
   friends: FriendDef[];
   coins: CoinDef[];

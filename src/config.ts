@@ -558,6 +558,72 @@ export const config = {
     homingIdleRadius: 40,
   },
 
+  /**
+   * A fly swarm: a cloud of tiny flies that can't be killed. It goes for the bird once it sees it (as a homing bat does),
+   * but a poo of the bird's draws it off: it feeds on the nearest one till it's gone. Not in the tuning panel.
+   */
+  swarm: {
+    /** how many flies in a swarm (takes a level restart) */
+    flyCount: 40,
+    /** the swarm's diameter (px) at rest: about a dragon's width */
+    diameter: 130,
+    /** it squeezes down to this share of its diameter (each way) to get through a narrow gap, no further */
+    minScale: 0.5,
+    /** a fly's size on screen (px) */
+    flySize: 2.5,
+    /** at night and in the evening the flies glow: a halo this many times a fly's size round each */
+    glowSize: 5,
+    /** ...this strong (0–1) */
+    glowAlpha: 0.22,
+    /** the flies' colour by day (dark) and at dusk and night (bright, glowing) */
+    dayColor: '#1f1a14',
+    nightColor: '#f4ffb0',
+    // the swarm as a whole (its centre):
+    /** how fast it chases the bird (px per physics step) */
+    chaseSpeed: 3.8,
+    /** how fast it goes for a poo (px per physics step) */
+    pooSpeed: 2.6,
+    /** how quickly it turns: the share of the way from its velocity to the one it wants, each physics step */
+    turn: 0.05,
+    /** its heading swings this far (radians) either way of the way to its target... */
+    wander: 0.5,
+    /** ...about this many times a second */
+    wanderHz: 0.35,
+    /** ...and random jolts on top of that (px per step², at most), so it lurches rather than glides */
+    jitter: 0.15,
+    /** until it first sees the bird it drifts about where it started, this far (px) */
+    idleRadius: 30,
+    /** it goes for the bird's poo (falling or lying) up to this far away (px, centre to poo) */
+    pooRange: 700,
+    /** it settles on a lying poo to feed once its centre is this near (px) to where it feeds */
+    feedReach: 24,
+    /** how often (ms) the way to its target is worked out again */
+    replanMs: 300,
+    /** size (px) of the grid cells it finds its way on: finer than a bat's, for narrow gaps (takes a reload) */
+    cell: 8,
+    /** how far (px) beyond its squeezed size it keeps from things where it can */
+    clearance: 8,
+    // each fly: a Langevin particle in a harmonic well round the swarm's centre (the midge-swarm model, Okubo 1986;
+    // Kelley & Ouellette 2013), never leaving the swarm's outline:
+    /** the well's pull back to the centre (per step²): stronger, a tighter cloud */
+    flySpring: 0.006,
+    /** a fly's damping (per step) */
+    flyDamping: 0.08,
+    /** random kicks (px per step², standard deviation): stronger, a busier cloud */
+    flyNoise: 0.8,
+    /** a fly's top speed (px per step) */
+    flyMaxSpeed: 5,
+    // feeding on a poo:
+    /** feeding, the kicks are this much stronger... */
+    feedNoise: 1.6,
+    /** ...each fly darts down to the poo and back up, this fast (px per step²)... */
+    feedDart: 0.5,
+    /** ...rising up to this share of the swarm's height above it before diving again */
+    feedRise: 0.9,
+    /** ...over a patch this many times the splat's width */
+    feedSpread: 1.6,
+  },
+
   player: {
     lives: 3,
     /** after coming back from losing a life the bird blinks and can't be hurt for this long */
@@ -593,6 +659,8 @@ export const config = {
     fallMs: 1200,
     /** a dragon's fire, synthesised; keep it low, it's on for as long as the fire is out */
     flame: 0.12,
+    /** a fly swarm's buzz, synthesised; keep it low, it's on whenever a swarm is on the screen (a buzz-N.mp3 instead: set its level in volumes.json) */
+    buzz: 0.1,
     /** a poo hissing away in a dragon's fire, synthesised */
     hiss: 0.5,
     /** a body on a hinge squeaks while it turns at least this fast (deg/s) round it; one squeak at a time per hinge, played to its end */

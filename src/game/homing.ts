@@ -35,21 +35,35 @@ export function inSight(bodies: MBody[], a: Point, b: Point): boolean {
  * bodies may have moved, and the bird surely has — and `way` says which way a bat at a point should fly.
  */
 export class HomingField {
-  readonly cell = config.bat.homingCell;
+  readonly cell: number;
   readonly cols: number;
-  readonly rows = Math.ceil(WORLD.height / this.cell);
+  readonly rows: number;
   private kind: Uint8Array;
   private dist: Float64Array;
   private bird: Point | null = null;
+  /** half-size of the oval the one finding its way fits in (a bat: `batOutline`) */
+  private outline: { halfWidth: number; halfHeight: number };
+  /** how far (px) beyond its outline it keeps from things where it can */
+  private clearance: number;
 
-  /** `width`: the level's */
-  constructor(private width = WORLD.width) {
+  /**
+   * `width`: the level's. `opts`: for something other than a bat (a fly swarm): its outline, clearance and grid cell
+   * size; the bat's (`batOutline`, `config.bat`) when not given.
+   */
+  constructor(
+    private width = WORLD.width,
+    opts: { outline?: { halfWidth: number; halfHeight: number }; clearance?: number; cell?: number } = {},
+  ) {
+    this.cell = opts.cell ?? config.bat.homingCell;
+    this.outline = opts.outline ?? batOutline;
+    this.clearance = opts.clearance ?? config.bat.homingClearance;
+    this.rows = Math.ceil(WORLD.height / this.cell);
     this.cols = Math.ceil(width / this.cell);
     this.kind = new Uint8Array(this.cols * this.rows);
     this.dist = new Float64Array(this.cols * this.rows);
   }
 
-  /** Redraws the field around `bodies` (the level's), towards `bird` (null: no bird to go for). */
+  /** Redraws the field around `bodies` (the level's), towards `bird` (null: no bird to go for; or anything else to go to). */
   update(bodies: MBody[], bird: Point | null) {
     this.bird = bird;
     this.markObstacles(bodies);
@@ -93,7 +107,7 @@ export class HomingField {
    * off the world) its centre in it. A bat already in something can tell which way gets it out.
    */
   overlap(p: Point): number {
-    const { halfWidth: hw, halfHeight: hh } = batOutline;
+    const { halfWidth: hw, halfHeight: hh } = this.outline;
     if (p.y >= WORLD.height) return 1;
     // the world's edges, as walls
     let worst = Math.max(0, 1 - (Math.max(0, p.x) / hw) ** 2, 1 - (Math.max(0, this.width - p.x) / hw) ** 2, 1 - (Math.max(0, p.y) / hh) ** 2);
@@ -130,7 +144,7 @@ export class HomingField {
     // where its wings won't fit, its centre at the cell's
     for (let i = 0; i < kind.length; i++) if (kind[i] !== SOLID && this.blocked(this.centre(i))) kind[i] = BLOCKED;
     // the bat's clearance beyond its wings, round them and inside the world's edges
-    const reach = Math.ceil(config.bat.homingClearance / cell);
+    const reach = Math.ceil(this.clearance / cell);
     const blocked = kind.slice();
     for (let r = 0; r < rows; r++)
       for (let c = 0; c < cols; c++) {

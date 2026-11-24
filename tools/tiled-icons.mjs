@@ -17,6 +17,8 @@ const ICONS = [
   { out: 'dragon', svg: 'dragon/idle', height: 85, feet: 106 / 110 },
   { out: 'bunny', svg: 'friend/bunny/idle', height: 64, feet: 1 },
   { out: 'bird', svg: 'bird/idle', height: 90 },
+  // the fly swarm has no sprite: an icon of its own, its size config.swarm.diameter
+  { out: 'swarm', svg: 'swarm/icon', height: 130 },
 ];
 
 const browser = await puppeteer.launch({ headless: 'shell' });

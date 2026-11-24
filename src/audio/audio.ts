@@ -73,12 +73,14 @@ class GameAudio {
   private fallBus: GainNode | null = null;
   /** the fire sounds go through this, likewise */
   private flameBus: GainNode | null = null;
+  /** the fly swarms' synthesised buzz goes through this, likewise */
+  private buzzBus: GainNode | null = null;
   /** looped noise for the fire sounds: plain, and sparse pops (crackle); made on first use */
   private flameNoise: { hiss: AudioBuffer; crackle: AudioBuffer } | null = null;
-  /** fire sounds playing, with when they were last `set`; one not set for a while (the game stopped stepping) stops */
+  /** looped sounds playing (fires, swarms' buzz), with when they were last `set`; one not set for a while (the game stopped stepping) stops */
   private flames = new Map<FlameSound, number>();
   /** last levels applied (only push changes) */
-  private applied = { effects: -1, music: -1, theme: -1, fall: -1, flame: -1 };
+  private applied = { effects: -1, music: -1, theme: -1, fall: -1, flame: -1, buzz: -1 };
 
   constructor() {
     try {
@@ -280,6 +282,108 @@ class GameAudio {
     return flame;
   }
 
+  /**
+   * Starts a fly swarm's buzz, silent until `set`. `set` it every game step: how loud (0–1) and how worked up the swarm
+   * is (0 drifting, 0.5 chasing, 1 feeding: higher and busier). Not set for a while, it fades out and `ended` turns true.
+   * A `buzz-N.mp3` in public/assets/audio is played looped instead of the synthesised one (its level: volumes.json).
+   */
+  startBuzz(): BuzzSound {
+    const ctx = sound.context.audioContext;
+    const buzz: BuzzSound = { ended: true, set: () => {}, stop: () => {} };
+    if (ctx.state !== 'running' || this.suspended) return buzz;
+    const files = this.groups.get('buzz');
+    if (files?.length) return this.loopFile(buzz, files[Math.floor(Math.random() * files.length)]);
+    const t = ctx.currentTime;
+    const gain = (value: number) => {
+      const g = ctx.createGain();
+      g.gain.value = value;
+      return g;
+    };
+    const lfo = (hz: number, depth: number, to: AudioParam, type: OscillatorType = 'sine') => {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.value = hz;
+      o.connect(gain(depth)).connect(to);
+      o.start(t);
+      return o;
+    };
+    const env = gain(0);
+    // a fly's wings are a buzzy sawtooth round 150–250 Hz; a cloud of them, a few voices out of tune with each other,
+    // each one's pitch wandering (flies turning, coming near and going off) and its level swelling and fading
+    const body = ctx.createBiquadFilter();
+    body.type = 'bandpass';
+    body.frequency.value = 900;
+    body.Q.value = 0.8;
+    const top = ctx.createBiquadFilter();
+    top.type = 'lowpass';
+    top.frequency.value = 3800;
+    body.connect(top).connect(env).connect(this.buzzOut(ctx));
+    const voices: OscillatorNode[] = [];
+    const sources: OscillatorNode[] = [];
+    for (let i = 0; i < 5; i++) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = 165 + Math.random() * 90;
+      const level = gain(0.12);
+      sources.push(
+        lfo(0.2 + Math.random() * 0.6, 6 + Math.random() * 10, osc.frequency),
+        lfo(5 + Math.random() * 4, 2 + Math.random() * 2, osc.frequency, 'triangle'),
+        lfo(0.3 + Math.random() * 1.2, 0.08, level.gain),
+      );
+      osc.connect(level).connect(body);
+      osc.start(t);
+      voices.push(osc);
+    }
+    sources.push(...voices);
+
+    buzz.ended = false;
+    buzz.set = (level: number, excitement = 0) => {
+      if (buzz.ended) return;
+      this.flames.set(buzz, performance.now());
+      const now = ctx.currentTime;
+      const k = Math.min(1, Math.max(0, excitement));
+      env.gain.setTargetAtTime(Math.min(1, Math.max(0, level)) * (0.7 + 0.3 * k), now, 0.15);
+      // worked up: wings beating faster, up to a fifth higher, and brighter
+      for (const v of voices) v.detune.setTargetAtTime(700 * k, now, 0.3);
+      body.frequency.setTargetAtTime(900 + 700 * k, now, 0.3);
+    };
+    buzz.stop = () => {
+      if (buzz.ended) return;
+      buzz.ended = true;
+      this.flames.delete(buzz);
+      const now = ctx.currentTime;
+      env.gain.cancelScheduledValues(now);
+      env.gain.setTargetAtTime(0, now, 0.1);
+      for (const s of sources) s.stop(now + 0.6);
+    };
+    voices[0].addEventListener('ended', () => env.disconnect());
+    return buzz;
+  }
+
+  /** `buzz` as `file` played looped, faster (higher) as the swarm gets worked up. */
+  private loopFile(buzz: BuzzSound, file: string): BuzzSound {
+    const s = sound.find(file);
+    if (!s?.isLoaded) return buzz;
+    const played = s.play({ loop: true, volume: 0 });
+    if (played instanceof Promise) return buzz;
+    const base = fileVolume(file);
+    buzz.ended = false;
+    buzz.set = (level: number, excitement = 0) => {
+      if (buzz.ended) return;
+      this.flames.set(buzz, performance.now());
+      const k = Math.min(1, Math.max(0, excitement));
+      played.volume = base * Math.min(1, Math.max(0, level)) * (0.7 + 0.3 * k);
+      played.speed = 1 + 0.25 * k;
+    };
+    buzz.stop = () => {
+      if (buzz.ended) return;
+      buzz.ended = true;
+      this.flames.delete(buzz);
+      played.stop();
+    };
+    return buzz;
+  }
+
   /** A short "shhh": a poo evaporating in a fire (noise, its pitch and level falling away). */
   playHiss() {
     const ctx = sound.context.audioContext;
@@ -337,12 +441,14 @@ class GameAudio {
     const theme = v * config.audio.music * this.themeFade() * (this.themes.length ? fileVolume(this.themes[0]) : 1);
     const fall = v * config.audio.fall;
     const flame = v * config.audio.flame;
+    const buzz = v * config.audio.buzz;
     if (effects !== this.applied.effects) sound.volumeAll = effects;
     if (music !== this.applied.music) this.music.volume = Math.min(1, Math.max(0, music));
     if (theme !== this.applied.theme) this.theme.volume = Math.min(1, Math.max(0, theme));
     if (fall !== this.applied.fall && this.fallBus) this.fallBus.gain.value = fall;
     if (flame !== this.applied.flame && this.flameBus) this.flameBus.gain.value = flame;
-    this.applied = { effects, music, theme, fall, flame };
+    if (buzz !== this.applied.buzz && this.buzzBus) this.buzzBus.gain.value = buzz;
+    this.applied = { effects, music, theme, fall, flame, buzz };
     const now = performance.now();
     for (const [f, setAt] of this.flames) if (now - setAt > FLAME_TIMEOUT_MS) f.stop();
   }
@@ -427,6 +533,15 @@ class GameAudio {
       this.flameBus.connect((sound.context as webaudio.WebAudioContext).destination);
     }
     return this.flameBus;
+  }
+
+  private buzzOut(ctx: AudioContext): GainNode {
+    if (!this.buzzBus) {
+      this.buzzBus = ctx.createGain();
+      this.buzzBus.gain.value = this.applied.buzz;
+      this.buzzBus.connect((sound.context as webaudio.WebAudioContext).destination);
+    }
+    return this.buzzBus;
   }
 
   /** 2 s of white noise, and of sparse pops of it (a fire's crackle) */
@@ -533,6 +648,12 @@ export interface FlameSound {
   /** how loud, 0–1: how far the fire is out */
   set(level: number): void;
   stop(): void;
+}
+
+/** A fly swarm's buzz playing (`GameAudio.startBuzz`). */
+export interface BuzzSound extends FlameSound {
+  /** how loud (0–1), and how worked up the swarm is (0–1) */
+  set(level: number, excitement?: number): void;
 }
 
 /** a fire sound not `set` for this long stops */

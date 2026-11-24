@@ -12,6 +12,7 @@ import { batDef } from '../src/characters/bat';
 import { dragonDef } from '../src/characters/dragon';
 import { friendDefs } from '../src/characters/friend';
 import { villainDef, villainLooks } from '../src/characters/villain';
+import { config } from '../src/config';
 
 const levelFiles = import.meta.glob<string>(['../src/levels/*.tmj', '../src/levels/sets/*/*.tmj'], { query: '?raw', import: 'default', eager: true });
 const tilesetFiles = import.meta.glob<string>('../src/levels/*.tsj', { query: '?raw', import: 'default', eager: true });
@@ -134,7 +135,7 @@ describe('Tiled levels', () => {
     expect(() => parseTiledMap('t', mapOf([{ type: 'Coin', width: 10, height: 10 }]))).toThrow('must be a point');
     const map = mapOf([{ gid: 1, type: 'Terrain', width: 40, height: 40 }]);
     map.tilesets = [{ firstgid: 1, source: 'icons.tsj' }];
-    expect(() => parseTiledMap('t', map, tilesets)).toThrow('only a Coin, Villain, Bat, Dragon, Friend, BirdStart can be a tile');
+    expect(() => parseTiledMap('t', map, tilesets)).toThrow('only a Coin, Villain, Bat, Dragon, Swarm, Friend, BirdStart can be a tile');
     expect(() => parseTiledMap('t', map)).toThrow('tileset "icons.tsj" isn\'t loaded');
   });
 
@@ -190,7 +191,7 @@ describe('Tiled levels', () => {
   });
 
   describe('actor tiles (icons.tsj, bottom-centre aligned)', () => {
-    /** a map with the icons tileset (gid: coin 1, villain 2, bat 3, bunny 4, bird 5, ghost 6, dragon 7) and `objects` */
+    /** a map with the icons tileset (gid: coin 1, villain 2, bat 3, bunny 4, bird 5, ghost 6, dragon 7, swarm 8) and `objects` */
     const actorMap = (objects: Partial<TiledObject>[]) => {
       const map = mapOf(objects);
       map.tilesets = [{ firstgid: 1, source: 'icons.tsj' }];
@@ -200,7 +201,7 @@ describe('Tiled levels', () => {
       const tile = (tilesets['icons.tsj'] as { tiles: { id: number; imagewidth: number; imageheight: number }[] }).tiles[id];
       return { width: tile.imagewidth, height: tile.imageheight };
     };
-    const villain = { gid: 2, ...size(1) }, bat = { gid: 3, ...size(2) }, bunny = { gid: 4, ...size(3) }, bird = { gid: 5, ...size(4) }, ghost = { gid: 6, ...size(5) }, dragon = { gid: 7, ...size(6) };
+    const villain = { gid: 2, ...size(1) }, bat = { gid: 3, ...size(2) }, bunny = { gid: 4, ...size(3) }, bird = { gid: 5, ...size(4) }, ghost = { gid: 6, ...size(5) }, dragon = { gid: 7, ...size(6) }, swarm = { gid: 8, ...size(7) };
 
     it('has icons at the actors\' sizes in the game (else: npm run tiled-icons, and fix icons.tsj)', () => {
       // the villain's is cut at his feet
@@ -209,6 +210,13 @@ describe('Tiled levels', () => {
       expect(bunny.height).toBe(friendDefs.bunny.displayHeight);
       expect(bird.height).toBe(birdDef.displayHeight);
       expect(dragon.height).toBe(Math.round(dragonDef.displayHeight * dragonDef.anchor.y));
+      expect(swarm).toMatchObject({ width: config.swarm.diameter, height: config.swarm.diameter });
+    });
+
+    it('centres a fly swarm on its tile or point', () => {
+      const level = parseTiledMap('t', actorMap([{ ...swarm, x: 400, y: 300 }, { type: 'Swarm', point: true, x: 700, y: 200 }]), tilesets);
+      expect(level.swarms).toEqual([{ x: 400, y: 300 - swarm.height / 2 }, { x: 700, y: 200 }]);
+      expect(() => parseTiledMap('t', mapOf([{ type: 'Swarm', width: 10, height: 10 }]))).toThrow('must be a point');
     });
 
     it('sits a dragon at its feet, facing left when the tile is flipped, its fire straight ahead or along its path', () => {

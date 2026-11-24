@@ -9,9 +9,9 @@
  "name":"icons",
  "objectalignment":"bottom",
  "spacing":0,
- "tilecount":7,
+ "tilecount":8,
  "tiledversion":"1.12.2",
- "tileheight":127,
+ "tileheight":130,
  "tiles":[
         {
          "id":0,
@@ -121,6 +121,13 @@
          "imageheight":82,
          "imagewidth":131,
          "type":"Dragon"
+        }, 
+        {
+         "id":7,
+         "image":"tiles\/swarm.png",
+         "imageheight":130,
+         "imagewidth":130,
+         "type":"Swarm"
         }],
  "tilewidth":131,
  "type":"tileset",
