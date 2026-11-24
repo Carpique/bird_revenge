@@ -923,7 +923,7 @@ export class Game {
       let b = this.buzzSounds.get(sw);
       if (!this.asleep.has(sw) && !sw.burning && this.onScreen(sw.position.x, sw.radius)) {
         if (!b || b.ended) this.buzzSounds.set(sw, (b = audio.startBuzz()));
-        b.set(1, sw.isFeeding ? 1 : sw.afterPoo ? 0.8 : sw.chasing ? 0.5 : 0.15);
+        b.set(sw.isFeeding ? config.audio.buzzFeeding : 1, sw.isFeeding ? 1 : sw.afterPoo ? 0.8 : sw.chasing ? 0.5 : 0.15);
       } else if (b) {
         b.stop();
         this.buzzSounds.delete(sw);

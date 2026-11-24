@@ -682,7 +682,10 @@ export const config = {
     /** a dragon's fire, synthesised; keep it low, it's on for as long as the fire is out */
     flame: 0.12,
     /** a fly swarm's buzz, synthesised; keep it low, it's on whenever a swarm is on the screen (a buzz-N.mp3 instead: set its level in volumes.json) */
-    buzz: 0.1,
+    buzz: 0.25,
+    /** a swarm feeding on a poo buzzes at this fraction of its level, easing there (and back) over about `buzzFadeMs` */
+    buzzFeeding: 0.25,
+    buzzFadeMs: 500,
     /** a poo hissing away in a dragon's fire, synthesised */
     hiss: 0.5,
     /** a body on a hinge squeaks while it turns at least this fast (deg/s) round it; one squeak at a time per hinge, played to its end */

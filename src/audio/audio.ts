@@ -324,11 +324,11 @@ class GameAudio {
       const osc = ctx.createOscillator();
       osc.type = 'sawtooth';
       osc.frequency.value = 165 + Math.random() * 90;
-      const level = gain(0.12);
+      const level = gain(0.3);
       sources.push(
         lfo(0.2 + Math.random() * 0.6, 6 + Math.random() * 10, osc.frequency),
         lfo(5 + Math.random() * 4, 2 + Math.random() * 2, osc.frequency, 'triangle'),
-        lfo(0.3 + Math.random() * 1.2, 0.08, level.gain),
+        lfo(0.3 + Math.random() * 1.2, 0.2, level.gain),
       );
       osc.connect(level).connect(body);
       osc.start(t);
@@ -342,7 +342,8 @@ class GameAudio {
       this.flames.set(buzz, performance.now());
       const now = ctx.currentTime;
       const k = Math.min(1, Math.max(0, excitement));
-      env.gain.setTargetAtTime(Math.min(1, Math.max(0, level)) * (0.7 + 0.3 * k), now, 0.15);
+      // ~95% of the way there in buzzFadeMs
+      env.gain.setTargetAtTime(Math.min(1, Math.max(0, level)) * (0.7 + 0.3 * k), now, config.audio.buzzFadeMs / 3000);
       // worked up: wings beating faster, up to a fifth higher, and brighter
       for (const v of voices) v.detune.setTargetAtTime(700 * k, now, 0.3);
       body.frequency.setTargetAtTime(900 + 700 * k, now, 0.3);
@@ -367,12 +368,19 @@ class GameAudio {
     const played = s.play({ loop: true, volume: 0 });
     if (played instanceof Promise) return buzz;
     const base = fileVolume(file);
+    let volume = 0;
+    let setAt = performance.now();
     buzz.ended = false;
     buzz.set = (level: number, excitement = 0) => {
       if (buzz.ended) return;
-      this.flames.set(buzz, performance.now());
+      const now = performance.now();
+      this.flames.set(buzz, now);
       const k = Math.min(1, Math.max(0, excitement));
-      played.volume = base * Math.min(1, Math.max(0, level)) * (0.7 + 0.3 * k);
+      const target = base * Math.min(1, Math.max(0, level)) * (0.7 + 0.3 * k);
+      // eased towards, like the synthesised one: ~95% of the way there in buzzFadeMs
+      volume += (target - volume) * (1 - Math.exp((-3 * (now - setAt)) / Math.max(1, config.audio.buzzFadeMs)));
+      setAt = now;
+      played.volume = volume;
       played.speed = 1 + 0.25 * k;
     };
     buzz.stop = () => {
