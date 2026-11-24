@@ -915,7 +915,7 @@ export class Game {
     const a = pair.bodyA.parent, b = pair.bodyB.parent;
     const labels = [a.label, b.label];
     if (!labels.includes('poo')) {
-      if (labels.includes('body')) this.crush(a.label === 'body' ? a : b, a.label === 'body' ? b : a);
+      if (labels.includes('body')) this.crush(a.label === 'body' ? a : b, a.label === 'body' ? b : a, pair);
       return;
     }
     const pooBody = a.label === 'poo' ? a : b;
@@ -985,15 +985,26 @@ export class Game {
   }
 
   /**
-   * A movable body of the level (a crate) bounces off villains, bats and dragons: Matter does that. One falling on a walking
-   * villain or a flying bat knocks it off too, as the bird's poo does: once this step's bounce is done, so the crate goes
-   * its way, and nothing more bumps into the one knocked off. Dragons don't mind.
+   * A movable body of the level (a crate) bounces off villains, bats and dragons: Matter does that. One hitting a walking
+   * villain or a flying bat hard enough knocks it off too, as the bird's poo does: once this step's bounce is done, so the
+   * crate goes its way, and nothing more bumps into the one knocked off. Dragons don't mind.
+   * How hard: the speed, along the collision's normal, of the crate's point that touches it, spin included, so a crate
+   * falling on one counts as much as a swinging stick's tip hitting one sideways.
    */
-  private crush(crate: MBody, other: MBody) {
-    // as it came in: read before Matter turns it round
-    if (crate.velocity.y < config.crush.minSpeed) return;
+  private crush(crate: MBody, other: MBody, pair: MPair) {
     const c = this.villains.find((v) => v.body === other) ?? this.bats.find((b) => b.body === other);
     if (!c?.hittable) return;
+    // as it came in: read before Matter turns it round
+    // Matter reuses a 2-slot `supports` array; `supportCount` (untyped) says how many are this collision's
+    const { normal, supports } = pair.collision;
+    const supportCount = (pair.collision as unknown as { supportCount: number }).supportCount;
+    let px = 0, py = 0;
+    for (let i = 0; i < supportCount; i++) (px += supports[i].x), (py += supports[i].y);
+    const contact = supportCount ? { x: px / supportCount, y: py / supportCount } : other.position;
+    const rx = contact.x - crate.position.x, ry = contact.y - crate.position.y;
+    const w = crate.angularVelocity;
+    const vx = crate.velocity.x - w * ry, vy = crate.velocity.y + w * rx;
+    if (Math.abs(vx * normal.x + vy * normal.y) < config.crush.minSpeed) return;
     const { x, y } = other.position;
     this.pending.push(() => this.knockOff(c, x, y, 'collision'));
   }
