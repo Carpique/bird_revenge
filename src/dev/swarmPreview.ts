@@ -5,7 +5,7 @@ import { splatHalfWidth, splatLifetimeMs } from '../characters/poo';
 import { config, WORLD } from '../config';
 import { inSight } from '../game/homing';
 import { Bodies, Query, STEP_MS, type MBody } from '../game/physics';
-import { Swarm, type SwarmPoo } from '../game/Swarm';
+import { stepSwarms, Swarm, type SwarmPoo } from '../game/Swarm';
 import { fitWorld } from '../render/fitWorld';
 
 /**
@@ -89,7 +89,7 @@ async function main() {
   f.add(s, 'flyCount', 1, 300, 1);
   f.add(s, 'diameter', 40, 300, 1);
   f.add(s, 'minScale', 0.2, 1, 0.05);
-  f.add(s, 'flySize', 1, 8, 0.5);
+  f.add(s, 'flySize', 1, 8, 0.25);
   f.add(s, 'glowSize', 1, 8, 0.25);
   f.add(s, 'glowAlpha', 0, 1, 0.02);
   f.addColor(s, 'dayColor');
@@ -127,8 +127,8 @@ async function main() {
         }
         for (let i = poos.length - 1; i >= 0; i--) if (poos[i].ms >= splatLifetimeMs) poos.splice(i, 1);
         const seen: SwarmPoo[] = poos.map((p) => ({ id: p.id, x: p.x, y: p.y, lying: p.lying }));
+        stepSwarms(swarms, STEP_MS, (sw) => ({ bodies, bird, seesBird: !sw.chasing && inSight(bodies, sw.position, bird), poos: seen, solid }));
         for (const sw of swarms) {
-          sw.step(STEP_MS, { bodies, bird, seesBird: !sw.chasing && inSight(bodies, sw.position, bird), poos: seen, solid });
           const b = buzz.get(sw);
           if (ui.sound) {
             const playing = b && !b.ended ? b : audio.startBuzz();

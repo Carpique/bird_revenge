@@ -31,7 +31,7 @@ import { landingBranch } from './branches';
 import { Bodies, Body, Composite, Engine, Events, Query, Sleeping, STEP_MS, type MBody, type MEngine, type MPair } from './physics';
 import { Poo } from './Poo';
 import { surfaceHit } from './surfaceHit';
-import { Swarm, type SwarmPoo } from './Swarm';
+import { stepSwarms, Swarm, type SwarmPoo } from './Swarm';
 import { spanInBand, Villain, type HitCause, type Span } from './Villain';
 
 /** how far (px) a surface may be from a villain's feet and still be what he walks on */
@@ -874,7 +874,7 @@ export class Game {
 
   /**
    * Steps the fly swarms: each goes for `bird` once it has seen it (null: none to go for), and for the bird's poos,
-   * falling or lying; the level's bodies, the ground, the level's ends and the dragons' fire are walls to it.
+   * falling or lying, one swarm to a poo; the level's bodies, the ground, the level's ends and the dragons' fire are walls to it.
    */
   private stepSwarms(bird: { x: number; y: number } | null) {
     if (!this.swarms.length) return;
@@ -886,14 +886,14 @@ export class Game {
       if (p.state === 'falling') poos.push({ id: p, x: p.body.position.x, y: p.body.position.y, lying: false });
       else if (p.state === 'splat') poos.push({ id: p, x: p.view.x, y: p.view.y, lying: true });
     }
-    for (const sw of this.swarms) {
-      if (this.asleep.has(sw)) continue;
+    // one swarm to a poo (see `stepSwarms`)
+    stepSwarms(this.swarms.filter((sw) => !this.asleep.has(sw)), STEP_MS, (sw) => {
       const r = sw.minRadius;
       const fireGap = this.dragons.length ? (p: { x: number; y: number }) => Math.min(Infinity, ...this.dragons.map((d) => d.gap(p.x, p.y, r))) : undefined;
       // one already after the bird needn't look again
       const seesBird = !sw.chasing && bird !== null && inSight(bodies, sw.position, bird);
-      sw.step(STEP_MS, { bodies, bird, seesBird, poos, solid, fireGap });
-    }
+      return { bodies, bird, seesBird, poos, solid, fireGap };
+    });
   }
 
   /** Each swarm buzzes while it's on the screen: higher and busier chasing, more so going for a poo or feeding on it. */

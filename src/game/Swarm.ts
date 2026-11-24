@@ -47,8 +47,8 @@ const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2;
  *
  * The swarm as a whole is a point (its centre) that steers like a homing bat, only more erratically: it drifts about
  * where it started till it sees the bird (nothing of the level's in between), then goes for it round the level's bodies,
- * its heading swinging either way and jolted at random. A poo of the bird's (falling or lying, within `pooRange`) draws it
- * off: it chases the nearest one and, once it lies somewhere, settles on it and feeds till it's gone; then it goes back
+ * its heading swinging either way and jolted at random. Once it has seen the bird (not before: till then it ignores them),
+ * a poo of the bird's (falling or lying, within `pooRange`) draws it off: it chases the nearest one and, once it lies somewhere, settles on it and feeds till it's gone; then it goes back
  * to the bird.
  *
  * Each fly is a particle in a harmonic well round the swarm's centre, damped and kicked at random (the standard midge
@@ -59,7 +59,7 @@ const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2;
  * to fit (its oval narrower or flatter, shifted to fit between what's either side), so its flies crowd closer.
  */
 export class Swarm {
-  /** the flies, drawn as dots (and their glow, at dusk and night) */
+  /** the flies, drawn as dots (and their glow) */
   readonly view = new Container();
   /** hangs where it is (the level is won); its flies still buzz about */
   frozen = false;
@@ -122,7 +122,6 @@ export class Swarm {
     }
     const min = this.minRadius;
     this.field = new HomingField(levelWidth, { outline: { halfWidth: min, halfHeight: min }, clearance: s.clearance, cell: s.cell });
-    this.glow.blendMode = 'add';
     this.view.addChild(this.glow, this.dots);
   }
 
@@ -156,6 +155,11 @@ export class Swarm {
     return this.poo !== null;
   }
 
+  /** which poo it's going for (its `SwarmPoo.id`), or null */
+  get pooId(): object | null {
+    return this.poo?.id ?? null;
+  }
+
   /** where it started */
   get start(): Point {
     return { x: this.def.x, y: this.def.y };
@@ -166,7 +170,7 @@ export class Swarm {
     return { x: this.x + this.ox, y: this.y + this.oy, rx: this.rx, ry: this.ry };
   }
 
-  /** Glowing flies (dusk, night) or dark ones. */
+  /** Bright flies with a pale glow (dusk, night) or dark ones with a gold glow (day). */
   setNight(night: boolean) {
     this.night = night;
   }
@@ -183,8 +187,9 @@ export class Swarm {
 
   step(stepMs: number, senses: SwarmSenses) {
     this.age += stepMs / 1000;
-    this.choosePoo(senses.poos);
     if (senses.seesBird) this.spotted = true;
+    // on standby till it has seen the bird: poos don't draw it yet
+    this.choosePoo(this.spotted ? senses.poos : []);
     if (!this.frozen) {
       this.replan(stepMs, senses);
       this.steer(senses);
@@ -404,13 +409,14 @@ export class Swarm {
     this.dots.clear();
     this.glow.clear();
     if (!this.fx.length) return;
-    // the glow: a faint wide halo, and a stronger one close in, so it fades out rather than ending in a disc
-    if (this.night) {
-      for (let i = 0; i < this.fx.length; i++) this.glow.circle(this.fx[i], this.fy[i], (size * s.glowSize) / 2);
-      this.glow.fill({ color, alpha: s.glowAlpha * 0.5 });
-      for (let i = 0; i < this.fx.length; i++) this.glow.circle(this.fx[i], this.fy[i], (size * s.glowSize) / 4);
-      this.glow.fill({ color, alpha: s.glowAlpha });
-    }
+    // the glow: a faint wide halo, and a stronger one close in, so it fades out rather than ending in a disc;
+    // lit up against the dark at night, gold over the bright sky by day (like a coin's)
+    const glowColor = this.night ? s.nightColor : s.dayGlowColor;
+    this.glow.blendMode = this.night ? 'add' : 'normal';
+    for (let i = 0; i < this.fx.length; i++) this.glow.circle(this.fx[i], this.fy[i], (size * s.glowSize) / 2);
+    this.glow.fill({ color: glowColor, alpha: s.glowAlpha * 0.5 });
+    for (let i = 0; i < this.fx.length; i++) this.glow.circle(this.fx[i], this.fy[i], (size * s.glowSize) / 4);
+    this.glow.fill({ color: glowColor, alpha: s.glowAlpha });
     for (let i = 0; i < this.fx.length; i++) {
       // by day little dark squares are crisper than circles at this size
       if (this.night) this.dots.circle(this.fx[i], this.fy[i], size / 2);
@@ -421,6 +427,28 @@ export class Swarm {
 
   destroy() {
     this.view.destroy({ children: true });
+  }
+}
+
+/**
+ * Steps `swarms` (those in play) one after another, one swarm to a poo: each keeps the poo it's after and chooses only
+ * among those no other swarm has claimed, so the poo a swarm picks this step is out of the next one's choice.
+ * `sensesOf`: what each senses, with all the poos about.
+ */
+export function stepSwarms(swarms: readonly Swarm[], stepMs: number, sensesOf: (s: Swarm) => SwarmSenses) {
+  const claimed = new Map<object, Swarm>();
+  for (const s of swarms) {
+    const id = s.pooId;
+    if (id) claimed.set(id, s);
+  }
+  for (const s of swarms) {
+    const senses = sensesOf(s);
+    const before = s.pooId;
+    const free = senses.poos.filter((p) => (claimed.get(p.id) ?? s) === s);
+    s.step(stepMs, { ...senses, poos: free });
+    if (before && claimed.get(before) === s) claimed.delete(before);
+    const now = s.pooId;
+    if (now) claimed.set(now, s);
   }
 }
 

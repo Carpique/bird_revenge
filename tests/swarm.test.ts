@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { config, WORLD } from '../src/config';
 import { Bodies, Query, STEP_MS, type MBody } from '../src/game/physics';
-import { Swarm, type SwarmPoo, type SwarmSenses } from '../src/game/Swarm';
+import { stepSwarms, Swarm, type SwarmPoo, type SwarmSenses } from '../src/game/Swarm';
 
 const R = config.swarm.diameter / 2;
 
@@ -65,6 +65,19 @@ describe('a fly swarm', () => {
     expect(Math.hypot(s.position.x - bird.x, s.position.y - bird.y)).toBeLessThan(R * 1.5);
   });
 
+  it("ignores poos till it has seen the bird", () => {
+    const s = new Swarm({ x: 300, y: 300 }, WORLD.width);
+    const bird = { x: 1000, y: 200 };
+    const poo: SwarmPoo = { id: {}, x: 400, y: WORLD.groundY + 2, lying: true };
+    run(s, 300, () => sensesOf([], bird, false, [poo]));
+    expect(s.afterPoo).toBe(false);
+    expect(Math.hypot(s.position.x - 300, s.position.y - 300)).toBeLessThan(R);
+    // seen once: from then on a poo draws it, seen or not
+    run(s, 1, () => sensesOf([], bird, true, [poo]));
+    run(s, 1, () => sensesOf([], bird, false, [poo]));
+    expect(s.pooId).toBe(poo.id);
+  });
+
   /** a wall across the world with a gap `gap` px tall in it, centred at y 300, at x 600–640 */
   const wallWithGap = (gap: number) => [
     Bodies.rectangle(620, (300 - gap / 2) / 2, 40, 300 - gap / 2, { isStatic: true }),
@@ -91,6 +104,21 @@ describe('a fly swarm', () => {
     const s = new Swarm({ x: 300, y: 300 }, WORLD.width);
     run(s, 1500, () => sensesOf(bodies, { x: 1000, y: 300 }, true));
     expect(s.position.x).toBeLessThan(620);
+  });
+
+  it('shares out the poos, one swarm to a poo: a second swarm takes the other poo, or none', () => {
+    const a = new Swarm({ x: 300, y: 300 }, WORLD.width), b = new Swarm({ x: 360, y: 300 }, WORLD.width);
+    const bird = { x: 1000, y: 200 };
+    const near: SwarmPoo = { id: {}, x: 330, y: WORLD.groundY + 2, lying: true };
+    const far: SwarmPoo = { id: {}, x: 900, y: WORLD.groundY + 2, lying: true };
+    // one poo: one swarm goes for it, the other keeps after the bird
+    stepSwarms([a, b], STEP_MS, () => sensesOf([], bird, true, [near]));
+    expect([a.pooId, b.pooId].filter((id) => id === near.id)).toHaveLength(1);
+    expect([a.pooId, b.pooId]).toContain(null);
+    // two: one each, and they keep to them, both feeding
+    for (let i = 0; i < 900; i++) stepSwarms([a, b], STEP_MS, () => sensesOf([], bird, true, [near, far]));
+    expect(new Set([a.pooId, b.pooId])).toEqual(new Set([near.id, far.id]));
+    expect(a.isFeeding && b.isFeeding).toBe(true);
   });
 
   it("stays put, frozen, though its flies don't", () => {

@@ -570,14 +570,16 @@ export const config = {
     /** it squeezes down to this share of its diameter (each way) to get through a narrow gap, no further */
     minScale: 0.5,
     /** a fly's size on screen (px) */
-    flySize: 2.5,
-    /** at night and in the evening the flies glow: a halo this many times a fly's size round each */
+    flySize: 3.25,
+    /** the flies glow: a halo this many times a fly's size round each */
     glowSize: 5,
     /** ...this strong (0–1) */
     glowAlpha: 0.22,
     /** the flies' colour by day (dark) and at dusk and night (bright, glowing) */
     dayColor: '#1f1a14',
     nightColor: '#f4ffb0',
+    /** the glow's colour by day (gold, like a coin's); at dusk and night it's `nightColor` */
+    dayGlowColor: '#ffc300',
     // the swarm as a whole (its centre):
     /** how fast it chases the bird (px per physics step) */
     chaseSpeed: 3.8,
