@@ -66,7 +66,9 @@ const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2;
  * down over the poo instead, faster, each on its own.
  *
  * It needs room: a gap at least `minScale` of its diameter each way. In a narrower space than its diameter it squeezes
- * to fit (its oval narrower or flatter, shifted to fit between what's either side), so its flies crowd closer.
+ * to fit (its oval narrower or flatter, shifted to fit between what's either side), so its flies crowd closer; a gap
+ * narrower than that it doesn't squeeze for at all. Caught in something (a swinging beam swung into it), it may only
+ * back out of it, never on through it.
  *
  * A dragon's fire is a wall to it while it's out, as to a homing bat: it slides along it, or stops; one caught in it
  * may move only so as not to go in deeper. But fire that comes at it (spat at it, or rolling out over it) burns it
@@ -374,8 +376,8 @@ export class Swarm {
     // move only to get out
     const ignore = shove?.by ?? [];
     // the fire, as for a bat: one already in it may move only so as not to go in deeper
-    const fitsNow = this.fits(this.x, this.y, senses, ignore);
-    const free = (x: number, y: number) => (!fitsNow || this.fits(x, y, senses, ignore)) && this.clearOfFire(x, y, senses);
+    const now = this.overlap(this.x, this.y, senses, ignore);
+    const free = (x: number, y: number) => this.easesOverlap(now, x, y, senses, ignore) && this.clearOfFire(x, y, senses);
     const x0 = this.x, y0 = this.y;
     const nx = this.x + this.v.x + this.push.x, ny = this.y + this.v.y + this.push.y;
     if (free(nx, ny)) [this.x, this.y] = [nx, ny];
@@ -480,14 +482,37 @@ export class Swarm {
    * bodies shoving it aside)?
    */
   private fits(x: number, y: number, senses: SwarmSenses, ignore: MBody[] = []) {
+    return this.overlap(x, y, senses, ignore).blocked === 0;
+  }
+
+  /**
+   * How much of its smallest circle at (x, y) is in something solid (but for `ignore`): how many of its test points
+   * (its centre and `FIT_POINTS` round it), and the way out (from those points towards the centre; zero: none, or only
+   * the centre).
+   */
+  private overlap(x: number, y: number, senses: SwarmSenses, ignore: MBody[] = []) {
     const r = this.minRadius * 0.95;
     const solid = (px: number, py: number) => senses.solid(px, py) && !(ignore.length && Query.point(ignore, { x: px, y: py }).length);
-    if (solid(x, y)) return false;
+    let blocked = solid(x, y) ? 1 : 0, ex = 0, ey = 0;
     for (let i = 0; i < FIT_POINTS; i++) {
-      const a = (i / FIT_POINTS) * 2 * Math.PI;
-      if (solid(x + Math.cos(a) * r, y + Math.sin(a) * r)) return false;
+      const a = (i / FIT_POINTS) * 2 * Math.PI, dx = Math.cos(a), dy = Math.sin(a);
+      if (!solid(x + dx * r, y + dy * r)) continue;
+      blocked++;
+      ex -= dx;
+      ey -= dy;
     }
-    return true;
+    return { blocked, ex, ey };
+  }
+
+  /**
+   * May it go from where it is (its overlap there: `now`) to (x, y)? Fitting now: only where it fits too. Already in
+   * something (a swinging beam swung into it): only out of it, never deeper (no more of it in, nor any way into it),
+   * so it can't slip through what it's caught in.
+   */
+  private easesOverlap(now: { blocked: number; ex: number; ey: number }, x: number, y: number, senses: SwarmSenses, ignore: MBody[]) {
+    if (now.blocked === 0) return this.fits(x, y, senses, ignore);
+    if ((x - this.x) * now.ex + (y - this.y) * now.ey < 0) return false;
+    return this.overlap(x, y, senses, ignore).blocked <= now.blocked;
   }
 
   /** Does going to (x, y) keep it out of the dragons' fire, or (already in it) at least go no deeper, as for a bat? */
@@ -518,10 +543,12 @@ export class Swarm {
       down = Math.min(down, free(0, 1, off, 0));
     }
     const fit = (neg: number, pos: number) => {
-      const half = Math.max(min, Math.min(R, (neg + pos) / 2));
+      // too narrow for it even squeezed as far as it goes (`minScale` of its full size): it doesn't squeeze for it
+      // (it won't get through), but keeps its size, its flies just kept out of what's in the way
+      if (neg + pos < 2 * min) return [R, 0];
+      const half = Math.min(R, (neg + pos) / 2);
       // shifted off the centre only as far as it must be to keep clear of either side
-      const off = half <= min && neg + pos < 2 * min ? (pos - neg) / 2 : Math.min(Math.max(0, half - neg), pos - half);
-      return [half, off];
+      return [half, Math.min(Math.max(0, half - neg), pos - half)];
     };
     const [rx, ox] = fit(left, right), [ry, oy] = fit(up, down);
     const ease = (from: number, to: number) => from + (to - from) * (to < from ? 0.35 : 0.06);
