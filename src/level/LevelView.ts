@@ -49,6 +49,8 @@ const style = (seed: number, fill: string, extra: Options = {}): Options => ({
 export class LevelView extends Container {
   private movers: { item: LevelBody; sprite: Sprite }[] = [];
   private jointLines = new Graphics();
+  /** each joint's ends as last drawn (ax, ay, bx, by); NaN: not drawn yet */
+  private jointEnds: Float64Array;
   /** by terrain id */
   private doors = new Map<number, { sprite: Sprite; solid: boolean; blink: boolean }>();
   /** by button id */
@@ -56,6 +58,7 @@ export class LevelView extends Container {
 
   constructor(level: LevelDef, private built: BuiltLevel) {
     super();
+    this.jointEnds = new Float64Array(built.joints.length * 4).fill(NaN);
     const targets = new Set(level.buttons.filter((b) => b.action !== 'unfreeze').map((b) => b.target));
     const terrain = built.bodies.filter((b) => b.def.kind === 'terrain' && !targets.has(b.def.id));
     this.addChild(...staticSprites(level, terrain));
@@ -111,12 +114,36 @@ export class LevelView extends Container {
       sprite.position.set(item.body.position.x, item.body.position.y);
       sprite.rotation = item.body.angle;
     }
-    const g = this.jointLines.clear();
-    for (const { def, constraint } of this.built.joints) {
+    this.syncJoints();
+  }
+
+  /**
+   * Redraws the joints only when one of their ends has moved: rebuilding a Graphics makes PixiJS rebuild the whole
+   * render group's instructions, which every frame cost more than drawing the level.
+   */
+  private syncJoints() {
+    const joints = this.built.joints;
+    if (!joints.length) return;
+    const ends = this.jointEnds;
+    let moved = false;
+    joints.forEach(({ constraint }, i) => {
       const a = Constraint.pointAWorld(constraint), b = Constraint.pointBWorld(constraint);
-      if (def.kind === 'rope') g.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ color: INK, width: 2.5 });
-      g.circle(b.x, b.y, 5).fill(BARK).stroke({ color: INK, width: 2 });
-    }
+      const k = i * 4;
+      if (Math.abs(ends[k] - a.x) + Math.abs(ends[k + 1] - a.y) + Math.abs(ends[k + 2] - b.x) + Math.abs(ends[k + 3] - b.y) > 0.05 || Number.isNaN(ends[k])) {
+        ends[k] = a.x;
+        ends[k + 1] = a.y;
+        ends[k + 2] = b.x;
+        ends[k + 3] = b.y;
+        moved = true;
+      }
+    });
+    if (!moved) return;
+    const g = this.jointLines.clear();
+    joints.forEach(({ def }, i) => {
+      const k = i * 4, bx = ends[k + 2], by = ends[k + 3];
+      if (def.kind === 'rope') g.moveTo(ends[k], ends[k + 1]).lineTo(bx, by).stroke({ color: INK, width: 2.5 });
+      g.circle(bx, by, 5).fill(BARK).stroke({ color: INK, width: 2 });
+    });
   }
 
   override destroy() {

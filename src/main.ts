@@ -4,6 +4,7 @@ import { audio } from './audio/audio';
 import { changedConfig, config, loadSavedConfig } from './config';
 import type { BirdSample } from './game/Bird';
 import { Game } from './game/Game';
+import { STEP_MS } from './game/physics';
 import { DEMO, firstLevel, levels, listedLevels, nextLevel, onLevelEdited, testLevelName, TRAINING } from './levels';
 import { markCompleted, unlockedLevels } from './levels/progress';
 import { Thumbnails } from './level/thumbnails';
@@ -25,6 +26,7 @@ import { PoseTracker, type PoseTiming } from './pose/PoseTracker';
 import { outOfFrameCause, recalCause } from './pose/trackingStats';
 import type { PoseFrame } from './pose/types';
 import { loadAllAssets } from './render/assets';
+import { capFrameRate } from './render/frameCap';
 import { isPortrait } from './render/fitWorld';
 import { scenery } from './scenery/scenery';
 import { DebugPanel } from './ui/DebugPanel';
@@ -86,6 +88,9 @@ async function main() {
     background: scenery.skyColor,
   });
   gameBox.appendChild(app.canvas);
+  // the game steps at 60 Hz (`STEP_MS`), without interpolating in between: a faster screen (120 Hz) would only draw
+  // every frame twice, at twice the cost; `renderFrame` draws one regardless
+  const renderFrame = capFrameRate(app.ticker, 1000 / STEP_MS);
   // the canvas as big as its box, checked every frame before anything is laid out: the resize event alone isn't enough,
   // iOS Safari may still report the old size while turning, and then the game stays drawn too big
   app.ticker.add(() => {
@@ -482,7 +487,7 @@ async function main() {
       // render one last frame (with the "Pause" sign if paused), then stop the render loop
       game.paused = true;
       game.showPausedText = manualPause;
-      app.ticker.update(now);
+      renderFrame(now);
       app.ticker.stop();
     } else {
       countdownEnd += now - suspendedAt;
@@ -653,6 +658,12 @@ async function main() {
     syncPose();
   };
 
+  /** the canvas's rect for placing the corner icons, read again when `cornerBoxKey` (the sizes it depends on) changes */
+  let cornerBox = app.canvas.getBoundingClientRect();
+  let cornerBoxKey = '';
+  /** the corner icons' CSS variables as last written */
+  let cornerVars = '';
+
   // per render frame: state timers, controls, HUD, debug
   app.ticker.add(() => {
     const now = performance.now();
@@ -702,13 +713,23 @@ async function main() {
     if (!splash.visible) {
       // over the game's slot for them, at the end of the hearts' row, scaled with the world
       game.cornerIcons = +fullscreen.visible + +menuButton.visible;
-      const box = app.canvas.getBoundingClientRect();
+      // the canvas's place only moves with the window or the canvas's size: reading it every frame forces a layout
+      const boxKey = `${window.innerWidth}x${window.innerHeight} ${app.screen.width}x${app.screen.height} ${document.body.classList.contains('boxed')}`;
+      if (boxKey !== cornerBoxKey) {
+        cornerBoxKey = boxKey;
+        cornerBox = app.canvas.getBoundingClientRect();
+      }
       const s = game.root.scale.x;
       const slot = game.cornerSlot;
-      corner.style.setProperty('--fs-x', `${box.left + game.root.x + slot.x * s}px`);
-      corner.style.setProperty('--fs-y', `${box.top + game.root.y + slot.y * s}px`);
-      corner.style.setProperty('--fs-size', `${slot.size * s}px`);
-      corner.style.setProperty('--fs-gap', `${slot.gap * s}px`);
+      const vars = `${cornerBox.left + game.root.x + slot.x * s} ${cornerBox.top + game.root.y + slot.y * s} ${slot.size * s} ${slot.gap * s}`;
+      if (vars !== cornerVars) {
+        cornerVars = vars;
+        const [x, y, size, gap] = vars.split(' ');
+        corner.style.setProperty('--fs-x', `${x}px`);
+        corner.style.setProperty('--fs-y', `${y}px`);
+        corner.style.setProperty('--fs-size', `${size}px`);
+        corner.style.setProperty('--fs-gap', `${gap}px`);
+      }
     }
     // a phone held upright: the game (and the instructions' demonstration) in a 16:9 box as wide as the screen,
     // with a hint to turn it; the title screen fills it, laid out for it

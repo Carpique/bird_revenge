@@ -39,7 +39,8 @@ export class LanguageButton {
   }
 
   set visible(v: boolean) {
-    this.button.hidden = !v;
+    // set every frame: writing it even unchanged invalidates the page's style
+    if (this.button.hidden !== !v) this.button.hidden = !v;
   }
 
   private other(): Lang {

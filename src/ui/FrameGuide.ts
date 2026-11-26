@@ -216,6 +216,8 @@ export class FrameGuide {
   /** the canvas's size, in CSS px */
   private W = 1;
   private H = 1;
+  /** the canvas is cleared and the PixiJS items hidden: drawing `hidden` again has nothing to do */
+  private blank = false;
   /** offscreen, the player's figure drawn opaque, then laid over the panel see-through (rough.js's strokes overlap) */
   private layer = document.createElement('canvas');
   private layerRc = rough.canvas(this.layer);
@@ -295,6 +297,9 @@ export class FrameGuide {
       this.layer.width = this.canvas.width;
       this.layer.height = this.canvas.height;
     }
+    // hidden, as it is through the game: once cleared, the canvas stays blank (clearing it again every frame makes
+    // the browser composite the full-screen layer anew)
+    if (s.mode === 'hidden' && this.blank) return;
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -303,7 +308,8 @@ export class FrameGuide {
     this.ignore.visible = false;
     this.share.visible = false;
     this.askIgnore.visible = false;
-    if (s.mode === 'hidden') return;
+    this.blank = s.mode === 'hidden';
+    if (this.blank) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     switch (s.mode) {
