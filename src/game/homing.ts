@@ -41,6 +41,8 @@ export class HomingField {
   private kind: Uint8Array;
   private dist: Float64Array;
   private bird: Point | null = null;
+  /** the Dijkstra's queue, kept from one `update` to the next */
+  private heap = new MinHeap();
   /** half-size of the oval the one finding its way fits in (a bat: `batOutline`) */
   private outline: { halfWidth: number; halfHeight: number };
   /** how far (px) beyond its outline it keeps from things where it can */
@@ -141,8 +143,7 @@ export class HomingField {
           if (corners.some((pt) => Query.point([b], pt).length)) kind[r * cols + c] = SOLID;
         }
     }
-    // where its wings won't fit, its centre at the cell's
-    for (let i = 0; i < kind.length; i++) if (kind[i] !== SOLID && this.blocked(this.centre(i))) kind[i] = BLOCKED;
+    this.markBlocked();
     // the bat's clearance beyond its wings, round them and inside the world's edges
     const reach = Math.ceil(this.clearance / cell);
     const blocked = kind.slice();
@@ -162,17 +163,76 @@ export class HomingField {
       }
   }
 
+  /**
+   * Marks BLOCKED the cells (not SOLID) a bat with its centre at theirs would be in something from (see `blocked`): the
+   * same cells as `blocked(centre)` says, but worked out from the SOLID cells outwards rather than looking round every
+   * cell, and only from those at the edge of something (next to one that isn't SOLID): any cell a SOLID one reaches, one
+   * at its edge reaches too, nearer it, on the straight line between them.
+   */
+  private markBlocked() {
+    const { cell, cols, rows, kind } = this;
+    const { halfWidth: hw, halfHeight: hh } = this.outline;
+    // the world's edges, as walls (as in `overlap`): a centre nearer one than the oval reaches
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++) {
+        const i = r * cols + c;
+        if (kind[i] === SOLID) continue;
+        const x = (c + 0.5) * cell, y = (r + 0.5) * cell;
+        if (x < hw || this.width - x < hw || y < hh) kind[i] = BLOCKED;
+      }
+    // which cells round a SOLID one it reaches: those whose centre's oval its square is in (its nearest point to the centre)
+    const stencil = this.blockStencil();
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++) {
+        if (kind[r * cols + c] !== SOLID || !this.atEdge(r, c)) continue;
+        for (const [dc, dr] of stencil) {
+          const rr = r + dr, cc = c + dc;
+          if (rr < 0 || cc < 0 || rr >= rows || cc >= cols) continue;
+          const j = rr * cols + cc;
+          if (kind[j] === OPEN) kind[j] = BLOCKED;
+        }
+      }
+  }
+
+  /** the offsets (cells) from a SOLID cell to the cells whose centre's oval takes in some of it */
+  private blockStencil(): [number, number][] {
+    const { cell } = this;
+    const { halfWidth: hw, halfHeight: hh } = this.outline;
+    const kc = Math.ceil(hw / cell) + 1, kr = Math.ceil(hh / cell) + 1;
+    const out: [number, number][] = [];
+    for (let dr = -kr; dr <= kr; dr++)
+      for (let dc = -kc; dc <= kc; dc++) {
+        // the SOLID cell's nearest point to the other cell's centre, as in `overlap`
+        const dx = Math.max(0, (Math.abs(dc) - 0.5) * cell), dy = Math.max(0, (Math.abs(dr) - 0.5) * cell);
+        if (1 - (dx / hw) ** 2 - (dy / hh) ** 2 > 0) out.push([dc, dr]);
+      }
+    return out;
+  }
+
+  /** Is the SOLID cell at (r, c) next to (8 ways) one that isn't? */
+  private atEdge(r: number, c: number) {
+    const { cols, rows, kind } = this;
+    for (let dr = -1; dr <= 1; dr++)
+      for (let dc = -1; dc <= 1; dc++) {
+        const rr = r + dr, cc = c + dc;
+        if (rr >= 0 && cc >= 0 && rr < rows && cc < cols && kind[rr * cols + cc] !== SOLID) return true;
+      }
+    return false;
+  }
+
   /** Dijkstra from the bird's cell (which counts as open, wherever the bird is), 8 ways, never into a SOLID cell. */
   private spread(from: number) {
     const { cols, rows, kind, dist } = this;
-    const heap = new MinHeap();
+    const heap = this.heap;
+    heap.clear();
     dist[from] = 0;
     heap.push(from, 0);
     while (heap.size) {
-      const [i, d] = heap.pop();
+      const i = heap.pop(), d = heap.poppedKey;
       if (d > dist[i]) continue;
       const r = Math.floor(i / cols), c = i % cols;
-      for (const [dc, dr, len] of STEPS) {
+      for (let k = 0; k < STEPS.length; k++) {
+        const step = STEPS[k], dc = step[0], dr = step[1], len = step[2];
         const cc = c + dc, rr = r + dr;
         if (cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
         const j = rr * cols + cc;
@@ -235,20 +295,28 @@ const unit = (x: number, y: number): Point | null => {
   return len > 1e-6 ? { x: x / len, y: y / len } : null;
 };
 
-/** A binary min-heap of (item, key). */
+/** A binary min-heap of (item, key): typed arrays, grown as needed and kept, so a search allocates nothing. */
 class MinHeap {
-  private items: number[] = [];
-  private keys: number[] = [];
+  private items = new Int32Array(1024);
+  private keys = new Float64Array(1024);
+  size = 0;
+  /** the key of the item `pop` last took */
+  poppedKey = 0;
 
-  get size() {
-    return this.items.length;
+  clear() {
+    this.size = 0;
   }
 
   push(item: number, key: number) {
+    if (this.size === this.items.length) {
+      const items = new Int32Array(this.size * 2), keys = new Float64Array(this.size * 2);
+      items.set(this.items);
+      keys.set(this.keys);
+      this.items = items;
+      this.keys = keys;
+    }
     const { items, keys } = this;
-    let i = items.length;
-    items.push(item);
-    keys.push(key);
+    let i = this.size++;
     while (i > 0) {
       const p = (i - 1) >> 1;
       if (keys[p] <= key) break;
@@ -260,11 +328,13 @@ class MinHeap {
     keys[i] = key;
   }
 
-  pop(): [number, number] {
+  /** Takes the item with the smallest key (its key: `poppedKey`). */
+  pop(): number {
     const { items, keys } = this;
-    const top: [number, number] = [items[0], keys[0]];
-    const item = items.pop()!, key = keys.pop()!;
-    const n = items.length;
+    const top = items[0];
+    this.poppedKey = keys[0];
+    const n = --this.size;
+    const item = items[n], key = keys[n];
     if (n) {
       let i = 0;
       for (;;) {

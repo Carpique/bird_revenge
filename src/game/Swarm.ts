@@ -1,4 +1,4 @@
-import { Container, Graphics } from 'pixi.js';
+import { CanvasSource, Container, Sprite, Texture } from 'pixi.js';
 import { Smoke } from '../render/Smoke';
 import { splatHalfWidth } from '../characters/poo';
 import { config } from '../config';
@@ -92,8 +92,11 @@ export class Swarm {
   private burnT: number | null = null;
   /** its smoke while it burns away */
   private smoke: Smoke | null = null;
-  private dots = new Graphics();
-  private glow = new Graphics();
+  /** the flies' dots, and the two rings of their glow (a faint wide halo and a stronger one close in): a sprite per fly in each, moved each frame */
+  private dots = new Container();
+  private glow = new Container();
+  private glowOuter = new Container();
+  private glowInner = new Container();
   /** glowing flies (evening, night) or dark ones (morning, afternoon) */
   private night = false;
   /** its centre: what steers */
@@ -153,6 +156,7 @@ export class Swarm {
     }
     const min = this.minRadius;
     this.field = new HomingField(levelWidth, { outline: { halfWidth: min, halfHeight: min }, clearance: s.clearance, cell: s.cell });
+    this.glow.addChild(this.glowOuter, this.glowInner);
     this.view.addChild(this.glow, this.dots);
     // square, its corners rounded: flat on top, so what comes to rest on it stays there as on a crate
     this.body = Bodies.rectangle(this.x, this.y, 2 * min, 2 * min, {
@@ -314,12 +318,15 @@ export class Swarm {
     return null;
   }
 
-  /** Works the way to its target out again every `replanMs`, or at once when the target changes. */
+  /**
+   * Works the way to its target out again every `replanMs` (give or take a fifth, at random, so the swarms of a level
+   * don't all do it in the same frame: it's the costliest thing they do), or at once when the target changes.
+   */
   private replan(stepMs: number, senses: SwarmSenses) {
     const t = this.target(senses);
     this.replanIn -= stepMs;
     if (this.replanIn > 0 && (t?.id ?? null) === this.fieldTarget) return;
-    this.replanIn = config.swarm.replanMs;
+    this.replanIn = config.swarm.replanMs * randomBetween(0.8, 1.2);
     this.fieldTarget = t?.id ?? null;
     this.field.update(senses.bodies, t?.at ?? null);
   }
@@ -640,32 +647,67 @@ export class Swarm {
     if (this.burnT !== null) {
       // burning: the flies fade away where they are, the smoke rising
       const fade = Math.max(0, 1 - this.burnT / (config.evaporate.shrinkMs * s.burnSlow));
-      this.dots.alpha = this.glow.alpha = fade;
+      this.glow.alpha = fade;
+      this.dots.alpha = fade * (this.night ? 1 : 0.9);
       this.smoke?.sync();
       return;
     }
-    this.dots.clear();
-    this.glow.clear();
-    if (!this.fx.length) return;
+    const n = this.fx.length;
+    if (!n) return;
+    if (this.dots.children.length !== n) this.makeSprites(n);
     // the glow: a faint wide halo, and a stronger one close in, so it fades out rather than ending in a disc;
     // lit up against the dark at night, gold over the bright sky by day (like a coin's)
     const glowColor = this.night ? s.nightColor : s.dayGlowColor;
     this.glow.blendMode = this.night ? 'add' : 'normal';
-    for (let i = 0; i < this.fx.length; i++) this.glow.circle(this.fx[i], this.fy[i], (size * s.glowSize) / 2);
-    this.glow.fill({ color: glowColor, alpha: s.glowAlpha * 0.5 });
-    for (let i = 0; i < this.fx.length; i++) this.glow.circle(this.fx[i], this.fy[i], (size * s.glowSize) / 4);
-    this.glow.fill({ color: glowColor, alpha: s.glowAlpha });
-    for (let i = 0; i < this.fx.length; i++) {
-      // by day little dark squares are crisper than circles at this size
-      if (this.night) this.dots.circle(this.fx[i], this.fy[i], size / 2);
-      else this.dots.rect(this.fx[i] - size / 2, this.fy[i] - size / 2, size, size);
+    this.glowOuter.tint = this.glowInner.tint = glowColor;
+    this.glowOuter.alpha = s.glowAlpha * 0.5;
+    this.glowInner.alpha = s.glowAlpha;
+    this.dots.tint = color;
+    this.dots.alpha = this.night ? 1 : 0.9;
+    const outer = (size * s.glowSize) / DISC_SIZE, inner = outer / 2;
+    // by day little dark squares are crisper than circles at this size
+    const dotTexture = this.night ? disc() : Texture.WHITE;
+    const dot = size / dotTexture.width;
+    const o = this.glowOuter.children, g = this.glowInner.children, d = this.dots.children as Sprite[];
+    for (let i = 0; i < n; i++) {
+      const x = this.fx[i], y = this.fy[i];
+      o[i].position.set(x, y);
+      o[i].scale.set(outer);
+      g[i].position.set(x, y);
+      g[i].scale.set(inner);
+      if (d[i].texture !== dotTexture) d[i].texture = dotTexture;
+      d[i].position.set(x, y);
+      d[i].scale.set(dot);
     }
-    this.dots.fill({ color, alpha: this.night ? 1 : 0.9 });
+  }
+
+  /** A sprite per fly in each of the glow's rings and in the dots, all centred on the fly. */
+  private makeSprites(n: number) {
+    for (const c of [this.glowOuter, this.glowInner, this.dots]) {
+      c.removeChildren().forEach((sp) => sp.destroy());
+      for (let i = 0; i < n; i++) c.addChild(new Sprite({ texture: c === this.dots ? Texture.WHITE : disc(), anchor: 0.5 }));
+    }
   }
 
   destroy() {
     this.view.destroy({ children: true });
   }
+}
+
+/** size (px) of the disc texture the flies and their glow are drawn with */
+const DISC_SIZE = 64;
+let discTexture: Texture | undefined;
+/** A white disc, smooth-edged, mipmapped so it stays smooth shrunk to a fly's few pixels; made once, shared by every swarm. */
+function disc(): Texture {
+  if (discTexture) return discTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = DISC_SIZE;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(DISC_SIZE / 2, DISC_SIZE / 2, DISC_SIZE / 2 - 1, 0, 2 * Math.PI);
+  ctx.fill();
+  return (discTexture = new Texture({ source: new CanvasSource({ resource: canvas, autoGenerateMipmaps: true }) }));
 }
 
 /**
