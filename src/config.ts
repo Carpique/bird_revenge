@@ -595,6 +595,8 @@ export const config = {
     jitter: 0.15,
     /** until it first sees the bird it drifts about where it started, this far (px) */
     idleRadius: 30,
+    /** the bird dying, it loses it and heads back to where it started this fast (px per physics step), till it sees the bird again */
+    homeSpeed: 2.2,
     /** it goes for the bird's poo (falling or lying) up to this far away (px, centre to poo) */
     pooRange: 700,
     /** it settles on a lying poo to feed once its centre is this near (px) to where it feeds */

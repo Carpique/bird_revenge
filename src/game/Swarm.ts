@@ -57,7 +57,8 @@ const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2;
  *
  * The swarm as a whole is a point (its centre) that steers like a homing bat, only more erratically: it drifts about
  * where it started till it sees the bird (nothing of the level's in between), then goes for it round the level's bodies,
- * its heading swinging either way and jolted at random. Once it has seen the bird (not before: till then it ignores them),
+ * its heading swinging either way and jolted at random. When the bird dies it loses it: it finds its way back to
+ * where it started (round the level's bodies) and drifts there again till it sees the bird anew. Once it has seen the bird (not before: till then it ignores them),
  * a poo of the bird's (falling or lying, within `pooRange`) draws it off: it chases the nearest one and, once it lies somewhere, settles on it and feeds till it's gone; then it goes back
  * to the bird.
  *
@@ -264,6 +265,8 @@ export class Swarm {
       return;
     }
     this.age += stepMs / 1000;
+    // the bird dying: it loses it, and heads back to where it started till it sees the bird again
+    if (!senses.bird) this.spotted = false;
     if (senses.seesBird) this.spotted = true;
     // on standby till it has seen the bird: poos don't draw it yet
     this.choosePoo(this.spotted ? senses.poos : []);
@@ -297,10 +300,17 @@ export class Swarm {
     return { x: p.x, y: p.y - this.minRadius - 2 };
   }
 
-  /** where it's heading: a poo (where it feeds, once it lies), the bird once spotted, else nowhere */
+  /** away from where it started (beyond its drift round it): it heads back there */
+  private get awayFromStart() {
+    const r = Math.max(config.swarm.idleRadius, 1) * 2;
+    return (this.x - this.def.x) ** 2 + (this.y - this.def.y) ** 2 > r * r;
+  }
+
+  /** where it's heading: a poo (where it feeds, once it lies), the bird once spotted, else back to where it started */
   private target(senses: SwarmSenses): { id: object; at: Point } | null {
     if (this.poo) return { id: this.poo.id, at: this.poo.lying ? this.feedPoint(this.poo) : this.poo };
     if (this.spotted && senses.bird) return { id: this, at: senses.bird };
+    if (!this.spotted) return { id: this.def, at: this.start };
     return null;
   }
 
@@ -346,8 +356,12 @@ export class Swarm {
       [wx, wy] = this.wayTo(poo, swing * 0.5);
     } else if (this.spotted && senses.bird) {
       [wx, wy] = this.wayTo(senses.bird, swing);
+    } else if (!this.spotted && this.awayFromStart) {
+      // lost the bird (it died): back to where it started, round the level's bodies
+      speed = s.homeSpeed;
+      [wx, wy] = this.wayTo(this.start, swing * 0.5);
     } else {
-      // drifting slowly round about where it started; or, the bird gone a while (it lost a life), where it is
+      // drifting slowly round about where it started
       const a = this.wanderSeed[0].phase + 2 * Math.PI * s.wanderHz * 0.5 * this.age + s.wander * swing;
       const r = Math.max(s.idleRadius, 1);
       wx = Math.cos(a) * 0.5 + (this.spotted ? 0 : (this.def.x - this.x) / r);
