@@ -3,7 +3,7 @@ import { Smoke } from '../render/Smoke';
 import { splatHalfWidth } from '../characters/poo';
 import { config } from '../config';
 import type { SwarmDef } from '../level/types';
-import { HomingField } from './homing';
+import { BIRD, hunterOutline, type Navigation, type Target } from './homing';
 import { outOfFire, type FireGap } from './Bat';
 import { Bodies, Body, CRATE, Query, SWARM, type MBody } from './physics';
 
@@ -19,8 +19,10 @@ export interface SwarmPoo {
 
 /** What a swarm steers by, each step. */
 export interface SwarmSenses {
-  /** the level's bodies (terrain, crates, closed doors): what it finds its way round */
+  /** the level's bodies (terrain, crates, closed doors): what shoves it, and what it holds up */
   bodies: MBody[];
+  /** the way round the level's bodies, and where it fits, as for every hunter */
+  nav: Navigation;
   /** where the bird is; null: none to go for (dying) */
   bird: Point | null;
   /** nothing of the level's between its centre and the bird (see `inSight`) */
@@ -35,8 +37,6 @@ export interface SwarmSenses {
 
 /** how far (px) apart the free-space probes step */
 const PROBE_STEP = 3;
-/** how many points round its squeezed outline are tested for room, besides its centre */
-const FIT_POINTS = 10;
 /** where it feels for a moving body: rings round its centre (share of `shoveReach`, points round it), and its centre */
 /** holding, it counts a body as resting on it this near (px) its `body` */
 const HOLD_SLACK = 4;
@@ -66,10 +66,10 @@ const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2;
  * swarm model: Okubo 1986, Kelley & Ouellette 2013), and never leaves the swarm's oval. Feeding, the flies dart up and
  * down over the poo instead, faster, each on its own.
  *
- * It needs room: a gap at least `minScale` of its diameter each way. In a narrower space than its diameter it squeezes
- * to fit (its oval narrower or flatter, shifted to fit between what's either side), so its flies crowd closer; a gap
- * narrower than that it doesn't squeeze for at all. Caught in something (a swinging beam swung into it), it may only
- * back out of it, never on through it.
+ * It finds its way and fits as every hunter does (`Navigation`): as the hunters' oval (`hunterOutline`), squeezed as
+ * far as it goes. In a narrower space than its diameter it squeezes to fit (its oval narrower or flatter, shifted to fit
+ * between what's either side), so its flies crowd closer, down to that oval and no further: that's only how it looks.
+ * Caught in something (a swinging beam swung into it), it may only back out of it, never on through it.
  *
  * A dragon's fire is a wall to it while it's out, as to a homing bat: it slides along it, or stops; one caught in it
  * may move only so as not to go in deeper. But fire that comes at it (spat at it, or rolling out over it) burns it
@@ -123,11 +123,6 @@ export class Swarm {
   private poo: SwarmPoo | null = null;
   /** settled on a lying poo, feeding */
   private feeding = false;
-  /** the way to its target, round the level's bodies */
-  private field: HomingField;
-  private replanIn = 0;
-  /** what the field leads to: the bird, a poo, nothing */
-  private fieldTarget: object | null = null;
   /** its clock (s), for its wander */
   private age = 0;
   private wanderSeed = [
@@ -135,8 +130,7 @@ export class Swarm {
     { f: randomBetween(2.1, 3.4), phase: randomBetween(0, 2 * Math.PI), weight: 0.4 },
   ];
 
-  /** `levelWidth`: for its way-finding grid */
-  constructor(private def: SwarmDef, levelWidth: number) {
+  constructor(private def: SwarmDef) {
     const s = config.swarm;
     this.x = def.x;
     this.y = def.y;
@@ -154,15 +148,14 @@ export class Swarm {
       this.fy[i] = this.y + Math.sin(a) * r;
       this.dart[i] = Math.random() < 0.5 ? 1 : -1;
     }
-    const min = this.minRadius;
-    this.field = new HomingField(levelWidth, { outline: { halfWidth: min, halfHeight: min }, clearance: s.clearance, cell: s.cell });
+    const { halfWidth: hw, halfHeight: hh } = hunterOutline();
     this.glow.addChild(this.glowOuter, this.glowInner);
     this.view.addChild(this.glow, this.dots);
-    // square, its corners rounded: flat on top, so what comes to rest on it stays there as on a crate
-    this.body = Bodies.rectangle(this.x, this.y, 2 * min, 2 * min, {
+    // its squeezed size, its corners rounded: flat on top, so what comes to rest on it stays there as on a crate
+    this.body = Bodies.rectangle(this.x, this.y, 2 * hw, 2 * hh, {
       isStatic: true,
       label: 'swarm',
-      chamfer: { radius: min * 0.3 },
+      chamfer: { radius: hh * 0.3 },
       collisionFilter: { category: SWARM, mask: 0 },
     });
   }
@@ -172,9 +165,10 @@ export class Swarm {
     return config.swarm.diameter / 2;
   }
 
-  /** its radius squeezed as far as it goes (px): the narrowest gap it gets through is twice this */
-  get minRadius() {
-    return this.radius * Math.min(1, Math.max(0.05, config.swarm.minScale));
+  /** half its size each way squeezed as far as it goes (px): the hunters' oval, no bigger than it is at rest */
+  private get minHalf() {
+    const { halfWidth, halfHeight } = hunterOutline();
+    return { x: Math.min(halfWidth, this.radius), y: Math.min(halfHeight, this.radius) };
   }
 
   /** its centre */
@@ -274,10 +268,7 @@ export class Swarm {
     if (senses.seesBird) this.spotted = true;
     // on standby till it has seen the bird: poos don't draw it yet
     this.choosePoo(this.spotted ? senses.poos : []);
-    if (!this.frozen) {
-      this.replan(stepMs, senses);
-      this.steer(senses);
-    }
+    if (!this.frozen) this.steer(senses);
     this.fitShape(senses.solid);
     this.stepFlies(senses.solid);
   }
@@ -301,7 +292,7 @@ export class Swarm {
 
   /** where it feeds on a lying poo: its centre a little above it, so the flies diving reach it */
   private feedPoint(p: SwarmPoo): Point {
-    return { x: p.x, y: p.y - this.minRadius - 2 };
+    return { x: p.x, y: p.y - this.minHalf.y - 2 };
   }
 
   /** away from where it started (beyond its drift round it): it heads back there */
@@ -310,25 +301,15 @@ export class Swarm {
     return (this.x - this.def.x) ** 2 + (this.y - this.def.y) ** 2 > r * r;
   }
 
-  /** where it's heading: a poo (where it feeds, once it lies), the bird once spotted, else back to where it started */
-  private target(senses: SwarmSenses): { id: object; at: Point } | null {
+  /**
+   * where it's heading: a poo (where it feeds, once it lies), the bird once spotted (the same way as every hunter after
+   * it), else back to where it started
+   */
+  private target(senses: SwarmSenses): Target | null {
     if (this.poo) return { id: this.poo.id, at: this.poo.lying ? this.feedPoint(this.poo) : this.poo };
-    if (this.spotted && senses.bird) return { id: this, at: senses.bird };
+    if (this.spotted && senses.bird) return { id: BIRD, at: senses.bird };
     if (!this.spotted) return { id: this.def, at: this.start };
     return null;
-  }
-
-  /**
-   * Works the way to its target out again every `replanMs` (give or take a fifth, at random, so the swarms of a level
-   * don't all do it in the same frame: it's the costliest thing they do), or at once when the target changes.
-   */
-  private replan(stepMs: number, senses: SwarmSenses) {
-    const t = this.target(senses);
-    this.replanIn -= stepMs;
-    if (this.replanIn > 0 && (t?.id ?? null) === this.fieldTarget) return;
-    this.replanIn = config.swarm.replanMs * randomBetween(0.8, 1.2);
-    this.fieldTarget = t?.id ?? null;
-    this.field.update(senses.bodies, t?.at ?? null);
   }
 
   /** Moves its centre: towards its target round obstacles, wandering and lurching; feeding, it hovers over the poo. */
@@ -356,17 +337,17 @@ export class Swarm {
         wy = (f.y - this.y) / s.feedReach;
         speed = Math.min(s.pooSpeed, d * 0.15) + 0.2;
       } else {
-        [wx, wy] = this.wayTo(f, swing * 0.5);
+        [wx, wy] = this.wayTo(senses, swing * 0.5);
       }
     } else if (poo) {
       speed = s.pooSpeed;
-      [wx, wy] = this.wayTo(poo, swing * 0.5);
+      [wx, wy] = this.wayTo(senses, swing * 0.5);
     } else if (this.spotted && senses.bird) {
-      [wx, wy] = this.wayTo(senses.bird, swing);
+      [wx, wy] = this.wayTo(senses, swing);
     } else if (!this.spotted && this.awayFromStart) {
       // lost the bird (it died): back to where it started, round the level's bodies
       speed = s.homeSpeed;
-      [wx, wy] = this.wayTo(this.start, swing * 0.5);
+      [wx, wy] = this.wayTo(senses, swing * 0.5);
     } else {
       // drifting slowly round about where it started
       const a = this.wanderSeed[0].phase + 2 * Math.PI * s.wanderHz * 0.5 * this.age + s.wander * swing;
@@ -394,18 +375,16 @@ export class Swarm {
       this.push.y *= s.shoveDecay;
     }
     // never where it wouldn't fit, squeezed as far as it goes (the bodies shoving it aside aside); one already stuck may
-    // move only to get out
+    // move only to get out. The fire, as for a bat: one already in it may move only so as not to go in deeper
     const ignore = shove?.by ?? [];
-    // the fire, as for a bat: one already in it may move only so as not to go in deeper
-    const now = this.overlap(this.x, this.y, senses, ignore);
-    const free = (x: number, y: number) => this.easesOverlap(now, x, y, senses, ignore) && this.clearOfFire(x, y, senses);
+    const free = (x: number, y: number) => senses.nav.mayMove(this.position, { x, y }, ignore) && this.clearOfFire(x, y, senses);
     const x0 = this.x, y0 = this.y;
     const nx = this.x + this.v.x + this.push.x, ny = this.y + this.v.y + this.push.y;
     if (free(nx, ny)) [this.x, this.y] = [nx, ny];
     else if (free(nx, this.y)) [this.x, this.v.y] = [nx, 0];
     else if (free(this.x, ny)) [this.y, this.v.x] = [ny, 0];
     else this.v = { x: 0, y: 0 };
-    if (shove) this.giveWay(shove, (this.x - x0) * shove.n.x + (this.y - y0) * shove.n.y, (x, y) => this.fits(x, y, senses) && this.clearOfFire(x, y, senses));
+    if (shove) this.giveWay(shove, (this.x - x0) * shove.n.x + (this.y - y0) * shove.n.y, (x, y) => senses.nav.fits(x, y) && this.clearOfFire(x, y, senses));
   }
 
   /**
@@ -490,50 +469,14 @@ export class Swarm {
     if (on) Body.setPosition(this.body, { x: this.x, y: this.y });
   }
 
-  /** The way towards `to` (a unit vector) round the level's bodies, its heading swung `swing` (× `wander`) either way. */
-  private wayTo(to: Point, swing: number): [number, number] {
-    const way = this.field.way(this.position) ?? unit(to.x - this.x, to.y - this.y);
+  /** The way towards its target (a unit vector) round the level's bodies, its heading swung `swing` (× `wander`) either way. */
+  private wayTo(senses: SwarmSenses, swing: number): [number, number] {
+    const t = this.target(senses);
+    if (!t) return [0, 0];
+    const way = senses.nav.way(this.position, t) ?? unit(t.at.x - this.x, t.at.y - this.y);
     if (!way) return [0, 0];
     const a = config.swarm.wander * swing, cos = Math.cos(a), sin = Math.sin(a);
     return [way.x * cos - way.y * sin, way.x * sin + way.y * cos];
-  }
-
-  /**
-   * Would it fit at (x, y), squeezed as far as it goes: nothing solid in its smallest circle (but for `ignore`: the
-   * bodies shoving it aside)?
-   */
-  private fits(x: number, y: number, senses: SwarmSenses, ignore: MBody[] = []) {
-    return this.overlap(x, y, senses, ignore).blocked === 0;
-  }
-
-  /**
-   * How much of its smallest circle at (x, y) is in something solid (but for `ignore`): how many of its test points
-   * (its centre and `FIT_POINTS` round it), and the way out (from those points towards the centre; zero: none, or only
-   * the centre).
-   */
-  private overlap(x: number, y: number, senses: SwarmSenses, ignore: MBody[] = []) {
-    const r = this.minRadius * 0.95;
-    const solid = (px: number, py: number) => senses.solid(px, py) && !(ignore.length && Query.point(ignore, { x: px, y: py }).length);
-    let blocked = solid(x, y) ? 1 : 0, ex = 0, ey = 0;
-    for (let i = 0; i < FIT_POINTS; i++) {
-      const a = (i / FIT_POINTS) * 2 * Math.PI, dx = Math.cos(a), dy = Math.sin(a);
-      if (!solid(x + dx * r, y + dy * r)) continue;
-      blocked++;
-      ex -= dx;
-      ey -= dy;
-    }
-    return { blocked, ex, ey };
-  }
-
-  /**
-   * May it go from where it is (its overlap there: `now`) to (x, y)? Fitting now: only where it fits too. Already in
-   * something (a swinging beam swung into it): only out of it, never deeper (no more of it in, nor any way into it),
-   * so it can't slip through what it's caught in.
-   */
-  private easesOverlap(now: { blocked: number; ex: number; ey: number }, x: number, y: number, senses: SwarmSenses, ignore: MBody[]) {
-    if (now.blocked === 0) return this.fits(x, y, senses, ignore);
-    if ((x - this.x) * now.ex + (y - this.y) * now.ey < 0) return false;
-    return this.overlap(x, y, senses, ignore).blocked <= now.blocked;
   }
 
   /** Does going to (x, y) keep it out of the dragons' fire, or (already in it) at least go no deeper, as for a bat? */
@@ -543,10 +486,10 @@ export class Swarm {
 
   /**
    * Its oval as the room round its centre allows: as big as it is at rest where there's room, squeezed (no further than
-   * `minScale`) and shifted to fit between what's either side where there isn't. Squeezes fast, swells back slowly.
+   * the hunters' oval) and shifted to fit between what's either side where there isn't. Squeezes fast, swells back slowly.
    */
   private fitShape(solid: (x: number, y: number) => boolean) {
-    const R = this.radius, min = this.minRadius;
+    const R = this.radius, min = this.minHalf;
     const free = (dx: number, dy: number, ax: number, ay: number) => {
       let d = 0;
       while (d < R && !solid(this.x + ax + dx * (d + PROBE_STEP), this.y + ay + dy * (d + PROBE_STEP))) d += PROBE_STEP;
@@ -563,15 +506,15 @@ export class Swarm {
       up = Math.min(up, free(0, -1, off, 0));
       down = Math.min(down, free(0, 1, off, 0));
     }
-    const fit = (neg: number, pos: number) => {
-      // too narrow for it even squeezed as far as it goes (`minScale` of its full size): it doesn't squeeze for it
-      // (it won't get through), but keeps its size, its flies just kept out of what's in the way
+    const fit = (neg: number, pos: number, min: number) => {
+      // too narrow for it even squeezed as far as it goes (the hunters' oval): it doesn't squeeze for it (it won't get
+      // through), but keeps its size, its flies just kept out of what's in the way
       if (neg + pos < 2 * min) return [R, 0];
       const half = Math.min(R, (neg + pos) / 2);
       // shifted off the centre only as far as it must be to keep clear of either side
       return [half, Math.min(Math.max(0, half - neg), pos - half)];
     };
-    const [rx, ox] = fit(left, right), [ry, oy] = fit(up, down);
+    const [rx, ox] = fit(left, right, min.x), [ry, oy] = fit(up, down, min.y);
     const ease = (from: number, to: number) => from + (to - from) * (to < from ? 0.35 : 0.06);
     this.rx = ease(this.rx, rx);
     this.ry = ease(this.ry, ry);

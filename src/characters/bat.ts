@@ -44,6 +44,7 @@ export const batHitbox = { width: Math.round(batDisplayWidth * 0.8), height: 40 
 
 /**
  * Half-size (px) of the oval the whole bat fits in, wing tip to wing tip and wings up to wings down (its SVGs reach about
- * 27 px above its centre and 22 below): a homing bat keeps this oval out of the level's bodies, so its wings never go into a wall.
+ * 27 px above its centre and 22 below): how far it reaches on screen. A homing bat finds its way and fits as every
+ * hunter does, by `hunterOutline` (`config.homing`), not by this.
  */
 export const batOutline = { halfWidth: Math.round(batDisplayWidth / 2), halfHeight: 28 };

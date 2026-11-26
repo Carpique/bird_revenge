@@ -523,6 +523,23 @@ export const config = {
     poopedFallAfterMs: 500,
   },
 
+  /**
+   * How the hunters (homing bats and fly swarms) find their way round the level and fit through it: all alike, as one
+   * oval (a swarm squeezes down to it, no further). A gap the size of a swarm at rest (130 px) always lets one through;
+   * one smaller than the oval never; one in between may or may not, as it falls on the grid.
+   */
+  homing: {
+    /** the oval's width and height (px) (takes a level restart) */
+    width: 100,
+    height: 65,
+    /** size (px) of the grid cells the way is found on (takes a level restart) */
+    cell: 16,
+    /** how far (px) beyond the oval a hunter keeps from the level's bodies, the ground and the world's edges where it can (a cell's worth at least) */
+    clearance: 16,
+    /** how often (ms) the grid and the way to each target are worked out again */
+    replanMs: 250,
+  },
+
   /** bats fly along their routes and poo straight down; their poo hurts only the bird */
   bat: {
     /** time between poos is random within ± this fraction of the bat's `pooDelay` (set per bat in Tiled) */
@@ -538,12 +555,6 @@ export const config = {
     /** ...tumbling this many turns per second */
     fallSpin: 1.2,
     // a bat without a route homes in on the bird, round the level's bodies and keeping apart from the other bats:
-    /** homing bat: size (px) of the grid cells it finds its way on (takes a reload) */
-    homingCell: 16,
-    /** homing bat: how far (px) beyond its wings it keeps from the level's bodies, the ground and the world's edges where it can */
-    homingClearance: 16,
-    /** homing bat: how often (ms) the way to the bird is worked out again */
-    homingReplanMs: 250,
     /** homing bat: it keeps this far (px, centre to centre) from the other bats... */
     homingSeparation: 110,
     /** ...this keenly, against going for the bird (1) */
@@ -567,8 +578,6 @@ export const config = {
     flyCount: 40,
     /** the swarm's diameter (px) at rest: about a dragon's width */
     diameter: 130,
-    /** it squeezes down to this share of its diameter (each way) to get through a narrow gap, no further */
-    minScale: 0.5,
     /** a fly's size on screen (px) */
     flySize: 3.25,
     /** the flies glow: a halo this many times a fly's size round each */
@@ -601,8 +610,6 @@ export const config = {
     pooRange: 700,
     /** it settles on a lying poo to feed once its centre is this near (px) to where it feeds */
     feedReach: 24,
-    /** how often (ms) the way to its target is worked out again */
-    replanMs: 300,
     // shoved by a moving body (a falling or tumbling crate): out of its way at once, no drift on after
     /** it feels a moving body this far (share of its rest radius) from its centre: the flies further out just dodge */
     shoveReach: 0.75,
@@ -616,10 +623,6 @@ export const config = {
     shoveStiffness: 0.12,
     /** once nothing's pushing, its shove keeps this share of itself each step: low, it stops at once */
     shoveDecay: 0.5,
-    /** size (px) of the grid cells it finds its way on: finer than a bat's, for narrow gaps (takes a reload) */
-    cell: 8,
-    /** how far (px) beyond its squeezed size it keeps from things where it can */
-    clearance: 8,
     // each fly: a Langevin particle in a harmonic well round the swarm's centre (the midge-swarm model, Okubo 1986;
     // Kelley & Ouellette 2013), never leaving the swarm's outline:
     /** the well's pull back to the centre (per step²): stronger, a tighter cloud */

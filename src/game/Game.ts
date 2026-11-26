@@ -20,7 +20,7 @@ import { i18n, t } from '../ui/i18n';
 import { Apple } from './Apple';
 import { Background } from './Background';
 import { Bat } from './Bat';
-import { HomingField, inSight } from './homing';
+import { BIRD, hunterOutline, inSight, Navigation } from './homing';
 import { Bird, type BirdSample } from './Bird';
 import { centredOn, follow, scrolls } from './camera';
 import { Button } from './Button';
@@ -134,10 +134,8 @@ export class Game {
   private villains: Villain[] = [];
   /** the level's bats; a knocked-off one stays (gone) until the level restarts */
   private bats: Bat[] = [];
-  /** the way to the bird for the homing bats (those without a route) */
-  private homingField = new HomingField();
-  /** ms until the homing field is worked out again */
-  private replanIn = 0;
+  /** how the hunters (homing bats, fly swarms) find their way round the level */
+  private nav = new Navigation();
   private poos: Poo[] = [];
   private apples: Apple[] = [];
   private friends: Friend[] = [];
@@ -342,7 +340,6 @@ export class Game {
       this.actors.addChild(b.view);
       return b;
     });
-    this.replanIn = 0;
     for (const sw of this.swarms) {
       Composite.remove(this.engine.world, sw.body);
       sw.destroy();
@@ -352,7 +349,7 @@ export class Game {
     const timeOfDay = this.level.timeOfDay ?? 'afternoon';
     const night = timeOfDay === 'evening' || timeOfDay === 'night';
     this.swarms = this.level.swarms.map((def) => {
-      const sw = new Swarm(def, this.level.width);
+      const sw = new Swarm(def);
       sw.setNight(night);
       Composite.add(this.engine.world, sw.body);
       this.actors.addChild(sw.view);
@@ -471,7 +468,7 @@ export class Game {
       Bodies.rectangle(width / 2, -60, across, 100, { ...opts, label: 'ceiling' }),
     ];
     Composite.add(world, this.bounds);
-    this.homingField = new HomingField(width);
+    this.nav = new Navigation(width);
     this.levelView?.destroy();
     this.built = buildLevel(this.level);
     this.hinges = this.built.joints.filter((j) => j.def.kind === 'hinge').map((joint) => ({ joint, angle: hingeAngle(joint), squeaking: false }));
@@ -546,6 +543,7 @@ export class Game {
       const seesBird = v.spotted || (target !== null && inSight(this.levelBodies, v.hand, target));
       v.step(STEP_MS, { bird: target, seesBird, obstacles: this.villainObstacles(v.feet, v.top) });
     }
+    this.nav.step(STEP_MS, this.levelBodies);
     this.stepBats(bird);
     this.stepSwarms(bird);
     this.stepBuzzSounds();
@@ -870,16 +868,17 @@ export class Game {
     return [...splats, ...bodies, ...gaps];
   }
 
-  /** Steps the bats; the homing ones go for `bird` (null: none to go for), by a field worked out again every `replanMs`. */
+  /** How far a point is from the dragons' fire (px; below 0: in it), for something of radius `r` there. */
+  private fireGapFor(r: number) {
+    return (p: { x: number; y: number }) => Math.min(Infinity, ...this.dragons.map((d) => d.gap(p.x, p.y, r)));
+  }
+
+  /** Steps the bats; the homing ones go for `bird` (null: none to go for), round the level (`nav`), as the swarms do. */
   private stepBats(bird: { x: number; y: number } | null) {
-    const homers = this.bats.filter((b) => b.homing && b.hittable && !this.asleep.has(b));
-    if (homers.length && (this.replanIn -= STEP_MS) <= 0) {
-      this.replanIn = config.bat.homingReplanMs;
-      this.homingField.update(this.levelBodies, bird);
-    }
     const flying = this.bats.filter((b) => b.hittable && !this.asleep.has(b));
-    // the dragons' fire is a wall to them
-    const fireGap = (p: { x: number; y: number }) => Math.min(Infinity, ...this.dragons.map((d) => d.gap(p.x, p.y, batRadius)));
+    // the dragons' fire is a wall to them: to a homing one as to every hunter
+    const fireGap = this.fireGapFor(batRadius), huntersFireGap = this.fireGapFor(hunterOutline().halfHeight);
+    const target = bird && { id: BIRD, at: bird };
     for (const b of this.bats) {
       if (this.asleep.has(b)) continue;
       if (!b.homing) {
@@ -888,7 +887,7 @@ export class Game {
       }
       // one already after the bird needn't look again
       const seesBird = !b.chasing && b.hittable && bird !== null && inSight(this.levelBodies, b.position, bird);
-      b.step(STEP_MS, { field: this.homingField, others: flying.filter((o) => o !== b).map((o) => o.position), seesBird }, fireGap);
+      b.step(STEP_MS, { nav: this.nav, target, others: flying.filter((o) => o !== b).map((o) => o.position), seesBird }, huntersFireGap);
     }
   }
 
@@ -907,12 +906,11 @@ export class Game {
       else if (p.state === 'splat') poos.push({ id: p, x: p.view.x, y: p.view.y, lying: true });
     }
     // one swarm to a poo (see `stepSwarms`)
+    const fireGap = this.dragons.length ? this.fireGapFor(hunterOutline().halfHeight) : undefined;
     stepSwarms(this.swarms.filter((sw) => !this.asleep.has(sw)), STEP_MS, (sw) => {
-      const r = sw.minRadius;
-      const fireGap = this.dragons.length ? (p: { x: number; y: number }) => Math.min(Infinity, ...this.dragons.map((d) => d.gap(p.x, p.y, r))) : undefined;
       // one already after the bird needn't look again
       const seesBird = !sw.chasing && bird !== null && inSight(bodies, sw.position, bird);
-      return { bodies, bird, seesBird, poos, solid, fireGap };
+      return { bodies, nav: this.nav, bird, seesBird, poos, solid, fireGap };
     });
   }
 

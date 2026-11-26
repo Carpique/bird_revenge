@@ -3,7 +3,7 @@ import { Application, Container, Graphics } from 'pixi.js';
 import { audio, type BuzzSound } from '../audio/audio';
 import { splatHalfWidth, splatLifetimeMs } from '../characters/poo';
 import { config, WORLD } from '../config';
-import { inSight } from '../game/homing';
+import { inSight, Navigation } from '../game/homing';
 import { Bodies, Query, STEP_MS, type MBody } from '../game/physics';
 import { stepSwarms, Swarm, type SwarmPoo } from '../game/Swarm';
 import { fitWorld } from '../render/fitWorld';
@@ -21,10 +21,10 @@ async function main() {
   app.stage.addChild(world);
 
   const R = () => config.swarm.diameter / 2;
-  // a wall with a gap 0.75 of the swarm (it squeezes through), a shelf, and a wall with a gap 0.4 of it (too narrow)
+  // a wall with a gap 0.8 of the swarm (it squeezes through: any hunter gets through one this tall), a shelf, and a wall with a gap 0.4 of it (too narrow)
   const rects = [
-    { x: 560, y: 0, w: 32, h: 300 - R() * 0.75 },
-    { x: 560, y: 300 + R() * 0.75, w: 32, h: WORLD.groundY - 300 - R() * 0.75 },
+    { x: 560, y: 0, w: 32, h: 300 - R() * 0.8 },
+    { x: 560, y: 300 + R() * 0.8, w: 32, h: WORLD.groundY - 300 - R() * 0.8 },
     { x: 180, y: 470, w: 220, h: 16 },
     { x: 960, y: 0, w: 32, h: 380 - R() * 0.4 },
     { x: 960, y: 380 + R() * 0.4, w: 32, h: WORLD.groundY - 380 - R() * 0.4 },
@@ -50,12 +50,14 @@ async function main() {
   const drawSky = () => sky.clear().rect(-2000, -2000, WORLD.width + 4000, WORLD.groundY + 2000).fill(ui.night ? '#1f2c70' : '#d8edf8');
 
   let swarms: Swarm[] = [];
+  let nav = new Navigation(WORLD.width);
   const buzz = new Map<Swarm, BuzzSound>();
   const restart = () => {
     for (const s of swarms) s.destroy();
     for (const b of buzz.values()) b.stop();
     buzz.clear();
-    swarms = [new Swarm({ x: 300, y: 250 }, WORLD.width), new Swarm({ x: 1150, y: 250 }, WORLD.width)];
+    nav = new Navigation(WORLD.width);
+    swarms = [new Swarm({ x: 300, y: 250 }), new Swarm({ x: 1150, y: 250 })];
     for (const s of swarms) {
       s.setNight(ui.night);
       swarmLayer.addChild(s.view);
@@ -88,7 +90,6 @@ async function main() {
   const f = gui.addFolder('config.swarm');
   f.add(s, 'flyCount', 1, 300, 1);
   f.add(s, 'diameter', 40, 300, 1);
-  f.add(s, 'minScale', 0.2, 1, 0.05);
   f.add(s, 'flySize', 1, 8, 0.25);
   f.add(s, 'glowSize', 1, 8, 0.25);
   f.add(s, 'glowAlpha', 0, 1, 0.02);
@@ -127,7 +128,8 @@ async function main() {
         }
         for (let i = poos.length - 1; i >= 0; i--) if (poos[i].ms >= splatLifetimeMs) poos.splice(i, 1);
         const seen: SwarmPoo[] = poos.map((p) => ({ id: p.id, x: p.x, y: p.y, lying: p.lying }));
-        stepSwarms(swarms, STEP_MS, (sw) => ({ bodies, bird, seesBird: !sw.chasing && inSight(bodies, sw.position, bird), poos: seen, solid }));
+        nav.step(STEP_MS, bodies);
+        stepSwarms(swarms, STEP_MS, (sw) => ({ bodies, nav, bird, seesBird: !sw.chasing && inSight(bodies, sw.position, bird), poos: seen, solid }));
         for (const sw of swarms) {
           const b = buzz.get(sw);
           if (ui.sound) {

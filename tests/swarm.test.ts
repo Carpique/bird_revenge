@@ -1,18 +1,29 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { config, WORLD } from '../src/config';
 import { Bodies, Body, Composite, CRATE, Engine, Query, STEP_MS, type MBody } from '../src/game/physics';
+import { hunterOutline, Navigation } from '../src/game/homing';
 import { stepSwarms, Swarm, type SwarmPoo, type SwarmSenses } from '../src/game/Swarm';
 
 const R = config.swarm.diameter / 2;
 
+/** the way round the level, a new one for each test, stepped (as the game does each step) whenever a swarm senses */
+let nav: Navigation;
+beforeEach(() => {
+  nav = new Navigation(WORLD.width);
+});
+
 /** What a swarm senses among `bodies`, the bird at `bird` (seen or not), with `poos` about. */
-const sensesOf = (bodies: MBody[], bird: { x: number; y: number } | null, seesBird: boolean, poos: SwarmPoo[] = []): SwarmSenses => ({
+const sensesOf = (bodies: MBody[], bird: { x: number; y: number } | null, seesBird: boolean, poos: SwarmPoo[] = []): SwarmSenses => (
+  nav.step(STEP_MS, bodies),
+  {
   bodies,
+  nav,
   bird,
   seesBird,
   poos,
   solid: (x, y) => y >= WORLD.groundY || y < 0 || x < 0 || x > WORLD.width || Query.point(bodies, { x, y }).length > 0,
-});
+  }
+);
 
 /** The swarm's flies, read from its insides (they're its own business, but the tests want to see them). */
 const fliesOf = (s: Swarm) => {
@@ -29,7 +40,7 @@ const run = (s: Swarm, steps: number, senses: () => SwarmSenses, each?: () => vo
 
 describe('a fly swarm', () => {
   it('has config.swarm.flyCount flies, all inside its oval, whatever it does', () => {
-    const s = new Swarm({ x: 400, y: 300 }, WORLD.width);
+    const s = new Swarm({ x: 400, y: 300 });
     expect(fliesOf(s)).toHaveLength(config.swarm.flyCount);
     run(s, 600, () => sensesOf([], { x: 1000, y: 200 }, true), () => {
       const o = s.outline;
@@ -38,7 +49,7 @@ describe('a fly swarm', () => {
   });
 
   it('drifts about where it started till it sees the bird, then goes for it and touches it', () => {
-    const s = new Swarm({ x: 300, y: 300 }, WORLD.width);
+    const s = new Swarm({ x: 300, y: 300 });
     const bird = { x: 1000, y: 300 };
     run(s, 300, () => sensesOf([], bird, false));
     expect(Math.hypot(s.position.x - 300, s.position.y - 300)).toBeLessThan(R);
@@ -48,7 +59,7 @@ describe('a fly swarm', () => {
   });
 
   it('leaves the bird for a poo, feeds on it while it lies, and goes back to the bird when it is gone', () => {
-    const s = new Swarm({ x: 300, y: 300 }, WORLD.width);
+    const s = new Swarm({ x: 300, y: 300 });
     const bird = { x: 1000, y: 200 };
     const poo: SwarmPoo = { id: {}, x: 500, y: WORLD.groundY + 2, lying: true };
     run(s, 100, () => sensesOf([], bird, true));
@@ -66,7 +77,7 @@ describe('a fly swarm', () => {
   });
 
   it("ignores poos till it has seen the bird", () => {
-    const s = new Swarm({ x: 300, y: 300 }, WORLD.width);
+    const s = new Swarm({ x: 300, y: 300 });
     const bird = { x: 1000, y: 200 };
     const poo: SwarmPoo = { id: {}, x: 400, y: WORLD.groundY + 2, lying: true };
     run(s, 300, () => sensesOf([], bird, false, [poo]));
@@ -84,9 +95,9 @@ describe('a fly swarm', () => {
     Bodies.rectangle(620, (300 + gap / 2 + WORLD.groundY) / 2, 40, WORLD.groundY - 300 - gap / 2, { isStatic: true }),
   ];
 
-  it('squeezes through a gap narrower than itself (down to half its height), its flies never in the wall', () => {
-    const bodies = wallWithGap(R * 2 * 0.6);
-    const s = new Swarm({ x: 300, y: 300 }, WORLD.width);
+  it('squeezes through a gap narrower than itself (any hunter gets through one this tall), its flies never in the wall', () => {
+    const bodies = wallWithGap(100);
+    const s = new Swarm({ x: 300, y: 300 });
     const bird = { x: 1000, y: 300 };
     let flattest = R;
     run(s, 1500, () => sensesOf(bodies, bird, true), () => {
@@ -95,19 +106,19 @@ describe('a fly swarm', () => {
     });
     expect(s.position.x).toBeGreaterThan(700);
     // in the gap it was squeezed flat, to about the gap's height
-    expect(flattest).toBeLessThan(R * 0.7);
-    expect(flattest).toBeGreaterThanOrEqual(R * config.swarm.minScale - 1e-6);
+    expect(flattest).toBeLessThan(R * 0.8);
+    expect(flattest).toBeGreaterThanOrEqual(hunterOutline().halfHeight - 1e-6);
   });
 
-  it("doesn't get through a gap under half its height", () => {
+  it("doesn't get through a gap lower than the hunters' oval", () => {
     const bodies = wallWithGap(R * 2 * 0.4);
-    const s = new Swarm({ x: 300, y: 300 }, WORLD.width);
+    const s = new Swarm({ x: 300, y: 300 });
     run(s, 1500, () => sensesOf(bodies, { x: 1000, y: 300 }, true));
     expect(s.position.x).toBeLessThan(620);
   });
 
   it('shares out the poos, one swarm to a poo: a second swarm takes the other poo, or none', () => {
-    const a = new Swarm({ x: 300, y: 300 }, WORLD.width), b = new Swarm({ x: 360, y: 300 }, WORLD.width);
+    const a = new Swarm({ x: 300, y: 300 }), b = new Swarm({ x: 360, y: 300 });
     const bird = { x: 1000, y: 200 };
     const near: SwarmPoo = { id: {}, x: 330, y: WORLD.groundY + 2, lying: true };
     const far: SwarmPoo = { id: {}, x: 900, y: WORLD.groundY + 2, lying: true };
@@ -122,7 +133,7 @@ describe('a fly swarm', () => {
   });
 
   it('gets out of the way of a crate sliding at it, never letting it through its middle, and stops when it stops', () => {
-    const s = new Swarm({ x: 400, y: 300 }, WORLD.width);
+    const s = new Swarm({ x: 400, y: 300 });
     const crate = Bodies.rectangle(150, 300, 60, 60);
     const bird = { x: 1000, y: 100 };
     for (let i = 0; i < 120; i++) {
@@ -145,11 +156,11 @@ describe('a fly swarm', () => {
   const shaft = () => {
     const engine = Engine.create();
     const ground = Bodies.rectangle(WORLD.width / 2, WORLD.groundY + 50, WORLD.width, 100, { isStatic: true });
-    const half = R * config.swarm.minScale + 15;
+    const half = hunterOutline().halfWidth + 15;
     const walls = [400 - half - 30, 400 + half + 30].map((x) => Bodies.rectangle(x, WORLD.groundY - 200, 60, 400, { isStatic: true }));
     const crate = Bodies.rectangle(400, WORLD.groundY - 330, 2 * half - 10, 40, { collisionFilter: { category: CRATE } });
     Composite.add(engine.world, [ground, ...walls, crate]);
-    const s = new Swarm({ x: 400, y: WORLD.groundY - R }, WORLD.width);
+    const s = new Swarm({ x: 400, y: WORLD.groundY - R });
     Composite.add(engine.world, s.body);
     return { engine, ground, walls, crate, s };
   };
@@ -163,7 +174,7 @@ describe('a fly swarm', () => {
     }
     // the crate rests on it, off the ground by about its squeezed size
     expect(s.isHolding).toBe(true);
-    expect(crate.bounds.max.y).toBeLessThan(WORLD.groundY - s.minRadius);
+    expect(crate.bounds.max.y).toBeLessThan(WORLD.groundY - hunterOutline().halfHeight);
     expect(Math.hypot(crate.velocity.x, crate.velocity.y)).toBeLessThan(0.1);
   });
 
@@ -196,7 +207,7 @@ describe('a fly swarm', () => {
     const ground = Bodies.rectangle(WORLD.width / 2, WORLD.groundY + 50, WORLD.width, 100, { isStatic: true });
     const crate = Bodies.rectangle(400, WORLD.groundY - 300, 160, 40, { collisionFilter: { category: CRATE } });
     Composite.add(engine.world, [ground, crate]);
-    const s = new Swarm({ x: 400, y: WORLD.groundY - R }, WORLD.width);
+    const s = new Swarm({ x: 400, y: WORLD.groundY - R });
     Composite.add(engine.world, s.body);
     let held = false;
     for (let i = 0; i < 400; i++) {
@@ -211,7 +222,7 @@ describe('a fly swarm', () => {
   });
 
   it("stays put, frozen, though its flies don't", () => {
-    const s = new Swarm({ x: 300, y: 300 }, WORLD.width);
+    const s = new Swarm({ x: 300, y: 300 });
     s.frozen = true;
     const before = fliesOf(s);
     run(s, 120, () => sensesOf([], { x: 1000, y: 300 }, true));

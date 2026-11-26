@@ -2,7 +2,7 @@ import { batDef, batHitbox, batRadius, homingBatDef } from '../characters/bat';
 import { config, WORLD } from '../config';
 import type { BatDef } from '../level/types';
 import { CharacterSprite } from '../render/CharacterSprite';
-import type { HomingField } from './homing';
+import type { Navigation, Target } from './homing';
 import type { HitCause } from './Villain';
 import { BIRD_POO, Bodies, Body, characterBody, type MBody } from './physics';
 
@@ -22,9 +22,10 @@ export const outOfFire = (fireGap: FireGap, from: { x: number; y: number }, to: 
   return gap >= 0 || gap >= fireGap(from);
 };
 
-/** What a homing bat steers by: the way to the bird, where the other flying bats are, and whether it can see the bird. */
+/** What a homing bat steers by: the way round the level, the bird (null: none to go for), where the other flying bats are, and whether it can see the bird. */
 export interface Homing {
-  field: HomingField;
+  nav: Navigation;
+  target: Target | null;
   others: { x: number; y: number }[];
   /** nothing of the level's (terrain, crates) between it and the bird, centre to centre (see `inSight`) */
   seesBird: boolean;
@@ -38,7 +39,7 @@ export type FireGap = (p: { x: number; y: number }) => number;
  * round and round a closed one. Every `pooDelay` seconds or so (± `bat.intervalSpread`) it poos straight down,
  * wherever it is; its poo hurts only the bird (see Game).
  * A bat without a route homes in on the bird instead, at the same steady speed, once it has seen it (nothing of the
- * level's in between: terrain, a crate): round the level's bodies (see `HomingField`), keeping apart from the other bats, turning smoothly; till then it
+ * level's in between: terrain, a crate): round the level's bodies (see `Navigation`, as a fly swarm does), keeping apart from the other bats, turning smoothly; till then it
  * flutters about where it started.
  * Hit by the bird's poo (or a falling crate), it hangs in the air for a moment in its "hit" pose (seeing stars, for a crate), then tumbles off the bottom of the screen,
  * gone for good. Touching a flying bat costs the bird a life, as a walking villain does.
@@ -217,7 +218,7 @@ export class Bat {
    * Flies `speed` px (at most) towards the bird, the way the field shows, away from bats too close; turning a share of the
    * way at a time, so it swerves rather than jerks. Its heading swings either way of the bird's, smoothly and unevenly,
    * so its path curves the way a bat's does, and no two bats fly alike. Before it has seen the bird it loops about where
-   * it started instead. Its wings never go into a body: blocked, it slides along it, or stops.
+   * it started instead. Its oval (`hunterOutline`) never goes into a body: blocked, it slides along it, or stops.
    */
   private home(speed: number, homing: Homing | undefined, fireGap: FireGap | undefined) {
     const { homingSeparation: separation, homingSeparationWeight: separationWeight, homingTurn: turn, homingWander, homingWanderHz, homingIdleRadius } = config.bat;
@@ -225,7 +226,7 @@ export class Bat {
     const swing = this.wander.reduce((a, w) => a + w.weight * Math.sin(2 * Math.PI * homingWanderHz * w.f * this.age + w.phase), 0);
     let wx = 0, wy = 0;
     if (this.spotted) {
-      const way = homing?.field.way(this.position) ?? null;
+      const way = homing ? homing.nav.way(this.position, homing.target) : null;
       if (way) {
         const a = homingWander * swing, cos = Math.cos(a), sin = Math.sin(a);
         wx = way.x * cos - way.y * sin;
@@ -257,11 +258,10 @@ export class Bat {
       this.v.x *= speed / v;
       this.v.y *= speed / v;
     }
-    const field = homing?.field;
-    // one already in something (a body moved onto it, or it started there) may move only so as not to go in deeper
-    const now = field?.overlap(this.position) ?? 0;
+    // never into anything; one already in something (a body moved onto it, or it started there) only out of it
+    const nav = homing?.nav;
     const free = (x: number, y: number) =>
-      (!field || field.overlap({ x, y }) <= now) && (!fireGap || outOfFire(fireGap, this.position, { x, y }));
+      (!nav || nav.mayMove(this.position, { x, y })) && (!fireGap || outOfFire(fireGap, this.position, { x, y }));
     const nx = this.x + this.v.x, ny = this.y + this.v.y;
     if (free(nx, ny)) [this.x, this.y] = [nx, ny];
     else if (free(nx, this.y)) [this.x, this.v.y] = [nx, 0];

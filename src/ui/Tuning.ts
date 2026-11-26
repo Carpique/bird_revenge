@@ -136,8 +136,11 @@ const RANGES: Record<string, [number, number, number]> = {
   'bat.hitShowMs': [0, 2000, 50],
   'bat.fallGravity': [0.05, 2, 0.05],
   'bat.fallSpin': [0, 5, 0.1],
-  'bat.homingClearance': [0, 100, 2],
-  'bat.homingReplanMs': [50, 2000, 50],
+  'homing.width': [20, 200, 1],
+  'homing.height': [20, 200, 1],
+  'homing.cell': [4, 32, 1],
+  'homing.clearance': [0, 64, 2],
+  'homing.replanMs': [50, 2000, 50],
   'bat.homingSeparation': [0, 300, 5],
   'bat.homingSeparationWeight': [0, 10, 0.25],
   'bat.homingTurn': [0.01, 1, 0.01],
@@ -172,7 +175,7 @@ const CHOICES: Record<string, readonly string[]> = {
   'smoothing.arms': ['fixed', 'off', 'auto'],
 };
 
-const SECTIONS = ['pointing', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'bat', 'friend', 'coin', 'player', 'audio', 'telemetry'] as const;
+const SECTIONS = ['pointing', 'flap', 'tilt', 'hover', 'shoot', 'visibility', 'calibration', 'smoothing', 'physics', 'keyboard', 'villain', 'apple', 'homing', 'bat', 'friend', 'coin', 'player', 'audio', 'telemetry'] as const;
 
 /** lil-gui panel (toggle with G) editing `config` live. */
 export class Tuning {
