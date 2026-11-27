@@ -1,8 +1,7 @@
 import { Application, UPDATE_PRIORITY } from 'pixi.js';
 import { countLevelView } from './analytics';
 import { audio } from './audio/audio';
-import { changedConfig, config, loadSavedConfig } from './config';
-import type { BirdSample } from './game/Bird';
+import { config, loadSavedConfig } from './config';
 import { Game } from './game/Game';
 import { STEP_MS } from './game/physics';
 import { DEMO, firstLevel, levels, listedLevels, nextLevel, onLevelEdited, testLevelName, TRAINING } from './levels';
@@ -18,7 +17,6 @@ import { Keyboard } from './input/keyboard';
 import { TouchControls } from './input/touchControls';
 import { PoseDetectors } from './input/poseControls';
 import { PoseSession, type PoseStep } from './input/poseSession';
-import { BlackBox } from './pose/blackBox';
 import { startCamera, stopCamera } from './pose/camera';
 import { cameraConsent, isPermissionError, requestCamera } from './pose/cameraConsent';
 import { REQUIRED_PARTS } from './pose/landmarks';
@@ -29,7 +27,6 @@ import { loadAllAssets } from './render/assets';
 import { capFrameRate } from './render/frameCap';
 import { isPortrait } from './render/fitWorld';
 import { scenery } from './scenery/scenery';
-import { DebugPanel } from './ui/DebugPanel';
 import { loadFonts } from './ui/fonts';
 import { FrameGuide, type GuideState } from './ui/FrameGuide';
 import { CameraButton } from './ui/CameraButton';
@@ -38,14 +35,12 @@ import { MenuButton } from './ui/MenuButton';
 import { t, type Msg } from './ui/i18n';
 import { LanguageButton } from './ui/LanguageButton';
 import { PauseMenu } from './ui/PauseMenu';
-import { downloadJson, Recorder } from './ui/Recorder';
 import { RotateHint } from './ui/RotateHint';
 import { loadRecording } from './tutorial';
 import { ClipLoop } from './tutorial/ClipLoop';
 import { PoseReplay } from './tutorial/PoseReplay';
 import { TUTORIAL_LEVEL, type PoseRecording } from './tutorial/recording';
 import { SplashScreen } from './ui/SplashScreen';
-import { Tuning } from './ui/Tuning';
 import { VolumeButton } from './ui/VolumeButton';
 import { wakeLock } from './ui/wakeLock';
 
@@ -75,7 +70,8 @@ import { wakeLock } from './ui/wakeLock';
 type AppState = 'loading' | 'menu' | 'cameraAsk' | 'calibrating' | 'countdown' | 'playing' | 'outOfFrame' | 'keyboard' | 'gameOver';
 
 async function main() {
-  loadSavedConfig();
+  // the tuning panel's saved settings (G, dev server only)
+  if (import.meta.env.DEV) loadSavedConfig();
 
   const app = new Application();
   const gameBox = document.getElementById('game')!;
@@ -266,14 +262,8 @@ async function main() {
   const pauseMenu = new PauseMenu(app);
   app.stage.addChild(pauseMenu);
   const status = document.getElementById('status')!;
-  const debug = new DebugPanel(video);
-  const tuning = new Tuning();
-  const recorder = new Recorder();
-  // the last minute of the raw pose stream, saved with B (see `BlackBox`)
-  const blackBox = new BlackBox();
-  // the bird's state per pose frame for it (one object, filled in place) and the long render frames counted so far
-  const birdSample: BirdSample = { x: 0, y: 0, vx: 0, vy: 0, onGround: false, perched: false, dying: false };
-  let longRenderSeen = 0;
+  // debug panel, tuning, recorder, black box: dev server only, left out of the production build (`DevTools`)
+  const dev = import.meta.env.DEV ? new (await import('./dev/devTools')).DevTools(video, status) : null;
   const corner = document.getElementById('corner')!;
   const fullscreen = new FullscreenButton(corner);
   const menuButton = new MenuButton(corner);
@@ -552,20 +542,8 @@ async function main() {
     else if (canPause()) setPaused(true);
   };
   keyboard.onHotkey = (k) => {
-    if (k === 'd') debug.toggle();
-    else if (k === 'g') tuning.toggle();
-    else if (k === 'r') recorder.toggle();
-    else if (k === 'b') {
-      const dump = blackBox.dump({
-        model: config.pose.model,
-        delegate: tracker?.stats.info?.delegate ?? config.pose.delegate,
-        config: changedConfig(),
-        flapping: config.pointing.flapping,
-        source: tracker?.stats.source ?? null,
-      });
-      if (dump) downloadJson('black-box', dump);
-    }
-    else if (k === 'm') volume.toggleMute();
+    dev?.hotkey(k, tracker);
+    if (k === 'm') volume.toggleMute();
     if (state === 'loading' || state === 'menu' || state === 'cameraAsk' || menuOpen) return;
     if (k === 'p') keyboard.onPause();
     else if (state === 'gameOver') return;
@@ -601,39 +579,15 @@ async function main() {
     // always run the detectors so their state stays continuous; only *apply* them while playing
     const reading = detectors.update(f, now);
     vis = reading.vis;
-    recorder.add(f, now);
     if (reading.flap && reading.shoot && reading.tilt && reading.pointing) {
       ({ flap: flapOut, shoot: shootOut, tilt: tiltOut, pointing: pointingOut } = reading);
-      debug.record(now, reading.flap, reading.shoot);
     }
     // what the frame means for the game (the rules are in `PoseSession`)
     const step = session.update(state, reading, now);
     if (step.redetect) tracker?.redetect();
     applyStep(step, now);
     if (step.shoot) game.requestPoo();
-    if (f) blackBox.aspect = f.aspect;
-    const ctl = session.controls(state, now);
-    // the long render frames since the previous pose frame (the count starts again when the stats are reset)
-    const longRender = tracker ? tracker.stats.longRenderFrames : 0;
-    const longSince = longRender >= longRenderSeen ? longRender - longRenderSeen : longRender;
-    longRenderSeen = longRender;
-    blackBox.add(now, tracker?.raw ?? null, {
-      state,
-      personDetected: vis.personDetected,
-      centred: vis.centred,
-      playerPresent: vis.playerPresent,
-      inFrame: vis.inFrame,
-      lift: ctl.lift,
-      tilt: ctl.tilt,
-      hover: ctl.hover,
-      flapping: ctl.flapping,
-      inferenceMs: tracker?.inferenceMs ?? 0,
-      // the effect: what the bird is told and where it is when the frame arrives
-      intent: ctl.pointing,
-      bird: game.birdState(birdSample),
-      dropped: timing.dropped,
-      longRender: longSince,
-    });
+    dev?.pose(f, timing, reading, state, session.controls(state, now), tracker, game);
     // the calibration dialog, also on the frame that brought it up
     if (state === 'calibrating') {
       // MediaPipe's own landmarks too: the arms' noise during the hold (`smoothing.arms` = auto)
@@ -643,7 +597,7 @@ async function main() {
         // the smoothing and the pointing detector's EMA follow it together (kept until the next calibration)
         if (tracker) tracker.smoother.armNoise = calibStatus.armNoise;
         detectors.pointing.armNoise = calibStatus.armNoise;
-        blackBox.calibrated(now, calibStatus.done, calibStatus.armNoise);
+        dev?.calibrated(now, calibStatus.done, calibStatus.armNoise);
         startCountdown();
       }
     }
@@ -741,10 +695,7 @@ async function main() {
     demo.root.visible = splash.visible && demoOn;
     demoReplay.update(app.ticker.deltaMS);
 
-    const statusText = recorder.recording ? `● REC ${recorder.seconds.toFixed(0)}s` : '';
-    if (status.textContent !== statusText) status.textContent = statusText;
-
-    debug.draw({
+    dev?.draw({
       state,
       frame,
       vis,
@@ -755,7 +706,6 @@ async function main() {
       fps: tracker?.fps ?? 0,
       inferenceMs: tracker?.inferenceMs ?? 0,
       stats: tracker?.stats ?? null,
-      blackBoxSeconds: blackBox.seconds,
       arms: tracker ? { filter: tracker.smoother.armFilter, noise: tracker.smoother.armNoise } : undefined,
       now,
     });
