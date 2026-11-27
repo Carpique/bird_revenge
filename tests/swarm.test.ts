@@ -144,12 +144,13 @@ describe('a fly swarm', () => {
     }
     // it went on unhindered: nothing behind the swarm to pin it, so it never held
     expect(crate.position.x).toBeCloseTo(750);
-    // stopped: so does the swarm's shove, at once (back to drifting slowly)
+    // stopped: so does the swarm's shove, at once (shoved far from where it started, it heads back there, no faster
+    // than it goes home, with some leeway for its jitter: well short of the crate's 5 px a step)
     Body.setVelocity(crate, { x: 0, y: 0 });
     run(s, 5, () => sensesOf([crate], bird, false));
     const at = s.position;
     run(s, 10, () => sensesOf([crate], bird, false));
-    expect(Math.hypot(s.position.x - at.x, s.position.y - at.y)).toBeLessThan(config.swarm.chaseSpeed * 0.2 * 10 + 2);
+    expect(Math.hypot(s.position.x - at.x, s.position.y - at.y)).toBeLessThan(config.swarm.homeSpeed * 10 * 1.4);
   });
 
   /** A shaft down to the ground at x = 400, a little wider than a squeezed swarm, a crate (narrower) falling into it, a swarm at the bottom: all in a physics world. */
